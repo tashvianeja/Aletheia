@@ -4,7 +4,7 @@ Privacy Guardian is a local-first background app for macOS and Windows that help
 
 The app can classify sensitive categories in documents and forms, inspect consent and tracking signals, and relate a request to the apparent purpose of a site or application. It presents one of three outcomes: **Ignore**, **Inform**, or **Intervene**, with an explanation and an action where one is available.
 
-This repository is an in-progress initial build. All 20 functional requirements are implemented, with independent evidence recorded in `docs/PLAN.md`; physical Windows validation, protected macOS permission grants, Intel compatibility, policy-performance optimization, final fresh-clone verification, and a green CI run remain pending. The current ARM macOS app and DMG passed the installed lifecycle, but no GitHub release has been published.
+This repository is an in-progress initial build. All 20 functional requirements are implemented, with independent evidence recorded in `docs/PLAN.md`; physical Windows validation, protected macOS permission grants, Intel compatibility, and a green CI run remain pending. The current ARM macOS app and DMG passed the installed lifecycle, but no GitHub release has been published.
 
 ## Feature matrix
 
@@ -125,9 +125,9 @@ make typecheck
 make check
 ```
 
-The latest local `make check` baseline is green: Ruff checks 173 files; strict mypy checks 73 modules; core/unit/integration/platform/packaging tests report 270 passed, 4 skipped, and 2 deselected in 41.67 seconds; the real headed browser/performance/native-clipboard run reports 34 passed and 1 skipped in 95.26 seconds. Total: **304 passed, 5 skipped**. Exact line coverage is **85.71%** scoped (`1,667/1,945`) and **75.39%** overall (`4,107/5,448`), above the 85%/70% gates.
+The final fresh-clone `make check` at `d3390ba` reports **307 passed, 5 skipped**, with two first-phase performance cases deselected. Ruff checks 175 files; strict mypy checks 73 modules. Exact line coverage is **85.71%** scoped (`1,667/1,945`) and **75.42%** overall (`4,115/5,456`), above the 85%/70% gates.
 
-Use `-m macos`, `-m windows`, `-m e2e`, `-m perf`, and `-m llm` only in an environment that supports those markers. The final native-Cocoa 300-second run measured 0.823200875-second tray readiness, 197.734375 MiB warm-median RSS, 200.78125 MiB peak RSS, and 0.0442277493% CPU. Warm median and CPU meet their targets; the peak is 0.78125 MiB over 200 MiB. Two first-phase perf cases are excluded from the local baseline but included in runtime acceptance. Current outstanding checks include physical Windows CI, protected macOS TCC/Full Disk Access/Accessibility/screen grant tests, Intel packaging compatibility (the Intel lifecycle audit found a legacy OpenSSL module requiring macOS 15), policy-performance optimization, final fresh-clone verification, and green CI.
+Use `-m macos`, `-m windows`, `-m e2e`, `-m perf`, and `-m llm` only in an environment that supports those markers. The final native-Cocoa 300-second run measured 0.823200875-second tray readiness, 207.33952 MB warm-median RSS, 210.5344 MB peak RSS, and 0.0442277493% CPU. CPU meets its target; raw RSS misses the decimal 200-MB target by 7.33952 MB at the median and 10.5344 MB at peak, though the 25% tolerance gate passes. Two first-phase perf cases are excluded from the initial phase but included in runtime acceptance. Current outstanding checks include physical Windows CI, protected macOS TCC/Full Disk Access/Accessibility/screen grant tests, Intel packaging compatibility (current crypto builds need Rust/Cargo plus checksum-pinned static OpenSSL 3.5.8 for macOS 13), and green CI.
 
 ## Configuration
 

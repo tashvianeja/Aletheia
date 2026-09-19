@@ -1,6 +1,6 @@
 # Acceptance map
 
-`tests/ACCEPTANCE.json` is the machine-readable source of the acceptance map. It covers all 20 functional requirements and all 18 end-to-end scenarios; this page makes its current status readable without changing the test contract. The latest local `make check` baseline is 304 passed and 5 skipped: 270 passed/4 skipped/2 deselected core tests plus 34 passed/1 skipped headed browser/performance/native-clipboard tests. Exact line coverage is 85.71% scoped (`1,667/1,945`) and 75.39% overall (`4,107/5,448`).
+`tests/ACCEPTANCE.json` is the machine-readable source of the acceptance map. It covers all 20 functional requirements and all 18 end-to-end scenarios; this page makes its current status readable without changing the test contract. Final fresh-clone `make check` evidence at `d3390ba` is 307 passed and 5 skipped, with two first-phase performance cases deselected. Exact line coverage is 85.71% scoped (`1,667/1,945`) and 75.42% overall (`4,115/5,456`).
 
 ## Functional requirements
 
@@ -42,6 +42,6 @@
 | 15 | Preference learning and export/import round trip covered. |
 | 16 | SIGKILL mid-analysis abort plus service-alive/reconnect exercised. |
 | 17 | Current macOS DMG lifecycle exercised; Windows pending. |
-| 18 | Final 300-second Cocoa run: 0.823200875 s tray-ready and 0.0442277493% CPU; 197.734375 MiB warm median passes while 200.78125 MiB peak is 0.78125 MiB over. |
+| 18 | Final 300-second Cocoa run: 0.823200875 s tray-ready and 0.0442277493% CPU; raw RSS misses 200 MB by 7.33952 MB at median and 10.5344 MB at peak, while the 25% tolerance gate passes. |
 
 The source JSON gives the precise test/fixture names and should be updated with test evidence as implementation lands. The reported verification baseline is recorded in `docs/PLAN.md`; a full acceptance pass is not complete.

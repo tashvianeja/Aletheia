@@ -2,7 +2,7 @@
 
 ## Status of this guide
 
-The repository has an `uv` project for Python 3.12 and declares `make` targets for setup, checks, extension building, and packaging. Python 3.12.13, uv dependencies, Tesseract 5.5.3, `create-dmg` 1.3, and Xcode Command Line Tools were reported present on the current macOS 27 arm64 development machine. A clean-clone run at `3bec8897ddccf446282d5fff1c3cecacb4a6339d` verified setup and the macOS package path; the current `edeb15d` app/DMG also passed its installed lifecycle.
+The repository has an `uv` project for Python 3.12 and declares `make` targets for setup, checks, extension building, and packaging. Python 3.12.13, uv dependencies, Tesseract 5.5.3, `create-dmg` 1.3, and Xcode Command Line Tools were reported present on the current macOS 27 arm64 development machine. Final fresh-clone proof was recorded on 2026-09-19 at `/private/tmp/pg-fresh-s12.bpTXSL/Privacy-Guardian`, source `d3390ba`; the current app/DMG lifecycle passed.
 
 ## macOS
 
@@ -52,7 +52,7 @@ Optional OpenAI credentials are stored through the operating-system keychain onl
 
 ## Fresh-clone verification procedure
 
-This was executed at `3bec8897ddccf446282d5fff1c3cecacb4a6339d`: setup, diagnose/smoke, lint, mypy, source macOS build, extension archives, packaged install/onboarding/native handshake/PNG and native-JPEG OCR, uninstall/restore, and the 339-Mach-O macOS-13 audit passed. `make test` had one theme-dependent assertion; `make e2e` had one passport timing failure at 1.83173 seconds.
+This completed at `d3390ba`: setup, diagnose/smoke, source macOS build, extension archives, packaged install/onboarding/native handshake/PNG and native-JPEG OCR, uninstall/restore, and the 339-Mach-O macOS-13 audit passed. `make check` reported 307 passed and 5 skipped, with two first-phase performance cases deselected; coverage was 85.71% scoped and 75.42% overall.
 
 ```sh
 git clone https://github.com/tashvianeja/Privacy-Guardian.git
@@ -82,9 +82,9 @@ The worker must record command exit codes, test/coverage totals, generated exten
 |---|---|---|
 | `make setup` | Sync dependencies and run setup script | Fresh clone passed |
 | `make run` | Start the console app | Fresh clone diagnose/smoke passed |
-| `make test` | Pytest with coverage | Fresh clone exposed one theme-dependent assertion; final check pending |
-| `make e2e` | Playwright browser suite | Fresh clone exposed one passport timing failure; final count pending |
-| `make check` | Lint, typecheck, and test | Final aggregate check pending |
+| `make test` | Pytest with coverage | Fresh clone passed within final check |
+| `make e2e` | Playwright browser suite | Fresh clone runtime suite passed; Windows browser runtime remains pending |
+| `make check` | Lint, typecheck, and test | Fresh clone passed: 307 passed, 5 skipped |
 | `make build-extension` | Generate/build extension assets | Fresh clone passed |
 | `make build-mac` | macOS app + DMG with bundled compatible OCR | Current lifecycle passed |
 | `make build-win` | Intended Windows installer build | TODO; Windows runner pending |

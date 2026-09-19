@@ -16,4 +16,4 @@ All notable changes will be documented here. This project has not produced a ver
 
 ### Verification pending
 
-- Real TCC/Full Disk Access/Accessibility/screen and Windows checks, Intel packaging compatibility, Intel policy-performance optimization, final fresh clone, green CI, and release artifacts.
+- Real TCC/Full Disk Access/Accessibility/screen and Windows checks, Intel packaging compatibility, green CI, and release artifacts.
