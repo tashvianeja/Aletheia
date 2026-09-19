@@ -8,7 +8,7 @@
     return {field_id,label,name:(element.name||element.id||'').slice(0,100),input_type:element.type||element.tagName.toLowerCase(),autocomplete:element.autocomplete||'',required:!!element.required||element.getAttribute('aria-required')==='true',asserted_required:/\*/.test(label)||element.dataset.required==='true',filled:element.isContentEditable?!!element.textContent?.trim():['checkbox','radio'].includes(element.type)?element.checked:!!element.value};
   });}
   async function inventory(){const items=fields();const fingerprint=JSON.stringify(items.map(field=>({...field,filled:false})));if(fingerprint===lastFingerprint)return;lastFingerprint=fingerprint;
-    try{const result=await PG.request('context',{forms:{fields:items}});assessments=result.forms?.fields||[];PG.queryAll('.pg-badge').forEach(node=>node.remove());
+    try{const result=await PG.request('context',{forms:{fields:items}});if(fingerprint!==lastFingerprint)return;assessments=result.forms?.fields||[];PG.queryAll('.pg-badge').forEach(node=>node.remove());
       for(const assessment of assessments){if(!assessment.badge)continue;const element=PG.queryAll('[data-pg-field-id]').find(node=>node.dataset.pgFieldId===assessment.field.field_id);if(!element)continue;const badge=document.createElement('span');badge.className='pg-badge';badge.textContent='May be unnecessary';badge.title=assessment.necessity?.rationale||'';badge.setAttribute('role','note');element.insertAdjacentElement('afterend',badge);}
     }catch(_){lastFingerprint='';}}
   const schedule=()=>{clearTimeout(timer);timer=setTimeout(inventory,35);};

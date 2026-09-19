@@ -5,18 +5,26 @@ import time
 from datetime import UTC, datetime
 from typing import Any
 
-from privacy_guardian.core.events import Outcome
+from privacy_guardian.core.events import Outcome, Requester
 from privacy_guardian.util.i18n import tr
 
 
-async def run_deep_check(service: Any, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+async def run_deep_check(
+    service: Any,
+    payload: dict[str, Any] | None = None,
+    *,
+    foreground_requester: Requester | None = None,
+) -> dict[str, Any]:
     payload = payload or {}
     started = time.monotonic()
     fresh = True
-    foreground = None
+    foreground = foreground_requester
     browser_foreground = True
     if service.adapter and hasattr(service.adapter, "foreground_requester"):
-        foreground = await asyncio.to_thread(service.adapter.foreground_requester)
+        if foreground is None:
+            foreground = Requester.model_validate(
+                await asyncio.to_thread(service.adapter.foreground_requester)
+            )
         identity = (
             foreground.display_name + " " + foreground.bundle_id + " " + foreground.exe_path
         ).lower()
@@ -50,6 +58,14 @@ async def run_deep_check(service: Any, payload: dict[str, Any] | None = None) ->
     for name in ("tracking", "consent", "policy", "terms", "forms", "uploads"):
         analysis = analyses.get(name, {})
         profile = analysis.get("profile", {})
+        if analysis.get("partial") or profile.get("partial"):
+            findings.append(
+                {
+                    "kind": name,
+                    "severity": "INFORM",
+                    "summary": "Document analysis is partial; omitted content has not been checked.",
+                }
+            )
         if name == "tracking" and (
             profile.get("fingerprinting")
             or profile.get("tracker_domains")
@@ -147,7 +163,9 @@ async def run_deep_check(service: Any, payload: dict[str, Any] | None = None) ->
         before_desktop = len(findings)
         try:
             desktop_events = await asyncio.wait_for(
-                asyncio.to_thread(service.adapter.snapshot),
+                asyncio.to_thread(service.adapter.snapshot, foreground)
+                if foreground is not None
+                else asyncio.to_thread(service.adapter.snapshot),
                 timeout=max(0.1, 9.5 - time.monotonic() + started),
             )
             desktop_available = True

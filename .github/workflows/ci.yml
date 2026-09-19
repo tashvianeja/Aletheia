@@ -34,7 +34,10 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run mypy --strict src/
-      - run: uv run pytest --cov=privacy_guardian --cov-report=xml --cov-report=json --cov-report=term-missing --cov-fail-under=0
+      - name: Test all acceptance paths
+        id: test_gate
+        continue-on-error: true
+        run: uv run pytest --cov=privacy_guardian --cov-report=xml --cov-report=json --cov-report=term-missing --cov-fail-under=0
       - name: Check line coverage
         id: coverage_gate
         continue-on-error: true
@@ -55,6 +58,7 @@ jobs:
           dist/PrivacyGuardian.app/Contents/MacOS/PrivacyGuardian --diagnose
           PRIVACY_GUARDIAN_DATA_DIR="$RUNNER_TEMP/guardian-smoke" dist/PrivacyGuardian.app/Contents/MacOS/PrivacyGuardian --smoke-test
           codesign --verify --deep --strict dist/PrivacyGuardian.app
+          uv run python tests/packaging/verify_packaged_installation.py --platform macos --artifact dist/PrivacyGuardian-0.1.0.dmg --maximum-macos 13.0
       - name: Packaged Windows smoke
         if: runner.os == 'Windows'
         shell: pwsh
@@ -62,6 +66,7 @@ jobs:
           $env:PRIVACY_GUARDIAN_DATA_DIR = "$env:RUNNER_TEMP/guardian-smoke"
           & dist/PrivacyGuardian/PrivacyGuardian.exe --diagnose
           & dist/PrivacyGuardian/PrivacyGuardian.exe --smoke-test
+          uv run python tests/packaging/verify_packaged_installation.py --platform windows --artifact dist/PrivacyGuardian-Setup-0.1.0.exe
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -71,6 +76,6 @@ jobs:
             coverage.xml
             artifacts/
 
-      - name: Enforce coverage outcome
-        if: always() && steps.coverage_gate.outcome == 'failure'
+      - name: Enforce test and coverage outcomes
+        if: always() && (steps.coverage_gate.outcome == 'failure' || steps.test_gate.outcome == 'failure')
         run: exit 1

@@ -140,6 +140,7 @@ class ConsentBannerEvent(PrivacyEvent):
 
 
 class PolicyDocumentEvent(PrivacyEvent):
+    partial: bool = False
     event_type: Literal["policy_document"] = "policy_document"
     kind: Literal["privacy_policy", "terms"] = "privacy_policy"
     document_hash: str = ""

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from html.parser import HTMLParser
 from urllib.parse import urljoin, urlsplit
 
@@ -64,5 +65,8 @@ async def fetch_public_document(url: str, origin: str, user_agent: str) -> dict[
                     parser = _PublicText()
                     parser.feed(text)
                     text = "\n".join(parser.parts)
-                return {"text": text[:120_000], "partial": partial or len(text) > 120_000}
+                bounded = text
+                while len(json.dumps({"text": bounded}, ensure_ascii=False).encode()) > 600 * 1024:
+                    bounded = bounded[: int(len(bounded) * 0.8)]
+                return {"text": bounded, "partial": partial or len(bounded) < len(text)}
     raise ValueError("Too many document redirects")

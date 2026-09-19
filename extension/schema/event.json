@@ -785,6 +785,11 @@
           "default": null,
           "title": "Correlation Id"
         },
+        "partial": {
+          "default": false,
+          "title": "Partial",
+          "type": "boolean"
+        },
         "kind": {
           "default": "privacy_policy",
           "enum": [

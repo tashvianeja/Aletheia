@@ -17,19 +17,22 @@ from pathlib import Path
 from typing import Any
 
 from privacy_guardian.core.ipc.protocol import MAX_MESSAGE_BYTES, decode_message, encode_message
+from privacy_guardian.util.permissions import secure_path
 
 Handler = Callable[[dict[str, Any]], Awaitable[dict[str, Any]]]
 
 
 def ensure_token(data_dir: Path) -> str:
     data_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    secure_path(data_dir)
     path = data_dir / "ipc.token"
     try:
         fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     except FileExistsError:
-        path.chmod(0o600)
+        secure_path(path)
         return path.read_text(encoding="ascii").strip()
     token = secrets.token_hex(32)
+    secure_path(path)
     with os.fdopen(fd, "w", encoding="ascii") as handle:
         handle.write(token)
     return token
@@ -81,7 +84,7 @@ class ControlServer:
             # The process lock must be acquired before removing a stale socket.
             path.unlink(missing_ok=True)
             self.server = await asyncio.start_unix_server(self._client, path=path)
-            path.chmod(0o600)
+            secure_path(path)
 
     async def _dispatch(self, envelope: dict[str, Any]) -> dict[str, Any]:
         token = envelope.get("token")
@@ -117,6 +120,9 @@ class ControlServer:
             }
 
     async def _client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        if len(self._tasks) >= 32:
+            writer.close()
+            return
         task = asyncio.current_task()
         if task:
             self._tasks.add(task)

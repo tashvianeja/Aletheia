@@ -9,7 +9,7 @@ description = "Local-first privacy decisions for your browser and desktop"
 requires-python = ">=3.12,<3.13"
 license = "MIT"
 dependencies = [
-  "pydantic>=2.10", "pydantic-settings>=2.7", "PySide6>=6.8", "platformdirs>=4.3",
+  "numpy==2.5.3", "pydantic>=2.10", "pydantic-settings>=2.7", "PySide6==6.8.3", "platformdirs>=4.3",
   "structlog>=24.4", "httpx>=0.28", "keyring>=25.5", "watchdog>=6.0", "PyYAML>=6.0",
   "pypdf>=5.1", "pdfplumber>=0.11", "python-docx>=1.1", "openpyxl>=3.1", "python-pptx>=1.0",
   "chardet>=5.2", "Pillow>=11", "piexif>=1.1", "pytesseract>=0.3.13", "pypdfium2>=4.30",
@@ -59,3 +59,9 @@ fail_under = 70
 
 [tool.hatch.metadata]
 allow-direct-references = true
+
+[tool.uv.sources]
+numpy = [
+  { url = "https://files.pythonhosted.org/packages/60/39/789131c1188c078dcb3a1692e72e1e050c68b88ffe72c9ccaac9bcd7a9cd/numpy-2.5.3-cp312-cp312-macosx_11_0_arm64.whl", marker = "sys_platform == 'darwin' and platform_machine == 'arm64'" },
+  { url = "https://files.pythonhosted.org/packages/d6/50/8fdbb16af64895706a45f06a4068e29db732ec180f3c1375f14123359138/numpy-2.5.3-cp312-cp312-macosx_10_13_x86_64.whl", marker = "sys_platform == 'darwin' and platform_machine == 'x86_64'" },
+]

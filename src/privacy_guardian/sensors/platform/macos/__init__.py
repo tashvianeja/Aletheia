@@ -134,6 +134,8 @@ class MacOSAdapter(PlatformAdapter):
         self._access: dict[str, set[DataCategory]] = {}
         self._extension_state: dict[str, str] = {}
         self._path_monitor: Any = None
+        self._extension_monitor: Any = None
+        self._extensions_changed = threading.Event()
         self._fs_changed = threading.Event()
         self._startup_requesters: dict[str, Requester] = {}
         self._injected = backend is not None or tcc_paths is not None or watch_paths is not None
@@ -264,8 +266,9 @@ class MacOSAdapter(PlatformAdapter):
                             display_name=label,
                         )
                     )
-                    if ".app/" in executable:
-                        app_root = Path(executable.split(".app/", 1)[0] + ".app")
+                    normalized_executable = executable.replace("\\", "/")
+                    if ".app/" in normalized_executable:
+                        app_root = Path(normalized_executable.split(".app/", 1)[0] + ".app")
                         try:
                             app_info = plistlib.loads(
                                 (app_root / "Contents/Info.plist").read_bytes()
@@ -500,7 +503,8 @@ class MacOSAdapter(PlatformAdapter):
                 if time.monotonic() - last_tcc >= 10:
                     events.extend(self.poll_tcc())
                     last_tcc = time.monotonic()
-                if time.monotonic() - last_extensions >= 5:
+                if self._extensions_changed.is_set() or time.monotonic() - last_extensions >= 60:
+                    self._extensions_changed.clear()
                     base = Path.home() / "Library/Application Support"
                     roots = [
                         base / name
@@ -532,6 +536,28 @@ class MacOSAdapter(PlatformAdapter):
 
         self._path_monitor = PathMonitor(self.watch_paths, self._fs_changed.set)
         self._path_monitor.start()
+        base = Path.home() / "Library/Application Support"
+        browser_roots = [
+            base / name
+            for name in (
+                "Google/Chrome",
+                "Microsoft Edge",
+                "BraveSoftware/Brave-Browser",
+                "Firefox/Profiles",
+            )
+        ]
+
+        def extensions_changed() -> None:
+            self._extensions_changed.set()
+            self._fs_changed.set()
+
+        self._extension_monitor = PathMonitor(
+            browser_roots,
+            extensions_changed,
+            path_filter=lambda path: path.name in {"manifest.json", "extensions.json"},
+        )
+        self._extension_monitor.start()
+
         self._thread = threading.Thread(target=self._loop, daemon=True, name="guardian-macos")
         self._thread.start()
         if sys.platform == "darwin" and not self._injected:
@@ -545,6 +571,8 @@ class MacOSAdapter(PlatformAdapter):
         self._fs_changed.set()
         if self._path_monitor:
             self._path_monitor.stop()
+        if self._extension_monitor:
+            self._extension_monitor.stop()
         if self._log_process:
             self._log_process.terminate()
         if self._thread:
@@ -568,8 +596,8 @@ class MacOSAdapter(PlatformAdapter):
     def foreground_requester(self) -> Requester:
         return enrich_requester(self.backend.foreground())
 
-    def snapshot(self) -> list[PrivacyEvent]:
-        requester = self.foreground_requester()
+    def snapshot(self, requester: Requester | None = None) -> list[PrivacyEvent]:
+        requester = requester or self.foreground_requester()
         events = self.diff_tcc({}, self.read_tcc())
         return [event for event in events if event.requester.key == requester.key] + [
             event for event in self._latest if event.requester.key == requester.key

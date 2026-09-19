@@ -9,10 +9,12 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from privacy_guardian.util.permissions import secure_path
 
-def data_directory() -> Path:
+
+def data_directory(*, ignore_environment: bool = False) -> Path:
     override = os.getenv("PRIVACY_GUARDIAN_DATA_DIR")
-    if override:
+    if override and not ignore_environment:
         return Path(override).expanduser()
     if sys.platform == "darwin":
         return Path.home() / "Library/Application Support/PrivacyGuardian"
@@ -96,6 +98,7 @@ class Settings(BaseSettings):
         import json
 
         self.data_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        secure_path(self.data_dir)
         lines: list[str] = []
         values = self.model_dump(mode="json")
         for key, value in values.items():
@@ -106,7 +109,7 @@ class Settings(BaseSettings):
         lines.extend(f"{key} = {json.dumps(value)}" for key, value in values["llm"].items())
         path = self.data_dir / "settings.toml"
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        path.chmod(0o600)
+        secure_path(path)
 
 
 __all__ = ["LLMSettings", "Settings", "data_directory"]

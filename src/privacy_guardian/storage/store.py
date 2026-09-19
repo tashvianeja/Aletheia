@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from privacy_guardian.core.events import Decision, PrivacyEvent, UserResponse
+from privacy_guardian.util.permissions import secure_path
 from privacy_guardian.util.privacy import public_identity, safe_origin, sanitize
 
 
@@ -18,10 +19,11 @@ class Store:
     def __init__(self, path: Path | str) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        secure_path(self.path.parent)
         self._lock = threading.RLock()
         self.connection = sqlite3.connect(str(path), check_same_thread=False)
         self.connection.row_factory = sqlite3.Row
-        self.path.chmod(0o600)
+        secure_path(self.path)
         self.connection.execute("PRAGMA journal_mode=WAL")
         self.connection.execute("PRAGMA foreign_keys=ON")
         self.migrate()

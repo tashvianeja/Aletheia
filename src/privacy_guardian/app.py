@@ -166,7 +166,7 @@ def main() -> int:
         return 0
     from PySide6.QtCore import QObject, QTimer, QUrl, Signal
     from PySide6.QtGui import QDesktopServices
-    from PySide6.QtWidgets import QApplication, QMessageBox
+    from PySide6.QtWidgets import QApplication, QMessageBox, QWidget
 
     from privacy_guardian.core.events import Decision, UserResponse
     from privacy_guardian.core.service import Service
@@ -189,6 +189,7 @@ def main() -> int:
     class Controller:
         def __init__(self) -> None:
             self.settings = settings
+            self.dialog_parent = QWidget()
             self.core = Service(settings)
             self.loop = asyncio.new_event_loop()
             self.bridge = Bridge()
@@ -207,7 +208,7 @@ def main() -> int:
             self.bridge.decision_ready.connect(self.show_decision)
             self.bridge.report_ready.connect(self.show_report)
             self.bridge.update_ready.connect(
-                lambda message: QMessageBox.information(None, tr("updates"), message)
+                lambda message: QMessageBox.information(self.dialog_parent, tr("updates"), message)
             )
             self.bridge.focus_requested.connect(self.show_dashboard)
             self.bridge.deep_check_requested.connect(self.deep_check)
@@ -217,7 +218,7 @@ def main() -> int:
             if not arguments.smoke_test:
                 self.hotkey.start()
             self.bridge.error.connect(
-                lambda message: QMessageBox.warning(None, tr("app_name"), message)
+                lambda message: QMessageBox.warning(self.dialog_parent, tr("app_name"), message)
             )
             self.tray = GuardianTray(self)
             self.popups = PopupQueue(self)
@@ -309,7 +310,12 @@ def main() -> int:
             if old.adapter:
                 old.adapter.stop()
             old.pool.close()
+            old.metadata_executor.shutdown(wait=False, cancel_futures=True)
             old._close_cloud()
+            if old.control.server:
+                old.control.server.close()
+            if old.control.listener:
+                old.control.listener.close()
             with contextlib.suppress(Exception):
                 old.store.close()
             self.loop = asyncio.new_event_loop()
@@ -326,14 +332,15 @@ def main() -> int:
             self.tray.showMessage(tr("app_name"), tr("service_restarted"))
 
         def deep_check(self) -> None:
+            foreground = self.core.adapter.foreground_requester() if self.core.adapter else None
             self.deepcheck_window = DeepCheckWindow(self)
             self.deepcheck_window.show()
 
             async def run_check() -> None:
-                response = await self.core.handle_message(
-                    {"v": 1, "id": "deep-check", "type": "deep_check", "payload": {}}
-                )
-                self.bridge.report_ready.emit(response.get("result") or {"summary": tr("error")})
+                from privacy_guardian.deepcheck import run_deep_check
+
+                report = await run_deep_check(self.core, foreground_requester=foreground)
+                self.bridge.report_ready.emit(report)
 
             self.submit(run_check())
 
@@ -370,7 +377,7 @@ def main() -> int:
 
         def show_permissions(self) -> None:
             QMessageBox.information(
-                None,
+                self.dialog_parent,
                 tr("permissions"),
                 "\n".join(
                     f"{name}: {tr('enabled') if enabled else tr('disabled')}"
@@ -380,7 +387,9 @@ def main() -> int:
 
         def show_extensions(self) -> None:
             QMessageBox.information(
-                None, tr("extensions"), tr("connected", count=len(self.core.connected_browsers))
+                self.dialog_parent,
+                tr("extensions"),
+                tr("connected", count=len(self.core.connected_browsers)),
             )
 
         def show_onboarding(self) -> None:

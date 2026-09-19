@@ -113,6 +113,7 @@ def main() -> None:
                 "--force",
                 "--sign",
                 identity,
+                *(["--options", "runtime", "--timestamp"] if identity != "-" else []),
                 "--entitlements",
                 str(ROOT / "packaging/macos/entitlements.plist"),
                 str(app),

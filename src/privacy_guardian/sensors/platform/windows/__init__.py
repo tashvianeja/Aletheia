@@ -168,12 +168,12 @@ class WindowsRegistry:
 
 
 class WindowsClipboard:
-    def foreground(self) -> Requester:
+    @staticmethod
+    def _requester(window: int) -> Requester:
         import psutil
-        import win32gui
         import win32process
 
-        _thread, pid = win32process.GetWindowThreadProcessId(win32gui.GetForegroundWindow())
+        _thread, pid = win32process.GetWindowThreadProcessId(window)
         try:
             process = psutil.Process(pid)
             return Requester(
@@ -181,6 +181,15 @@ class WindowsClipboard:
             )
         except (psutil.Error, OSError):
             return Requester(kind="application")
+
+    def foreground(self) -> Requester:
+        import win32gui
+
+        return self._requester(int(win32gui.GetForegroundWindow()))
+
+    def clipboard_owner(self) -> Requester | None:
+        owner = int(importlib.import_module("ctypes").windll.user32.GetClipboardOwner())
+        return self._requester(owner) if owner else None
 
     def clipboard(self) -> tuple[int, str]:
         import win32clipboard
@@ -275,6 +284,8 @@ class WindowsAdapter(PlatformAdapter):
         self._foreground: Requester | None = None
         self._injected = registry is not None
         self._path_monitor: Any = None
+        self._extension_monitor: Any = None
+        self._extensions_changed = threading.Event()
         self._fs_changed = threading.Event()
         self._extensions: dict[str, str] = {}
 
@@ -515,6 +526,7 @@ class WindowsAdapter(PlatformAdapter):
 
     def _loop(self) -> None:
         last_tasks = 0.0
+        last_extensions = 0.0
         last_registry = 0.0
         while not self._stop.is_set():
             try:
@@ -530,6 +542,9 @@ class WindowsAdapter(PlatformAdapter):
                 if time.monotonic() - last_tasks >= 5:
                     events.extend(self.poll_tasks())
                     last_tasks = time.monotonic()
+                if self._extensions_changed.is_set() or time.monotonic() - last_extensions >= 60:
+                    self._extensions_changed.clear()
+                    last_extensions = time.monotonic()
                     base = Path(os.getenv("LOCALAPPDATA", ""))
                     roots = [
                         base / name
@@ -585,6 +600,28 @@ class WindowsAdapter(PlatformAdapter):
 
         self._path_monitor = PathMonitor(self.watch_paths, self._fs_changed.set)
         self._path_monitor.start()
+        base = Path(os.getenv("LOCALAPPDATA", ""))
+        browser_roots = [
+            base / name
+            for name in (
+                "Google/Chrome/User Data",
+                "Microsoft/Edge/User Data",
+                "BraveSoftware/Brave-Browser/User Data",
+            )
+        ]
+        browser_roots.append(Path(os.getenv("APPDATA", "")) / "Mozilla/Firefox/Profiles")
+
+        def extensions_changed() -> None:
+            self._extensions_changed.set()
+            self._fs_changed.set()
+
+        self._extension_monitor = PathMonitor(
+            browser_roots,
+            extensions_changed,
+            path_filter=lambda path: path.name in {"manifest.json", "extensions.json"},
+        )
+        self._extension_monitor.start()
+
         try:
             self.poll_tasks()
         except Exception:
@@ -601,6 +638,8 @@ class WindowsAdapter(PlatformAdapter):
         self._stop.set()
         if self._path_monitor:
             self._path_monitor.stop()
+        if self._extension_monitor:
+            self._extension_monitor.stop()
         if self._thread:
             self._thread.join(timeout=2)
 
@@ -610,8 +649,8 @@ class WindowsAdapter(PlatformAdapter):
     def foreground_requester(self) -> Requester:
         return enrich_requester(self.backend.foreground())
 
-    def snapshot(self) -> list[PrivacyEvent]:
-        requester = self.foreground_requester()
+    def snapshot(self, requester: Requester | None = None) -> list[PrivacyEvent]:
+        requester = requester or self.foreground_requester()
         base = Path(os.getenv("LOCALAPPDATA", ""))
         roots = [
             base / name

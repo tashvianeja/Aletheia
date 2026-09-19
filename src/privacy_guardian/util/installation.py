@@ -4,11 +4,11 @@ import contextlib
 import importlib
 import json
 import shlex
-import shutil
 import sys
 from pathlib import Path
 
-from privacy_guardian.config import Settings
+from privacy_guardian.config import Settings, data_directory
+from privacy_guardian.util.permissions import secure_path
 
 HOST_NAME = "com.privacyguardian.host"
 CHROME_ID = "bfdjphkbgihhbonhnmjbbfhckdddonob"
@@ -31,6 +31,7 @@ def manifest_locations(platform: str | None = None, home: Path | None = None) ->
 
 def install(settings: Settings) -> list[Path]:
     settings.data_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    secure_path(settings.data_dir)
     installed: list[Path] = []
     if sys.platform == "win32":
         executable = (
@@ -69,7 +70,7 @@ def install(settings: Settings) -> list[Path]:
         folder.mkdir(parents=True, exist_ok=True)
         target = folder / f"{HOST_NAME}.json"
         target.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-        target.chmod(0o600)
+        secure_path(target)
         installed.append(target)
         if sys.platform == "win32":
             winreg = importlib.import_module("winreg")
@@ -128,6 +129,7 @@ def uninstall(settings: Settings, remove_data: bool = True) -> None:
         # Only known product artifacts are deleted; never recursively delete arbitrary configured roots.
         for name in (
             "settings.toml",
+            "trackers.json",
             "ipc.token",
             "guardian.lock",
             "tray-ready",
@@ -142,6 +144,26 @@ def uninstall(settings: Settings, remove_data: bool = True) -> None:
         for folder_name in ("chrome", "edge", "brave", "firefox", "logs"):
             target = settings.data_dir / folder_name
             if target.is_dir() and not target.is_symlink():
-                shutil.rmtree(target)
+                if folder_name == "logs":
+                    for log_file in target.glob("guardian.log*"):
+                        if log_file.is_file() and not log_file.is_symlink():
+                            log_file.unlink()
+                else:
+                    (target / f"{HOST_NAME}.json").unlink(missing_ok=True)
+                with contextlib.suppress(OSError):
+                    target.rmdir()
+        from privacy_guardian.core.ipc.transport import endpoint
+
+        if sys.platform != "win32":
+            socket = Path(endpoint(settings.data_dir))
+            socket.unlink(missing_ok=True)
+            if socket.parent != settings.data_dir:
+                with contextlib.suppress(OSError):
+                    socket.parent.rmdir()
+        if settings.data_dir.resolve() == data_directory(ignore_environment=True).resolve():
+            with contextlib.suppress(Exception):
+                from privacy_guardian.llm.client import delete_api_key
+
+                delete_api_key()
         with contextlib.suppress(OSError):
             settings.data_dir.rmdir()

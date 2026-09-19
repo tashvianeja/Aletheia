@@ -85,6 +85,7 @@ class Service:
         self.focused_origin = ""
         self.connected_browsers: dict[str, float] = {}
         self.browser_sessions: dict[str, str] = {}
+        self.closed_sessions: dict[str, float] = {}
         self.paused_until: datetime | None = None
         self.adapter: Any = None
         self._llm_executor: ProcessPoolExecutor | None = None
@@ -196,6 +197,9 @@ class Service:
                         self.pending_since.pop(event_id, None)
                         self.event_owners.pop(event_id, None)
                         self.response_locks.pop(event_id, None)
+                for closed_session, closed_at in list(self.closed_sessions.items()):
+                    if now - closed_at > 600:
+                        self.closed_sessions.pop(closed_session, None)
                 for browser, last_seen in list(self.connected_browsers.items()):
                     if now - last_seen > 15:
                         self.connected_browsers.pop(browser, None)
@@ -280,6 +284,12 @@ class Service:
                 .get(kind, {})
                 .get("profile", {})
             )
+            if document.get("partial"):
+                decision.rationale.append(
+                    "⚠ Partial document analysis; omitted content has not been checked."
+                )
+                if decision.outcome == Outcome.IGNORE:
+                    decision.outcome = Outcome.INFORM
             for clause in document.get("clauses", []):
                 if isinstance(clause, dict):
                     title = str(clause.get("category", "")).replace("_", " ").capitalize()
@@ -302,6 +312,14 @@ class Service:
 
         observation = Observation(
             categories=event.data_categories,
+            event_class=event.event_type,
+            signals=list(
+                getattr(
+                    event,
+                    "dark_patterns",
+                    profile.clauses if event.event_type == "policy_document" else [],
+                )
+            ),
             ts=event.ts,
             confidence=getattr(event, "confidence", 0),
             red_flags=[
@@ -322,7 +340,7 @@ class Service:
         )
         if decision.outcome == Outcome.INTERVENE:
             self.pending_since[event.id] = time.monotonic()
-        if decision.outcome != Outcome.IGNORE:
+        if decision.outcome != Outcome.IGNORE and event.event_type != "form_observed":
             for callback in tuple(self.decision_listeners):
                 try:
                     callback(decision)
@@ -449,10 +467,13 @@ class Service:
                 raise ValueError("Redaction could not be verified; upload remains cancelled")
             folder = Path.home() / "Downloads/PrivacyGuardian"
             folder.mkdir(parents=True, exist_ok=True, mode=0o700)
+            from privacy_guardian.util.permissions import secure_path
+
+            secure_path(folder)
             name = Path(redacted.filename).name
             target = folder / f"{event.id[:8]}-{name}"
             target.write_bytes(redacted.content)
-            target.chmod(0o600)
+            secure_path(target)
             result.update(
                 {
                     "path": str(target),
@@ -527,6 +548,8 @@ class Service:
     async def _route(self, request: Request) -> dict[str, Any]:
         payload = dict(request.payload)
         session = str(payload.pop("_session", ""))[:128]
+        if session and session in self.closed_sessions and request.type != "disconnect":
+            raise ValueError("Browser session has closed")
         if request.type == "ping":
             browser = str(payload.get("browser", "browser"))[:40]
             self.connected_browsers[browser] = time.monotonic()
@@ -605,6 +628,26 @@ class Service:
                 partial=analysis.partial,
                 size_bytes=meta["size"],
             )
+            if session in self.closed_sessions or meta["generation"] != self.pool.generation:
+                event.data_categories = sorted(
+                    {finding.category for finding in analysis.findings}, key=str
+                )
+                decision = decide(
+                    event,
+                    analysis.findings,
+                    self._profile(event.requester),
+                    self.preferences_for(event.requester),
+                    self.learned_rules,
+                )
+                self.store.save_event(event)
+                self.store.mark_aborted(event.id)
+                self.store.save_decision(decision)
+                if event.payload_ref:
+                    from privacy_guardian.analysis.worker import release_payload
+
+                    with contextlib.suppress(RuntimeError, KeyError):
+                        await self.pool.run(release_payload, event.payload_ref)
+                return {"aborted": True, "decision": decision.model_dump(mode="json")}
             decision = await self.process_event(event, analysis.findings)
             self.event_owners[event.id] = session
             return {
@@ -692,6 +735,13 @@ class Service:
                         )
                 else:
                     analyzed = await self.pool.run(analyze_payload, worker_payload)
+                if worker_payload.get("partial") or analyzed.profile.get("partial"):
+                    analyzed.partial = True
+                    analyzed.profile["partial"] = True
+                    analyzed.warnings.append(
+                        "Document is partially analyzed; omitted content has not been checked."
+                    )
+                    analyzed.profile["nothing_unusual"] = []
                 result[kind] = analyzed.model_dump(mode="json", exclude={"payload_ref"})
                 if kind in {"policy", "terms"}:
                     digest = hashlib.sha256(
@@ -711,6 +761,8 @@ class Service:
                                 analyzed.profile,
                             ),
                         )
+            if session in self.closed_sessions:
+                return {"aborted": True}
             if "uploads_in_progress" in payload:
                 result["uploads"] = {
                     "profile": {"in_progress": max(0, int(payload["uploads_in_progress"]))}
@@ -794,6 +846,7 @@ class Service:
                 elif kind in {"policy", "terms"} and payload.get("trigger_action"):
                     context_event = PolicyDocumentEvent(
                         requester=requester,
+                        partial=bool(analyzed_result.get("partial")),
                         kind="terms" if kind == "terms" else "privacy_policy",
                         missing=detail.get("missing", False),
                     )
@@ -818,6 +871,7 @@ class Service:
                         )
                     )
                 return {"disconnected": True, "event_id": requested_event}
+            self.closed_sessions[session] = time.monotonic()
             for upload_id, metadata in list(self.uploads.items()):
                 if metadata["session"] == session:
                     with contextlib.suppress(RuntimeError, KeyError):

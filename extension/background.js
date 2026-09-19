@@ -54,9 +54,9 @@ async function blockTracking(tabId, origin, hosts) {
   const pageHost = new URL(origin).hostname;
   const cleanHosts = [...new Set(hosts)].filter(host => /^[a-z0-9.-]+$/i.test(host)).slice(0,100);
   const existing = await api.declarativeNetRequest.getDynamicRules();
-  const base = 10000 + Math.abs(tabId % 10000) * 100;
-  const removeRuleIds = existing.filter(rule => rule.id >= base && rule.id < base + 100).map(rule => rule.id);
-  const addRules = cleanHosts.map((host,index)=>({id:base+index,priority:1,action:{type:'block'},condition:{urlFilter:`||${host}^`,initiatorDomains:[pageHost],resourceTypes:['script','image','xmlhttprequest','sub_frame','ping','other']}}));
+  const removeRuleIds = existing.filter(rule => rule.condition?.initiatorDomains?.length===1&&rule.condition.initiatorDomains[0]===pageHost).map(rule=>rule.id);
+  const used = new Set(existing.filter(rule=>!removeRuleIds.includes(rule.id)).map(rule=>rule.id));let nextId=10000;const allocate=()=>{while(used.has(nextId))nextId++;used.add(nextId);return nextId++;};
+  const addRules = cleanHosts.map(host=>({id:allocate(),priority:1,action:{type:'block'},condition:{urlFilter:`||${host}^`,initiatorDomains:[pageHost],resourceTypes:['script','image','xmlhttprequest','sub_frame','ping','other']}}));
   await api.declarativeNetRequest.updateDynamicRules({removeRuleIds,addRules});
   for (const host of cleanHosts) {
     const cookies = await api.cookies.getAll({domain:host});
@@ -109,7 +109,7 @@ async function route(message,sender) {
   if(message.type === 'fetch_policy') {
     const url=new URL(payload.url);if(!['https:','http:'].includes(url.protocol))throw new Error('Invalid policy URL');
     try{const response=await fetch(url.href,{credentials:'include',redirect:'follow',signal:AbortSignal.timeout(2000)});if(!response.ok)throw new Error('Policy unavailable');
-    const text=(await response.text()).slice(0,2000000);return {text:text.replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ')};}catch(_){return native('fetch_document',{url:url.href,origin:requester.origin,user_agent:navigator.userAgent},3500);}
+    const raw=await response.text(),text=raw.slice(0,2000000);return {partial:raw.length>2000000,text:text.replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ')};}catch(_){return native('fetch_document',{url:url.href,origin:requester.origin,user_agent:navigator.userAgent},3500);}
   }
   if (message.type === 'block_tracking') {await blockTracking(tabId,requester.origin,payload.hosts||[]);return {blocked:true};}
   if (message.type === 'tracking_context') {
@@ -137,7 +137,7 @@ api.webRequest.onBeforeRequest.addListener(details => {
   if (details.tabId < 0) return;
   const context = tabContexts.get(details.tabId) || {};
   context.request_hosts = context.request_hosts || new Set(); context.urls=context.urls||new Set();
-  try {context.request_hosts.add(new URL(details.url).hostname);} catch (_) {}
+  try {context.request_hosts.add(new URL(details.url).hostname);if(context.request_hosts.size>2000)context.request_hosts.delete(context.request_hosts.values().next().value);} catch (_) {}
   // URL identifiers remain in transient browser memory; only category analysis results persist.
   if (context.urls.size<200) context.urls.add(details.url.slice(0,2000));
   tabContexts.set(details.tabId,context);

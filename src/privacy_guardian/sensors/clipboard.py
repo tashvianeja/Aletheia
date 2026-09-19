@@ -31,7 +31,12 @@ class ClipboardMonitor:
         requester: Requester = await asyncio.to_thread(self.backend.foreground)
         if sequence != self.sequence:
             self.sequence = sequence
-            self.writer_key = requester.key
+            owner = (
+                await asyncio.to_thread(self.backend.clipboard_owner)
+                if hasattr(self.backend, "clipboard_owner")
+                else None
+            )
+            self.writer_key = owner.key if owner else requester.key
             from privacy_guardian.analysis.worker import analyze_payload
 
             if text:

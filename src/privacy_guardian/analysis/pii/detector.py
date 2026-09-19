@@ -163,7 +163,7 @@ def _validate(category: DataCategory, value: str) -> bool | None:
     return None
 
 
-def find_matches(text: str, *, use_ner: bool = False, region: str = "US") -> list[Match]:
+def _find_matches_block(text: str, *, use_ner: bool = False, region: str = "US") -> list[Match]:
     token_pattern = (
         r"<(?:" + "|".join(re.escape(category.value.upper()) for category in DataCategory) + r")>"
     )
@@ -234,25 +234,93 @@ def find_matches(text: str, *, use_ner: bool = False, region: str = "US") -> lis
     if use_ner:
         nlp = _ner()
         if nlp is not None:
-            for entity in nlp(text[:200_000]).ents:
-                entity_category = {
-                    "PERSON": DataCategory.FULL_NAME,
-                    "GPE": DataCategory.LOCATION_COARSE,
-                }.get(entity.label_)
-                if entity_category is not None:
-                    matches.append(Match(entity_category, entity.start_char, entity.end_char, 0.7))
-                elif entity.label_ == "ORG" and re.search(
-                    r"employer|employed|work(?:ing)? at",
-                    text[max(0, entity.start_char - 40) : entity.start_char],
-                    re.I,
-                ):
-                    matches.append(
-                        Match(DataCategory.EMPLOYMENT, entity.start_char, entity.end_char, 0.65)
-                    )
+            # Inspect every character, with overlap for entities spanning chunk boundaries.
+            # Repeated clauses/rows share an inference result, preserving original offsets.
+            chunks: list[tuple[int, str]] = []
+            offset = 0
+            while offset < len(text):
+                end = min(len(text), offset + 8192)
+                if end < len(text):
+                    boundary = text.rfind("\n", offset + 4096, end)
+                    if boundary >= 0:
+                        end = boundary + 1
+                start = max(0, offset - 256)
+                chunks.append((start, text[start : min(len(text), end + 256)]))
+                offset = end
+            unique_chunks = dict.fromkeys(chunk for _, chunk in chunks)
+            entities_by_chunk = {
+                chunk: [
+                    (entity.start_char, entity.end_char, entity.label_) for entity in document.ents
+                ]
+                for chunk, document in zip(
+                    unique_chunks, nlp.pipe(unique_chunks, batch_size=8), strict=True
+                )
+            }
+            for start, chunk in chunks:
+                for begin, end, label in entities_by_chunk[chunk]:
+                    begin += start
+                    end += start
+                    entity_category = {
+                        "PERSON": DataCategory.FULL_NAME,
+                        "GPE": DataCategory.LOCATION_COARSE,
+                    }.get(label)
+                    if entity_category is not None:
+                        matches.append(Match(entity_category, begin, end, 0.7))
+                    elif label == "ORG" and re.search(
+                        r"employer|employed|work(?:ing)? at", text[max(0, begin - 40) : begin], re.I
+                    ):
+                        matches.append(Match(DataCategory.EMPLOYMENT, begin, end, 0.65))
     unique = {(match.category, match.start, match.end): match for match in matches}
     return sorted(
         unique.values(), key=lambda match: (match.start, -match.end, match.category.value)
     )
+
+
+def find_matches(text: str, *, use_ner: bool = False, region: str = "US") -> list[Match]:
+    if len(text) <= 65_536:
+        return _find_matches_block(text, use_ner=use_ner, region=region)
+    # Repeated exported rows and boilerplate need one analysis per distinct window.
+    # Overlap preserves ordinary identifiers, addresses and multi-line name context.
+    cache: dict[str, list[Match]] = {}
+    found: dict[tuple[DataCategory, int, int], Match] = {}
+    offset = 0
+    while offset < len(text):
+        end = min(len(text), offset + 16_384)
+        if end < len(text):
+            boundary = text.rfind("\n", offset + 8192, end)
+            if boundary >= 0:
+                end = boundary + 1
+        start = max(0, offset - 512)
+        chunk = text[start : min(len(text), end + 512)]
+        matches = cache.get(chunk)
+        if matches is None:
+            matches = _find_matches_block(chunk, use_ner=use_ner, region=region)
+            cache[chunk] = matches
+        for match in matches:
+            shifted = Match(
+                match.category,
+                match.start + start,
+                match.end + start,
+                match.confidence,
+                match.validator_passed,
+            )
+            found[(shifted.category, shifted.start, shifted.end)] = shifted
+        offset = end
+    # Credentials can legitimately exceed the overlap (for example PEM keys).
+    # Scan these unbounded patterns over the complete text as well.
+    for category, pattern, confidence in _COMPILED:
+        if category.value.startswith("credentials."):
+            for candidate in pattern.finditer(text):
+                found[(category, candidate.start(), candidate.end())] = Match(
+                    category, candidate.start(), candidate.end(), confidence
+                )
+    for category, pattern, confidence in _CONTEXT:
+        if category.value.startswith("credentials."):
+            for candidate in pattern.finditer(text):
+                found[(category, candidate.start(1), candidate.end(1))] = Match(
+                    category, candidate.start(1), candidate.end(1), confidence
+                )
+    return sorted(found.values(), key=lambda match: (match.start, -match.end, match.category.value))
 
 
 def detect_pii(text: str, *, page: int | None = None, use_ner: bool = False) -> list[Finding]:
