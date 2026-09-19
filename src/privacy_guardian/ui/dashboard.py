@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from PySide6.QtCore import QTimer
+from PySide6.QtGui import QHideEvent, QShowEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -193,8 +194,16 @@ class Dashboard(QWidget):
         )
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.refresh)
-        self.timer.start(3000)
         self.refresh()
+
+    def showEvent(self, event: QShowEvent) -> None:
+        super().showEvent(event)
+        self.refresh()
+        self.timer.start(3000)
+
+    def hideEvent(self, event: QHideEvent) -> None:
+        self.timer.stop()
+        super().hideEvent(event)
 
     def refresh(self) -> None:
         rows = self.service.core.store.history(

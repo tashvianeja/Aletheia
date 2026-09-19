@@ -464,6 +464,8 @@ def main() -> int:
             self._closing = True
             self.supervisor.stop()
             self.hotkey.stop()
+            if self.dashboard is not None:
+                self.dashboard.close()
 
             async def stop() -> None:
                 if self.clipboard:

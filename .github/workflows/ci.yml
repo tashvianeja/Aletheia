@@ -89,10 +89,10 @@ jobs:
         shell: pwsh
         run: |
           $env:PRIVACY_GUARDIAN_DATA_DIR = "$env:RUNNER_TEMP/guardian-smoke"
-          & dist/PrivacyGuardian/PrivacyGuardian.exe --diagnose
-          if ($LASTEXITCODE -ne 0) { throw "Packaged diagnostics failed" }
-          & dist/PrivacyGuardian/PrivacyGuardian.exe --smoke-test
-          if ($LASTEXITCODE -ne 0) { throw "Packaged application smoke failed" }
+          $diagnose = Start-Process -FilePath dist/PrivacyGuardian/PrivacyGuardian.exe -ArgumentList '--diagnose' -Wait -PassThru
+          if ($diagnose.ExitCode -ne 0) { throw "Packaged diagnostics failed: $($diagnose.ExitCode)" }
+          $smoke = Start-Process -FilePath dist/PrivacyGuardian/PrivacyGuardian.exe -ArgumentList '--smoke-test' -Wait -PassThru
+          if ($smoke.ExitCode -ne 0) { throw "Packaged application smoke failed: $($smoke.ExitCode)" }
           $installer = @(Get-ChildItem dist/PrivacyGuardian-Setup-*.exe)
           if ($installer.Count -ne 1) { throw "Expected exactly one installer artifact" }
           uv run python tests/packaging/verify_packaged_installation.py --platform windows --artifact $installer[0].FullName
