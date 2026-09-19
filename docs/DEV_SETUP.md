@@ -32,7 +32,7 @@ uv sync
 uv run python scripts/setup.py
 ```
 
-Physical Windows UI validation has not been performed. Windows CI has exercised adapter tests, but final installer/runtime acceptance is pending CI-account billing capacity. In particular, validate how `make` is provided in the selected shell before relying on these commands.
+Physical Windows UI validation has not been performed. Windows CI has exercised adapter tests and the repaired installer run is building; final installer/runtime acceptance remains pending. A separate latest-source CI run has no jobs because of an account billing limit. In particular, validate how `make` is provided in the selected shell before relying on these commands.
 
 ## Browser development
 
@@ -84,7 +84,7 @@ The worker must record command exit codes, test/coverage totals, generated exten
 | `make run` | Start the console app | Fresh clone diagnose/smoke passed |
 | `make test` | Pytest with coverage | Fresh clone passed within final check |
 | `make e2e` | Playwright browser suite | Fresh clone runtime suite passed; Windows browser runtime remains pending |
-| `make check` | Lint, typecheck, and test | Fresh clone passed: 307 passed, 5 skipped |
+| `make check` | Lint, typecheck, and test | Final local headed run: 311 passed, 5 skipped; clean clone passed 307, 5 skipped |
 | `make build-extension` | Generate/build extension assets | Fresh clone passed |
 | `make build-mac` | macOS app + DMG with bundled compatible OCR | Current lifecycle passed |
 | `make build-win` | Build the Windows installer on Windows | Final installed-runtime acceptance pending |

@@ -1,6 +1,6 @@
 # Acceptance map
 
-`tests/ACCEPTANCE.json` is the machine-readable source of the acceptance map. It covers all 20 functional requirements and all 18 end-to-end scenarios; this page makes its current status readable without changing the test contract. Final fresh-clone `make check` evidence at `d3390ba` is 307 passed and 5 skipped, with two first-phase performance cases deselected. Exact line coverage is 85.71% scoped (`1,667/1,945`) and 75.42% overall (`4,115/5,456`).
+`tests/ACCEPTANCE.json` is the machine-readable source of the acceptance map. It covers all 20 functional requirements and all 18 end-to-end scenarios; this page makes its current status readable without changing the test contract. Final local headed `make check` evidence at `2af6d4a` is 311 passed and 5 skipped: 277 instrumented passes with four skips and two deselections, plus 34 runtime passes and one skip. Exact line coverage is 85.55% scoped (`1,687/1,972`) and 75.43% overall (`4,136/5,483`).
 
 ## Functional requirements
 
@@ -24,7 +24,7 @@
 | FR-16 Event history | store test | Unit evidence present |
 | FR-17 Native messaging | IPC transport/protocol tests; Chromium/Firefox handshakes and recovery exercised | Implemented and exercised |
 | FR-18 Onboarding | UI coverage and packaged onboarding smoke | Implemented and exercised |
-| FR-19 Packaging | Current app/DMG lifecycle: onboarding/tray, protocol-v1 readiness, OCR, uninstall/restoration, 339 Mach-O slices at macOS 13 | macOS exercised; Windows installer pending |
+| FR-19 Packaging | Prior app/DMG lifecycle: onboarding/tray, protocol-v1 readiness, OCR, uninstall/restoration, 339 Mach-O slices at macOS 13; refreshed main app codesign/audit pass | Refreshed macOS lifecycle and Windows installer run pending |
 | FR-20 Logging/resilience | SIGKILL-mid-analysis abort/service-alive/reconnect coverage; native-host death/result-race regression passed for Sol | Refreshed artifact/root verification pending |
 
 ## End-to-end scenarios
@@ -32,7 +32,7 @@
 | Scenario | Current status from `tests/ACCEPTANCE.json` |
 |---:|---|
 | 1–3 | Upload, redaction, image, and bounded full-text paths are implemented and exercised. |
-| 4–5 | Connected form case measured 238.983 ms; headed browser fixture coverage exercised. |
+| 4–5 | Connected form DOM badge measured 137.8 ms; the separate host-side comparison was 252.649 ms. |
 | 6–9 | Terms/Deep Check, CMP, and DNR/cookie-block paths exercised. |
 | 10 | Real macOS adapter test pending. |
 | 11 | Isolated Windows registry adapter coverage exists; final Windows installer/runtime acceptance is pending. |

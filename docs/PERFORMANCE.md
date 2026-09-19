@@ -6,7 +6,7 @@ The final 205 KB policy measurement was **0.306559 s** in the root run and **0.3
 
 The final 300-second native-Cocoa whole-tree measurement recorded tray readiness at **0.823200875 s**, initial RSS at **200.5 MiB**, warm median RSS at **197.734375 MiB** (**207.33952 MB**), peak RSS at **200.78125 MiB** (**210.5344 MB**), final RSS at **192.78125 MiB**, and cumulative CPU at **0.0442277493%**. CPU meets its target. The raw decimal-200-MB criterion is missed by **7.33952 MB** at the median and **10.5344 MB** at peak, although the configured 25% tolerance gate passes. The script reports MiB; both units are shown to avoid treating them as interchangeable.
 
-Document-path measurements include a 38 MB mixed PDF at **1.4866 s cold** and **0.1633 s warm**. The bounded full 5 MiB text scan measured **1.822472 s**: it misses the raw 1.5-second target by **0.322472 s**, while passing the 1.875-second 25%-tolerance gate. Keep cold and connected measurements distinct. Intel policy performance remains an open cross-platform optimization.
+Document-path measurements include a 38 MB mixed PDF at **1.4866 s cold** and **0.1633 s warm**. The bounded full 5 MiB text scan measured **1.822472 s**: it misses the raw 1.5-second target by **0.322472 s**, while passing the 1.875-second 25%-tolerance gate. Keep cold and connected measurements distinct. Intel policy performance passed at `d3390ba`; the remaining Intel runtime miss was a 2.1257-second passport DOM warning against the 1.5-second raw target and 1.875-second tolerated target.
 
 ## Targets and status
 
@@ -14,7 +14,7 @@ Document-path measurements include a 38 MB mixed PDF at **1.4866 s cold** and **
 |---|---|
 | Idle CPU under 1% averaged over 5 minutes | 0.0442277493% over 300 seconds |
 | Idle RSS under 200 MB | Raw decimal target misses: median 207.33952 MB (+7.33952 MB), peak 210.5344 MB (+10.5344 MB); 25% tolerance gate passes |
-| Form observation to badge ≤300 ms | Headed browser coverage exists; final aggregate latency pending |
+| Form observation to badge ≤300 ms | Connected DOM badge 137.8 ms; separate host-side comparison 252.649 ms |
 | File up to 5 MB to decision ≤1.5 s | Full 5 MiB scan 1.822472 s: raw target missed by 0.322472 s; 1.875 s tolerance gate passes |
 | Consent verdict ≤400 ms | 213.5 ms; consent CPU 0.05 ms |
 | 200 KB policy offline ≤2.5 s | 0.306559 s root / 0.346333 s independent Sol |

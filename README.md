@@ -4,14 +4,14 @@ Privacy Guardian is a local-first background app for macOS and Windows that help
 
 The app can classify sensitive categories in documents and forms, inspect consent and tracking signals, and relate a request to the apparent purpose of a site or application. It presents one of three outcomes: **Ignore**, **Inform**, or **Intervene**, with an explanation and an action where one is available.
 
-This repository is an in-progress initial build. All 20 functional requirements are implemented, with independent evidence recorded in `docs/PLAN.md`; physical Windows validation, protected macOS permission grants, refreshed host-race artifact verification, and a green CI run remain pending. Corrected Intel static-crypto packaging and installed-package smoke/audit passed at 14:14 UTC, but its earlier job remains failed and is not green evidence. No GitHub release has been published.
+This repository is an in-progress initial build. All 20 functional requirements are implemented, with independent evidence recorded in `docs/PLAN.md`; physical Windows validation, protected macOS permission grants, refreshed host-race artifact verification, and a green CI run remain pending. Corrected Intel static-crypto packaging and installed-package smoke/audit passed at 14:14 UTC, but its earlier job remains failed and is not green evidence. The latest-source CI run has no jobs because of an account billing limit. No GitHub release has been published.
 
 ## Feature matrix
 
 | Capability | Browser extension | macOS desktop | Windows desktop | Offline | Optional LLM-assisted |
 |---|---:|---:|---:|---:|---:|
 | Document category detection and redaction | Connected warning visible in 1.095 s; bounded 5 MiB full scan passes current gate | — | — | Yes | No |
-| Form field semantics | Connected headed form case 238.983 ms | — | — | Yes | No |
+| Form field semantics | Connected form DOM badge in 137.8 ms; host-side comparison 252.649 ms | — | — | Yes | No |
 | Policy and terms clause extraction | Wired, including exact three-finding Deep Check coverage | — | — | Yes | Policy refinement only |
 | Consent-banner analysis | Five known CMPs, three heuristics, and three rejects pass | — | — | Yes | No |
 | Tracker and fingerprinting signal analysis | DNR/cookie blocking and session preservation tested | — | — | Yes | No |
@@ -20,7 +20,7 @@ This repository is an in-progress initial build. All 20 functional requirements 
 | Decision engine, preferences, and local history | Service API wired | Service/UI wired | Service/UI wired; platform verification pending | Yes | Explanation polish only |
 | Deep Check | Context supplied by extension | UI rendered; exact three-finding coverage | UI rendered; Windows validation pending | Yes | Narrative only |
 
-The latest local headed browser/performance/native-clipboard run has 34 passing and one skipped case. A connected passport DOM-change-to-visible warning took 1.095 s (host-side 1.327781 s), and native-bridge setup took 1.354564 s, within its separate five-second budget. Historical cold first action before bridge readiness was 2.386 s. A dash means that the capability is outside that surface.
+The final local headed check at source `2af6d4a` has 34 runtime passes and one skip; all 23 real Chromium cases and Firefox pass. A connected passport DOM-change-to-visible warning took 1.095 s (host-side 1.327781 s), and native-bridge setup took 1.354564 s, within its separate five-second budget. Historical cold first action before bridge readiness was 2.386 s. A dash means that the capability is outside that surface.
 
 ## Screenshots
 
@@ -57,7 +57,7 @@ macOS monitoring may require Full Disk Access and Accessibility permission. The 
 
 ## Build from source
 
-These are the repository’s declared commands. Final fresh-clone evidence at `d3390ba` passed setup, full `make check`, source macOS build, packaged DMG mount/install/visible tray/onboarding/native handshake, packaged PNG/native-JPEG OCR, uninstall/restore, and a 339-Mach-O macOS-13 deployment audit. Windows has an installer artifact, but its old installed host failed with `ModuleNotFoundError: win32security`; frozen dependencies were fixed in `58739d7`. The repaired CI run is pending CI-account billing capacity.
+These are the repository’s declared commands. Final fresh-clone evidence at `d3390ba` passed setup, full `make check`, source macOS build, packaged DMG mount/install/visible tray/onboarding/native handshake, packaged PNG/native-JPEG OCR, uninstall/restore, and a 339-Mach-O macOS-13 deployment audit. Windows has an installer artifact, but its old installed host failed with `ModuleNotFoundError: win32security`; frozen dependencies were fixed in `58739d7` and the repaired run is building its installer. The separate latest-source CI run has no jobs because of an account billing limit.
 
 macOS:
 
@@ -85,7 +85,7 @@ uv run python scripts/build_extension.py
 uv run python scripts/build.py windows
 ```
 
-`make build-extension` writes `dist/privacy-guardian-chromium.zip` and `dist/privacy-guardian-firefox.zip`. `make build-mac` builds `dist/PrivacyGuardian.app` and `dist/PrivacyGuardian-<version>.dmg`; it signs ad hoc by default, or uses `CODESIGN_IDENTITY` and optional `NOTARY_PROFILE`. The current app/DMG passed visible onboarding/tray, native protocol-v1 `0.1.0` readiness, bundled OCR, uninstall, registration restoration, and a 339-Mach-O-slice maximum deployment target of macOS 13. `make build-win` invokes PyInstaller and Inno Setup on Windows; Windows installer/runtime verification remains required. For non-English OCR, install the appropriate Tesseract language data in the host operating system; English and OSD data are the currently bundled packaging target.
+`make build-extension` writes `dist/privacy-guardian-chromium.zip` and `dist/privacy-guardian-firefox.zip`. `make build-mac` builds `dist/PrivacyGuardian.app` and `dist/PrivacyGuardian-<version>.dmg`; it signs ad hoc by default, or uses `CODESIGN_IDENTITY` and optional `NOTARY_PROFILE`. The earlier app/DMG lifecycle passed visible onboarding/tray, native protocol-v1 `0.1.0` readiness, bundled OCR, uninstall, registration restoration, and a 339-Mach-O-slice maximum deployment target of macOS 13. The refreshed main app has passed codesign and the same 339-slice/macOS-13 audit; its lifecycle run is in progress. `make build-win` invokes PyInstaller and Inno Setup on Windows; Windows installer/runtime verification remains required. For non-English OCR, install the appropriate Tesseract language data in the host operating system; English and OSD data are the currently bundled packaging target.
 
 ## Run in development
 
@@ -125,9 +125,9 @@ make typecheck
 make check
 ```
 
-The final fresh-clone `make check` at `d3390ba` reports **307 passed, 5 skipped**, with two first-phase performance cases deselected. Ruff checks 175 files; strict mypy checks 73 modules. Exact line coverage is **85.71%** scoped (`1,667/1,945`) and **75.42%** overall (`4,115/5,456`), above the 85%/70% gates.
+The final local headed `make check` at source `2af6d4a` reports **311 passed, 5 skipped**: 277 instrumented passes with four skips and two deselections in 42.54 seconds, plus 34 runtime passes and one skip in 104.11 seconds. Ruff checks 176 files; strict mypy checks 73 modules. Exact line coverage is **85.55%** scoped (`1,687/1,972`) and **75.43%** overall (`4,136/5,483`), above the 85%/70% gates. The earlier clean-clone `d3390ba` run remains separately recorded under Build from source.
 
-Use `-m macos`, `-m windows`, `-m e2e`, `-m perf`, and `-m llm` only in an environment that supports those markers. The final native-Cocoa 300-second run measured 0.823200875-second tray readiness, 207.33952 MB warm-median RSS, 210.5344 MB peak RSS, and 0.0442277493% CPU. CPU meets its target; raw RSS misses the decimal 200-MB target by 7.33952 MB at the median and 10.5344 MB at peak, though the 25% tolerance gate passes. Two first-phase perf cases are excluded from the initial phase but included in runtime acceptance. Current outstanding checks include final Windows installer/runtime CI (currently awaiting CI-account billing capacity), protected macOS TCC/Full Disk Access/Accessibility/screen grant tests, refreshed artifacts after the native-host death/result-race fix, and green CI.
+Use `-m macos`, `-m windows`, `-m e2e`, `-m perf`, and `-m llm` only in an environment that supports those markers. The final native-Cocoa 300-second run measured 0.823200875-second tray readiness, 207.33952 MB warm-median RSS, 210.5344 MB peak RSS, and 0.0442277493% CPU. CPU meets its target; raw RSS misses the decimal 200-MB target by 7.33952 MB at the median and 10.5344 MB at peak, though the 25% tolerance gate passes. Two first-phase perf cases are excluded from the initial phase but included in runtime acceptance. Current outstanding checks include the in-progress Windows installer/runtime CI, protected macOS TCC/Full Disk Access/Accessibility/screen grant tests, refreshed-artifact lifecycle after the native-host death/result-race fix, and a green CI result; the separate latest-source run is currently blocked by an account billing limit.
 
 ## Configuration
 

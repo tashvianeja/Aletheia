@@ -27,4 +27,4 @@ Event-specific rules cover consent dark patterns, tracking signals, broad system
 | Persistent tracker signals | Tracker domains, fingerprinting, or tracking signals | **Inform** when signals exist, with a `block` recommendation. |
 | Wallpaper app with startup and broad access | Access breadth ≥0.6 and unnecessary/red-flag assessments | Raises risk to at least 0.65 and **Intervene**. |
 
-These are contract-level examples. The browser/desktop end-to-end scenarios that exercise them are mapped in `tests/ACCEPTANCE.json`; independent E2E verification is still pending.
+These are contract-level examples. The browser/desktop end-to-end scenarios that exercise them are mapped in `tests/ACCEPTANCE.json`; the final local headed browser run passed all 23 real Chromium cases plus Firefox. CI and final platform acceptance remain pending.

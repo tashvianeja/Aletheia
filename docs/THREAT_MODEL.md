@@ -24,7 +24,7 @@ The primary assets are raw uploaded documents, form values, clipboard content, p
 | Sensitive values leak into history or logs | Category-only findings, sanitization, redacting log processor, storage projection | Bugs in third-party libraries or future code can violate this; audit and tests remain necessary. |
 | Sensitive content is sent to the LLM | Disabled-by-default feature, one sanitizer choke point, keychain-only key, fallback | Sanitization cannot make a cloud provider a zero-risk boundary; public policy text is still sent when opted in. |
 | Oversized/malicious documents consume resources | Size/handle limits, archive checks, analysis deadline, partial results | OCR/extractors can still be resource intensive; benchmark and adversarial testing are incomplete. |
-| An extension blocks too much or too little | Bounded dynamic rules, explicit user-facing action, category context, four-second fail-open initial analysis | Browser APIs cannot cover all traffic; headed Chromium action coverage is partial and final totals remain pending. |
+| An extension blocks too much or too little | Bounded dynamic rules, explicit user-facing action, category context, four-second fail-open initial analysis | Browser APIs cannot cover all traffic; all 23 real Chromium cases plus Firefox pass in the final local headed run, but CI remains pending. |
 | Preference learning silences important decisions | Protected categories cannot auto-downgrade to Ignore; learned rules only downgrade to Inform | Category/purpose inference can be wrong. |
 
 ## Non-goals
@@ -33,4 +33,4 @@ The current build does not claim resistance to a compromised OS, browser, privil
 
 ## Verification gaps
 
-IPC tests have reported real Unix-socket coverage; Chromium browser actions and Firefox’s fixed-ID native-host handshake are also exercised. `pip-audit` was clean except for the local project and direct spaCy wheel, which are not PyPI packages and were skipped; Bandit medium-and-above was clean. Real TCC/screen checks, Windows execution, final artifact signing/rebuild, final browser counts, and green CI remain pending. These are material defense-in-depth checks and must be completed before a release claim.
+IPC tests have reported real Unix-socket coverage; Chromium browser actions and Firefox’s fixed-ID native-host handshake are also exercised. `pip-audit` was clean except for the local project and direct spaCy wheel, which are not PyPI packages and were skipped; Bandit medium-and-above was clean. Real TCC/screen checks, final Windows installer/runtime acceptance, refreshed artifacts after the native-host race fix, and green CI remain pending. These are material defense-in-depth checks and must be completed before a release claim.
