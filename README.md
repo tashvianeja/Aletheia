@@ -4,7 +4,7 @@ Privacy Guardian is a local-first background app for macOS and Windows that help
 
 The app can classify sensitive categories in documents and forms, inspect consent and tracking signals, and relate a request to the apparent purpose of a site or application. It presents one of three outcomes: **Ignore**, **Inform**, or **Intervene**, with an explanation and an action where one is available.
 
-This repository is an in-progress initial build. All 20 functional requirements are implemented, with independent evidence recorded in `docs/PLAN.md`; physical Windows validation, protected macOS permission grants, a refreshed artifact for the later UI-only source change, and a green CI run remain pending. The `2af` macOS artifact passed its installed lifecycle. Corrected Intel static-crypto packaging and installed-package smoke/audit passed at 14:14 UTC, but its earlier job remains failed and is not green evidence. The latest-source CI run has no jobs because of an account billing limit. No GitHub release has been published.
+This repository is an in-progress initial build. All 20 functional requirements are implemented, with independent evidence recorded in `docs/PLAN.md`; physical Windows validation, protected macOS permission grants, a refreshed artifact for the later UI-only source change, and a green CI run remain pending. The `2af` macOS artifact passed its installed lifecycle. Corrected Intel static-crypto packaging and installed-package smoke/audit passed at 14:14 UTC, but its earlier job remains failed and is not green evidence. The [latest-source CI run](https://github.com/tashvianeja/Privacy-Guardian/actions/runs/35449032544) has no jobs because of an account billing limit. No GitHub release has been published.
 
 ## Feature matrix
 
