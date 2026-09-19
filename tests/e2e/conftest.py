@@ -10,6 +10,7 @@ from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
+import psutil
 import pytest
 import pytest_asyncio
 from aiohttp import web
@@ -31,6 +32,30 @@ class RealBrowser:
     worker: Worker
     profile_dir: Path
     service_pid: int
+
+
+async def stop_subprocess(process: asyncio.subprocess.Process, timeout: float = 5) -> None:
+    if process.returncode is None:
+        with contextlib.suppress(ProcessLookupError):
+            process.terminate()
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(process.wait(), timeout)
+    if process.returncode is None:
+        with contextlib.suppress(ProcessLookupError):
+            process.kill()
+        await asyncio.wait_for(process.wait(), timeout)
+
+
+def kill_profile_processes(profile_dir: Path) -> None:
+    owned: list[psutil.Process] = []
+    for process in psutil.Process().children(recursive=True):
+        with contextlib.suppress(psutil.NoSuchProcess, psutil.AccessDenied):
+            if str(profile_dir) in " ".join(process.cmdline()):
+                owned.append(process)
+    for process in reversed(owned):
+        with contextlib.suppress(psutil.NoSuchProcess, psutil.AccessDenied):
+            process.kill()
+    psutil.wait_procs(owned, timeout=3)
 
 
 @pytest_asyncio.fixture
@@ -121,6 +146,7 @@ async def real_browser(
     installed_native_host: Settings, tmp_path: Path
 ) -> AsyncIterator[RealBrowser]:
     settings = installed_native_host
+    profile_dir = tmp_path / "chromium-profile"
     environment = os.environ.copy()
     environment["PRIVACY_GUARDIAN_DATA_DIR"] = str(settings.data_dir)
     service = await asyncio.create_subprocess_exec(
@@ -131,60 +157,62 @@ async def real_browser(
         cwd=ROOT,
         env=environment,
         stdout=asyncio.subprocess.DEVNULL,
-        stderr=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.DEVNULL,
     )
-    for _attempt in range(200):
-        if service.returncode is not None:
-            stderr = await service.stderr.read() if service.stderr else b""
-            raise RuntimeError(f"service exited before readiness: {stderr.decode()}")
-        try:
-            response = await send_request(
-                settings.data_dir,
-                {"v": 1, "id": "e2e-ready", "type": "ping", "payload": {}},
-                timeout=0.1,
-            )
-            if response.get("ok"):
-                break
-        except (OSError, TimeoutError, ConnectionError):
-            pass
-        await asyncio.sleep(0.025)
-    else:
-        service.terminate()
-        await service.wait()
-        raise RuntimeError("service did not bind its control socket")
-
-    playwright = await async_playwright().start()
-    extension = ROOT / "extension"
-    context = await playwright.chromium.launch_persistent_context(
-        str(tmp_path / "chromium-profile"),
-        channel="chromium",
-        headless=os.getenv("PRIVACY_GUARDIAN_E2E_HEADED") != "1",
-        args=[
-            f"--disable-extensions-except={extension}",
-            f"--load-extension={extension}",
-            "--host-resolver-rules=MAP tracker-one.test 127.0.0.1,MAP ads-two.test 127.0.0.1,MAP metrics-three.test 127.0.0.1",
-        ],
-        env=environment,
-    )
-    worker = (
-        context.service_workers[0]
-        if context.service_workers
-        else await context.wait_for_event("serviceworker", timeout=10_000)
-    )
-    extension_id = worker.url.split("/")[2]
+    playwright = None
+    context = None
     try:
+        for _attempt in range(200):
+            if service.returncode is not None:
+                raise RuntimeError("service exited before readiness")
+            try:
+                response = await send_request(
+                    settings.data_dir,
+                    {"v": 1, "id": "e2e-ready", "type": "ping", "payload": {}},
+                    timeout=0.1,
+                )
+                if response.get("ok"):
+                    break
+            except (OSError, TimeoutError, ConnectionError):
+                pass
+            await asyncio.sleep(0.025)
+        else:
+            raise RuntimeError("service did not bind its control socket")
+
+        playwright = await async_playwright().start()
+        extension = ROOT / "extension"
+        context = await playwright.chromium.launch_persistent_context(
+            str(profile_dir),
+            channel="chromium",
+            headless=os.getenv("PRIVACY_GUARDIAN_E2E_HEADED") != "1",
+            args=[
+                f"--disable-extensions-except={extension}",
+                f"--load-extension={extension}",
+                "--host-resolver-rules=MAP tracker-one.test 127.0.0.1,MAP ads-two.test 127.0.0.1,MAP metrics-three.test 127.0.0.1",
+            ],
+            env=environment,
+        )
+        worker = (
+            context.service_workers[0]
+            if context.service_workers
+            else await context.wait_for_event("serviceworker", timeout=10_000)
+        )
+        extension_id = worker.url.split("/")[2]
         assert extension_id == installation.CHROME_ID
         yield RealBrowser(
             context=context,
             data_dir=settings.data_dir,
             extension_id=extension_id,
             worker=worker,
-            profile_dir=tmp_path / "chromium-profile",
+            profile_dir=profile_dir,
             service_pid=service.pid,
         )
     finally:
-        with contextlib.suppress(Exception):
-            await context.close()
-        await playwright.stop()
-        service.terminate()
-        await service.wait()
+        if context is not None:
+            with contextlib.suppress(Exception, asyncio.CancelledError):
+                await asyncio.wait_for(context.close(), 5)
+        kill_profile_processes(profile_dir)
+        if playwright is not None:
+            with contextlib.suppress(Exception, asyncio.CancelledError):
+                await asyncio.wait_for(playwright.stop(), 5)
+        await stop_subprocess(service)
