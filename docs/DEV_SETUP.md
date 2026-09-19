@@ -32,7 +32,7 @@ uv sync
 uv run python scripts/setup.py
 ```
 
-Windows has not been executed on a physical machine or runner for this build. In particular, validate how `make` is provided in the selected shell before relying on these commands; this is a TODO for the Windows CI setup.
+Physical Windows UI validation has not been performed. Windows CI has exercised adapter tests, but final installer/runtime acceptance is pending CI-account billing capacity. In particular, validate how `make` is provided in the selected shell before relying on these commands.
 
 ## Browser development
 
@@ -42,7 +42,7 @@ Build the extension schemas/package with:
 make build-extension
 ```
 
-The extension source is in `extension/`. Chromium uses the fixed development extension ID `bfdjphkbgihhbonhnmjbbfhckdddonob`; Firefox uses `privacy-guardian@privacyguardian.local`. The native host name is `com.privacyguardian.host`. Register a development host with `uv run privacy-guardian --install-native-host`, then load the unpacked extension. Chromium/Firefox handshakes and browser recovery are verified; final browser totals are pending.
+The extension source is in `extension/`. Chromium uses the fixed development extension ID `bfdjphkbgihhbonhnmjbbfhckdddonob`; Firefox uses `privacy-guardian@privacyguardian.local`. The native host name is `com.privacyguardian.host`. Register a development host with `uv run privacy-guardian --install-native-host`, then load the unpacked extension. Chromium/Firefox handshakes and browser recovery are verified; CI evidence remains pending.
 
 ## Local data and credentials
 
@@ -87,4 +87,4 @@ The worker must record command exit codes, test/coverage totals, generated exten
 | `make check` | Lint, typecheck, and test | Fresh clone passed: 307 passed, 5 skipped |
 | `make build-extension` | Generate/build extension assets | Fresh clone passed |
 | `make build-mac` | macOS app + DMG with bundled compatible OCR | Current lifecycle passed |
-| `make build-win` | Intended Windows installer build | TODO; Windows runner pending |
+| `make build-win` | Build the Windows installer on Windows | Final installed-runtime acceptance pending |

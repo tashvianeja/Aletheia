@@ -4,7 +4,7 @@ Privacy Guardian is a local-first background app for macOS and Windows that help
 
 The app can classify sensitive categories in documents and forms, inspect consent and tracking signals, and relate a request to the apparent purpose of a site or application. It presents one of three outcomes: **Ignore**, **Inform**, or **Intervene**, with an explanation and an action where one is available.
 
-This repository is an in-progress initial build. All 20 functional requirements are implemented, with independent evidence recorded in `docs/PLAN.md`; physical Windows validation, protected macOS permission grants, Intel compatibility, and a green CI run remain pending. The current ARM macOS app and DMG passed the installed lifecycle, but no GitHub release has been published.
+This repository is an in-progress initial build. All 20 functional requirements are implemented, with independent evidence recorded in `docs/PLAN.md`; physical Windows validation, protected macOS permission grants, refreshed host-race artifact verification, and a green CI run remain pending. Corrected Intel static-crypto packaging and installed-package smoke/audit passed at 14:14 UTC, but its earlier job remains failed and is not green evidence. No GitHub release has been published.
 
 ## Feature matrix
 
@@ -38,7 +38,7 @@ System Settings is intentionally not screenshot: its application lists expose us
 
 ## Requirements
 
-Supported targets are macOS 13 or later (Apple Silicon or Intel) and Windows 10 21H2 or later / Windows 11 x64. This build has been developed on macOS 27 arm64; real Windows execution remains pending CI.
+Supported targets are macOS 13 or later (Apple Silicon or Intel) and Windows 10 21H2 or later / Windows 11 x64. This build has been developed on macOS 27 arm64; physical Windows UI validation remains unverified and final installer/runtime CI is pending.
 
 Source work requires Python 3.12 (the project constrains Python to `>=3.12,<3.13`), [uv](https://docs.astral.sh/uv/), and Tesseract for OCR. The pinned Qt runtime is PySide6 6.8.3; NumPy 2.5.3 supplies deployment wheels for macOS 11 arm64 and macOS 10.13 Intel. Browser integration targets Chrome, Edge, Brave, and Firefox through Manifest V3-style native messaging; Node 24, Firefox, and web-ext 10.6.0 are provisioned by `make setup`/CI for browser work.
 
@@ -53,11 +53,11 @@ There are no verified release artifacts for version 0.1.0 yet. Once a signed mac
 3. On Windows, run `PrivacyGuardian-Setup-<version>.exe` and accept the installer’s visible autostart option.
 4. Install the matching browser extension once its signed/published package is available. Development loading is described below.
 
-macOS monitoring may require Full Disk Access and Accessibility permission. Use the in-app settings action to open the relevant pane; instructions with verified screenshots are pending. These permissions are not a guarantee that every OS signal can be observed; see [Platform limitations](#platform-limitations).
+macOS monitoring may require Full Disk Access and Accessibility permission. The checked-in onboarding screenshot shows the in-app permission guidance; System Settings itself is intentionally not shown because its application lists can expose user-installed app names. Protected grant/revocation behavior remains unverified. These permissions are not a guarantee that every OS signal can be observed; see [Platform limitations](#platform-limitations).
 
 ## Build from source
 
-These are the repository’s declared commands. A fresh clone at `3bec8897ddccf446282d5fff1c3cecacb4a6339d` passed `uv sync`, setup, diagnose/smoke, lint, mypy, extension build, source macOS build, packaged DMG mount/install/visible tray/onboarding/native handshake, packaged PNG/native-JPEG OCR, uninstall/restore, and a 339-Mach-O macOS-13 deployment audit. Its DMG was 141 MB with SHA-256 `937b23af5760ec3f30d86e5a1d2cddf01337aa10922a0aaa7d4e8114e2a2c100`. It also had one theme-dependent `make test` assertion and one passport timing E2E failure. Windows packaging remains pending.
+These are the repository’s declared commands. Final fresh-clone evidence at `d3390ba` passed setup, full `make check`, source macOS build, packaged DMG mount/install/visible tray/onboarding/native handshake, packaged PNG/native-JPEG OCR, uninstall/restore, and a 339-Mach-O macOS-13 deployment audit. Windows has an installer artifact, but its old installed host failed with `ModuleNotFoundError: win32security`; frozen dependencies were fixed in `58739d7`. The repaired CI run is pending CI-account billing capacity.
 
 macOS:
 
@@ -109,7 +109,7 @@ For a development registration, start the desktop service then run:
 uv run privacy-guardian --install-native-host
 ```
 
-Load the matching unpacked extension source in the browser’s developer-extension view. Chromium-family browsers use ID `bfdjphkbgihhbonhnmjbbfhckdddonob`; Firefox uses `privacy-guardian@privacyguardian.local`. The installer writes native-host manifests for Chrome, Edge, Brave, and Firefox. Chromium and Firefox native-host handshakes, browser recovery after a killed upload analysis, and a three-badge fixture path are verified; final browser totals remain pending.
+Load the matching unpacked extension source in the browser’s developer-extension view. Chromium-family browsers use ID `bfdjphkbgihhbonhnmjbbfhckdddonob`; Firefox uses `privacy-guardian@privacyguardian.local`. The installer writes native-host manifests for Chrome, Edge, Brave, and Firefox. Chromium and Firefox native-host handshakes, browser recovery after a killed upload analysis, and a three-badge fixture path are verified. Local headed coverage is evidence only; the CI result remains pending.
 
 Runtime data defaults to `~/Library/Application Support/PrivacyGuardian` on macOS, `%APPDATA%\\PrivacyGuardian` on Windows, and `$XDG_DATA_HOME/PrivacyGuardian` on other systems. Logs are configured below that data directory.
 
@@ -127,7 +127,7 @@ make check
 
 The final fresh-clone `make check` at `d3390ba` reports **307 passed, 5 skipped**, with two first-phase performance cases deselected. Ruff checks 175 files; strict mypy checks 73 modules. Exact line coverage is **85.71%** scoped (`1,667/1,945`) and **75.42%** overall (`4,115/5,456`), above the 85%/70% gates.
 
-Use `-m macos`, `-m windows`, `-m e2e`, `-m perf`, and `-m llm` only in an environment that supports those markers. The final native-Cocoa 300-second run measured 0.823200875-second tray readiness, 207.33952 MB warm-median RSS, 210.5344 MB peak RSS, and 0.0442277493% CPU. CPU meets its target; raw RSS misses the decimal 200-MB target by 7.33952 MB at the median and 10.5344 MB at peak, though the 25% tolerance gate passes. Two first-phase perf cases are excluded from the initial phase but included in runtime acceptance. Current outstanding checks include physical Windows CI, protected macOS TCC/Full Disk Access/Accessibility/screen grant tests, Intel packaging compatibility (current crypto builds need Rust/Cargo plus checksum-pinned static OpenSSL 3.5.8 for macOS 13), and green CI.
+Use `-m macos`, `-m windows`, `-m e2e`, `-m perf`, and `-m llm` only in an environment that supports those markers. The final native-Cocoa 300-second run measured 0.823200875-second tray readiness, 207.33952 MB warm-median RSS, 210.5344 MB peak RSS, and 0.0442277493% CPU. CPU meets its target; raw RSS misses the decimal 200-MB target by 7.33952 MB at the median and 10.5344 MB at peak, though the 25% tolerance gate passes. Two first-phase perf cases are excluded from the initial phase but included in runtime acceptance. Current outstanding checks include final Windows installer/runtime CI (currently awaiting CI-account billing capacity), protected macOS TCC/Full Disk Access/Accessibility/screen grant tests, refreshed artifacts after the native-host death/result-race fix, and green CI.
 
 ## Configuration
 
@@ -182,13 +182,13 @@ Privacy Guardian has no telemetry in its declared design. Network use is limited
 
 ## Platform limitations
 
-Read [Platform limitations](docs/PLATFORM_LIMITATIONS.md) before relying on a signal for security or compliance decisions. Real TCC grant/screen-capture verification, real Windows execution, final browser totals, and CI are pending. The tool gives privacy guidance; it cannot guarantee interception of every application, browser, permission change, or network transfer.
+Read [Platform limitations](docs/PLATFORM_LIMITATIONS.md) before relying on a signal for security or compliance decisions. Real TCC grant/screen-capture verification, final Windows installer/runtime acceptance, refreshed artifacts after the native-host race fix, and CI are pending. The tool gives privacy guidance; it cannot guarantee interception of every application, browser, permission change, or network transfer.
 
 ## Troubleshooting
 
 If OCR is unavailable, run `tesseract --version`, install Tesseract with the platform command above, and restart the app. For a packaged macOS app, rebuild if the bundled OCR binary is absent. If native messaging cannot find the host, run `uv run privacy-guardian --install-native-host`, confirm the browser-specific host registration and allowed extension ID, then inspect the data-directory logs.
 
-If macOS events are missing, grant the requested Full Disk Access or Accessibility permission through System Settings, then restart the monitor. If an extension disconnects, restart the browser and the app; reconnect behavior is a pending resilience test. If `uv sync` fails on the spaCy model dependency, ensure GitHub access is available because the current package declaration uses the model wheel’s direct GitHub URL.
+If macOS events are missing, grant the requested Full Disk Access or Accessibility permission through System Settings, then restart the monitor. If an extension disconnects, restart the browser and the app; recovery after a killed upload analysis is covered, while refreshed artifacts for the native-host death/result race remain pending. If `uv sync` fails on the spaCy model dependency, ensure GitHub access is available because the current package declaration uses the model wheel’s direct GitHub URL.
 
 ## Uninstall
 

@@ -7,7 +7,7 @@
 | Requirement | Current mapped evidence | Status |
 |---|---|---|
 | FR-1 Document uploads | Document unit coverage; upload E2E and package OCR coverage | Implemented; bounded full-text scan passes current gate |
-| FR-2 Forms | Form unit coverage; headed browser fixture cases | Implemented; final browser count pending |
+| FR-2 Forms | Form unit coverage; headed browser fixture cases | Implemented and exercised |
 | FR-3 Terms | `unit/analysis/test_policy_corpus.py`; terms corpus | Corpus evidence present |
 | FR-4 Policies | `unit/analysis/test_policy_corpus.py`; policy corpus | Corpus evidence present |
 | FR-5 Consent | Five known CMPs, three heuristic, and three reject cases | Implemented and exercised |
@@ -22,21 +22,21 @@
 | FR-14 Deep Check | Exact three-finding integration coverage | Implemented and exercised |
 | FR-15 Preferences | preferences and store tests | Unit evidence present |
 | FR-16 Event history | store test | Unit evidence present |
-| FR-17 Native messaging | IPC transport/protocol tests; Chromium/Firefox handshakes and recovery exercised | Implemented; final browser count pending |
+| FR-17 Native messaging | IPC transport/protocol tests; Chromium/Firefox handshakes and recovery exercised | Implemented and exercised |
 | FR-18 Onboarding | UI coverage and packaged onboarding smoke | Implemented and exercised |
 | FR-19 Packaging | Current app/DMG lifecycle: onboarding/tray, protocol-v1 readiness, OCR, uninstall/restoration, 339 Mach-O slices at macOS 13 | macOS exercised; Windows installer pending |
-| FR-20 Logging/resilience | SIGKILL-mid-analysis abort/service-alive/reconnect coverage | Implemented and exercised |
+| FR-20 Logging/resilience | SIGKILL-mid-analysis abort/service-alive/reconnect coverage; native-host death/result-race regression passed for Sol | Refreshed artifact/root verification pending |
 
 ## End-to-end scenarios
 
 | Scenario | Current status from `tests/ACCEPTANCE.json` |
 |---:|---|
 | 1–3 | Upload, redaction, image, and bounded full-text paths are implemented and exercised. |
-| 4–5 | Connected form case measured 238.983 ms; final case totals pending. |
+| 4–5 | Connected form case measured 238.983 ms; headed browser fixture coverage exercised. |
 | 6–9 | Terms/Deep Check, CMP, and DNR/cookie-block paths exercised. |
 | 10 | Real macOS adapter test pending. |
-| 11 | Injected Windows adapter and Windows CI pending. |
-| 12 | Platform adapter aggregation pending. |
+| 11 | Isolated Windows registry adapter coverage exists; final Windows installer/runtime acceptance is pending. |
+| 12 | Platform adapter aggregation coverage exercised. |
 | 13 | Real clipboard/spawn-worker path exercised; content remains absent from storage/logs by contract. |
 | 14 | Exact three-finding Deep Check coverage exercised. |
 | 15 | Preference learning and export/import round trip covered. |
