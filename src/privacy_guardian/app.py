@@ -458,7 +458,9 @@ def main() -> int:
     app.setOrganizationName("PrivacyGuardian")
     app.setQuitOnLastWindowClosed(False)
     controller = Controller()
-    (settings.data_dir / "tray-ready").write_text("ready", encoding="ascii")
+    QTimer.singleShot(
+        0, lambda: (settings.data_dir / "tray-ready").write_text("ready", encoding="ascii")
+    )
     app.aboutToQuit.connect(controller.shutdown)
     sys.excepthook = lambda error_type, _error, _traceback: logging.getLogger(__name__).error(
         "ui operation failed", extra={"error_type": error_type.__name__}

@@ -3,6 +3,13 @@ from __future__ import annotations
 from typing import Any
 
 EN: dict[str, str] = {
+    "available": "available",
+    "unavailable": "unavailable",
+    "full_disk_access": "Full Disk Access",
+    "accessibility": "Accessibility",
+    "app_permissions": "Application privacy permissions",
+    "registry_monitoring": "Permission registry monitoring",
+    "clipboard_proxy": "Clipboard activity monitoring",
     "settings_failed": "Settings could not be saved. Check the shortcut format and system keychain access.",
     "action_failed": "That action could not finish. The sharing request is still held; try again or cancel.",
     "service_restarted": "Privacy monitoring restarted after an interruption.",

@@ -5,10 +5,11 @@ import base64
 import binascii
 import contextlib
 import hashlib
+import logging
 import multiprocessing
 import time
 from collections.abc import Callable
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from functools import partial
 from pathlib import Path
@@ -51,6 +52,10 @@ class Service:
         self.bus = EventBus()
         self.pool = AnalysisPool(settings.analysis_timeout_seconds)
         self.control = ControlServer(settings.data_dir, self.handle_message)
+        self.metadata_executor = ThreadPoolExecutor(
+            max_workers=2, thread_name_prefix="guardian-metadata"
+        )
+        self.metadata_slots = asyncio.Semaphore(8)
         self.preferences = UserPreferences.model_validate(
             self.store.get_preferences().get("user", {})
         )
@@ -142,6 +147,7 @@ class Service:
         if self.background_tasks:
             await asyncio.gather(*self.background_tasks, return_exceptions=True)
         self._close_cloud()
+        self.metadata_executor.shutdown(wait=False, cancel_futures=True)
         self.pool.close()
         self.store.close()
 
@@ -151,40 +157,46 @@ class Service:
     async def _maintenance(self) -> None:
         while True:
             await asyncio.sleep(1)
-            now = time.monotonic()
-            if not self.settings.llm.enabled:
-                for task in tuple(self.background_tasks):
-                    task.cancel()
-                self._close_cloud()
-            elif not self.background_tasks and now - self.cloud_last_used > 30:
-                self._close_cloud()
-            if (
-                self.pool._pool is not None
-                and not self.pool.active
-                and not self.uploads
-                and now - self.pool.last_used
-                > (120 if any(event.payload_ref for event in self.events.values()) else 10)
-            ):
-                self.pool.recycle()
-            for event_id, since in list(self.pending_since.items()):
+            try:
+                await self.control.ensure_running()
+                now = time.monotonic()
+                if not self.settings.llm.enabled:
+                    for task in tuple(self.background_tasks):
+                        task.cancel()
+                    self._close_cloud()
+                elif not self.background_tasks and now - self.cloud_last_used > 30:
+                    self._close_cloud()
                 if (
-                    now - since >= self.settings.popup_timeout_seconds
-                    and event_id not in self.actions
+                    self.pool._pool is not None
+                    and not self.pool.active
+                    and not self.uploads
+                    and now - self.pool.last_used
+                    > (120 if any(event.payload_ref for event in self.events.values()) else 10)
                 ):
-                    decision = self.decisions[event_id]
-                    await self.respond(
-                        UserResponse(event_id=event_id, action=decision.default_action)
-                    )
-            for upload_id, meta in list(self.uploads.items()):
-                if now - meta["touched"] > 120:
-                    await self.pool.run(abort_upload, upload_id)
-                    self.uploads.pop(upload_id, None)
-            for event_id, event in list(self.events.items()):
-                if (datetime.now(UTC) - event.ts).total_seconds() > 600:
-                    self.events.pop(event_id, None)
-                    self.decisions.pop(event_id, None)
-                    self.actions.pop(event_id, None)
-                    self.pending_since.pop(event_id, None)
+                    self.pool.recycle()
+                for event_id, since in list(self.pending_since.items()):
+                    if (
+                        now - since >= self.settings.popup_timeout_seconds
+                        and event_id not in self.actions
+                    ):
+                        decision = self.decisions[event_id]
+                        await self.respond(
+                            UserResponse(event_id=event_id, action=decision.default_action)
+                        )
+                for upload_id, meta in list(self.uploads.items()):
+                    if now - meta["touched"] > 120:
+                        await self.pool.run(abort_upload, upload_id)
+                        self.uploads.pop(upload_id, None)
+                for event_id, event in list(self.events.items()):
+                    if (datetime.now(UTC) - event.ts).total_seconds() > 600:
+                        self.events.pop(event_id, None)
+                        self.decisions.pop(event_id, None)
+                        self.actions.pop(event_id, None)
+                        self.pending_since.pop(event_id, None)
+            except Exception as error:
+                logging.getLogger(__name__).warning(
+                    "maintenance_recovered", extra={"error_type": type(error).__name__}
+                )
 
     def _profile(self, requester: Requester) -> SiteOrAppProfile:
         kind = "site" if requester.kind == "website" else "app"
@@ -380,7 +392,8 @@ class Service:
                 self.llm_executor,
                 partial(refine_public_profile, text, profile, self.settings.llm.model_dump()),
             )
-            self.store.cache_document(origin, digest, enriched)
+            cached = self.store.get_cached_document(origin, digest) or {}
+            self.store.cache_document(origin, digest, {**cached, kind: enriched})
             context = self.contexts.get(origin, {})
             if kind in context.get("analyses", {}):
                 context["analyses"][kind]["profile"] = sanitize(enriched)
@@ -598,7 +611,6 @@ class Service:
             # Content-bearing context is analysed immediately in the worker.
             from privacy_guardian.analysis.worker import analyze_payload
 
-            profile = self._profile(Requester(origin=origin))
             result: dict[str, Any] = {}
             for kind in ("policy", "terms", "forms", "consent", "tracking"):
                 incoming = payload.get(kind)
@@ -618,8 +630,26 @@ class Service:
                     else ""
                 )
                 cached = self.store.get_cached_document(origin, digest) if digest else None
-                if cached is not None:
-                    analyzed = AnalysisResult(profile=cached)
+                if cached is not None and isinstance(cached.get(kind), dict):
+                    analyzed = AnalysisResult(profile=cached[kind])
+                    if kind == "policy":
+                        from privacy_guardian.engine.necessity import necessity_for
+
+                        purpose = str(payload.get("purpose", "unknown"))
+                        collected = analyzed.profile.get("collects", [])
+                        analyzed.profile["necessity_statements"] = [
+                            f"Collects {category.value.replace('_', ' ').replace('.', ' ')}: {necessity_for(purpose, category).rationale}"
+                            for category in map(
+                                DataCategory, collected if isinstance(collected, list) else []
+                            )
+                        ]
+                elif kind in {"forms", "consent", "tracking"}:
+                    if self.metadata_slots.locked():
+                        raise ValueError("Metadata analysis queue is full")
+                    async with self.metadata_slots:
+                        analyzed = await asyncio.get_running_loop().run_in_executor(
+                            self.metadata_executor, analyze_payload, worker_payload
+                        )
                 else:
                     analyzed = await self.pool.run(analyze_payload, worker_payload)
                 result[kind] = analyzed.model_dump(mode="json", exclude={"payload_ref"})
@@ -627,7 +657,8 @@ class Service:
                     digest = hashlib.sha256(
                         str(worker_payload.get("text", "")).encode()
                     ).hexdigest()
-                    self.store.cache_document(origin, digest, analyzed.profile)
+                    cached = self.store.get_cached_document(origin, digest) or {}
+                    self.store.cache_document(origin, digest, {**cached, kind: analyzed.profile})
                     if self.settings.llm.enabled and self.settings.llm.policy_refinement:
                         self._schedule_cloud(
                             origin + ":" + digest,
@@ -640,19 +671,20 @@ class Service:
                                 analyzed.profile,
                             ),
                         )
-                for key, value in analyzed.profile.items():
-                    if key == "clauses" and isinstance(value, list):
-                        value = [
-                            str(item.get("category", "")) if isinstance(item, dict) else str(item)
-                            for item in value
-                        ]
-                    if key in SiteOrAppProfile.model_fields:
-                        setattr(profile, key, value)
             if "uploads_in_progress" in payload:
                 result["uploads"] = {
                     "profile": {"in_progress": max(0, int(payload["uploads_in_progress"]))}
                 }
             combined_analyses = {**self.contexts.get(origin, {}).get("analyses", {}), **result}
+            # Reload only after worker awaits: concurrent contexts and event observations
+            # may have updated the profile while this analysis was running.
+            profile = self._profile(Requester(origin=origin))
+            for completed in combined_analyses.values():
+                for key, value in completed.get("profile", {}).items():
+                    if key == "clauses":
+                        continue
+                    if key in SiteOrAppProfile.model_fields:
+                        setattr(profile, key, value)
             clauses: set[str] = set()
             for document_kind in ("policy", "terms"):
                 document_profile = combined_analyses.get(document_kind, {}).get("profile", {})

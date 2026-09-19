@@ -58,7 +58,9 @@ class Settings(BaseSettings):
     def valid_hotkey(cls, value: str) -> str:
         import re
 
-        if not re.fullmatch(r"(?:(?:Ctrl|Control|Cmd|Alt|Shift|Win)\+)+[A-Za-z0-9]", value, re.I):
+        if not re.fullmatch(
+            r"(?:(?:Ctrl|Control|Cmd|Alt|Option|Shift|Win|Meta)\+)+[A-Za-z0-9]", value, re.I
+        ):
             raise ValueError("Use modifiers plus one letter or digit, such as Ctrl+Shift+P")
         return value
 

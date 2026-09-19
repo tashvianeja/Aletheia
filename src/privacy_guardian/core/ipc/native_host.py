@@ -84,6 +84,8 @@ def main() -> int:
                 result = await forward(settings, message)
                 async with output_lock:
                     await asyncio.to_thread(write_message, sys.stdout.buffer, result)
+            except (OSError, ValueError, TimeoutError):
+                pass
             finally:
                 slots.release()
 
@@ -101,10 +103,11 @@ def main() -> int:
                 tasks.add(task)
                 task.add_done_callback(tasks.discard)
         finally:
-            for task in tuple(tasks):
-                task.cancel()
             if tasks:
-                await asyncio.gather(*tasks, return_exceptions=True)
+                done, pending = await asyncio.wait(tasks, timeout=2)
+                for task in pending:
+                    task.cancel()
+                await asyncio.gather(*done, *pending, return_exceptions=True)
             with contextlib.suppress(OSError, TimeoutError, ValueError):
                 await send_request(
                     settings.data_dir,

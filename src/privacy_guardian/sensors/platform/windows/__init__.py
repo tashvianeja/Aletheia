@@ -442,25 +442,54 @@ class WindowsAdapter(PlatformAdapter):
         self._state = current
         return events
 
+    @staticmethod
+    def _task_requester(name: str, definition: str) -> Requester:
+        from defusedxml import ElementTree
+
+        executable = ""
+        try:
+            root = ElementTree.fromstring(definition)
+            for node in root.iter():
+                if node.tag.rsplit("}", 1)[-1] == "Command" and node.text:
+                    executable = WindowsAdapter.command_executable(node.text)
+                    break
+        except (ValueError, ElementTree.ParseError):
+            pass
+        return enrich_requester(
+            Requester(
+                kind="application",
+                exe_path=executable,
+                bundle_id="" if executable else name,
+                display_name=ntpath.basename(executable)
+                if executable
+                else name.rsplit("\\", 1)[-1],
+            )
+        )
+
     def poll_tasks(self) -> list[PrivacyEvent]:
         current = self.scheduler.snapshot()
         events: list[PrivacyEvent] = []
+        startup = {DataCategory.STARTUP, DataCategory.BACKGROUND_EXECUTION}
+        for name, old in self._tasks.items():
+            if current.get(name) != old:
+                requester = self._task_requester(name, old)
+                self._access.setdefault(requester.key, set()).difference_update(startup)
         for name, definition in current.items():
+            requester = self._task_requester(name, definition)
+            self._access.setdefault(requester.key, set()).update(startup)
             if self._tasks.get(name) == definition:
                 continue
-            requester = enrich_requester(
-                Requester(kind="application", bundle_id=name, display_name=name.rsplit("\\", 1)[-1])
-            )
             events.append(
                 StartupRegistrationEvent(
                     source="os",
                     platform="windows",
                     requester=requester,
-                    data_categories=[DataCategory.STARTUP, DataCategory.BACKGROUND_EXECUTION],
+                    data_categories=sorted(startup, key=str),
                     mechanism="scheduled_task",
                     modified=name in self._tasks,
                 )
             )
+            events.append(self._breadth(requester))
         self._tasks = current
         return events
 
@@ -557,7 +586,7 @@ class WindowsAdapter(PlatformAdapter):
         self._path_monitor = PathMonitor(self.watch_paths, self._fs_changed.set)
         self._path_monitor.start()
         try:
-            self._tasks = self.scheduler.snapshot()
+            self.poll_tasks()
         except Exception:
             self._tasks = {}
         self._thread = threading.Thread(target=self._loop, daemon=True, name="guardian-windows")

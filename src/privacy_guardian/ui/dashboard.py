@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from privacy_guardian.core.events import DataCategory
+from privacy_guardian.engine.explain import category_label
 from privacy_guardian.engine.preferences import Preference
 from privacy_guardian.ui.theme import stylesheet
 from privacy_guardian.util.i18n import tr
@@ -62,7 +63,7 @@ class Dashboard(QWidget):
         self.pref_table = QTableWidget(len(DataCategory) + 2, 2)
         self.pref_table.setHorizontalHeaderLabels([tr("category"), tr("preference")])
         for row, category in enumerate(DataCategory):
-            self.pref_table.setItem(row, 0, QTableWidgetItem(category.value.replace("_", " ")))
+            self.pref_table.setItem(row, 0, QTableWidgetItem(category_label(category.value)))
             combo = QComboBox()
             for preference in Preference:
                 combo.addItem(tr(preference.value), preference.value)
@@ -202,7 +203,7 @@ class Dashboard(QWidget):
                 (
                     decision.get("outcome", ""),
                     event["requester"].get("display_name", ""),
-                    ", ".join(event["data_categories"]),
+                    ", ".join(category_label(category) for category in event["data_categories"]),
                     decision.get("explanation", ""),
                 )
             ):

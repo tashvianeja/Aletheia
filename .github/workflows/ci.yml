@@ -35,6 +35,10 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run mypy --strict src/
       - run: uv run pytest --cov=privacy_guardian --cov-report=xml --cov-report=json --cov-report=term-missing --cov-fail-under=0
+      - name: Check line coverage
+        id: coverage_gate
+        continue-on-error: true
+        run: uv run python tests/check_coverage.py coverage.json
       - run: uv run bandit -r src/ -ll
       - run: uv run pip-audit --skip-editable
       - name: Build extension
@@ -66,3 +70,7 @@ jobs:
             dist/
             coverage.xml
             artifacts/
+
+      - name: Enforce coverage outcome
+        if: always() && steps.coverage_gate.outcome == 'failure'
+        run: exit 1

@@ -4,7 +4,9 @@ Contract version 1 (2026-09-19). `core/events.py` is the authoritative executabl
 
 ## Processes and boundaries
 
-Qt runs on the main thread. The async service runs on a dedicated thread. A bounded single-process analysis pool owns raw document bytes and opaque payload handles, preserving handle affinity across analysis/redaction. Native transport necessarily forwards bytes, then discards them; raw bytes are not returned to the engine, persisted, or logged. The browser-spawned host is a framing/authentication transport only. Pool failure discards handles, restarts the worker, and returns an explicit retryable error.
+Qt runs on the main thread. The async service runs on a dedicated thread. A bounded, single-process analysis pool owns raw document bytes and opaque payload handles, preserving handle affinity across analysis/redaction. Native transport necessarily forwards bytes, then discards them; raw bytes are not returned to the engine, persisted, or logged. The browser-spawned host is a framing/authentication transport only. Pool failure discards handles, restarts the worker, and returns an explicit retryable error.
+
+Optional LLM work is isolated from the critical analysis queue in a separate lazy `ProcessPoolExecutor` with one worker. It is created only when cloud assistance is enabled and torn down on disable/stop; cloud latency therefore does not block upload, form, or native decisions.
 
 ## Models
 
@@ -40,8 +42,12 @@ Tables: schema_version(version); events(id,ts,event_type,requester,categories,ev
 
 The WebExtension runs as a thin sensor/actuator. Its background worker obtains website identity from browser sender data rather than page-supplied identity, validates event/request/response schemas, and allowlists form metadata fields. It holds observed URL/tracker context only in extension memory and clears tab context on navigation or close. Chromium’s fixed development extension ID is `bfdjphkbgihhbonhnmjbbfhckdddonob`; Firefox’s ID is `privacy-guardian@privacyguardian.local`. Native host name: `com.privacyguardian.host`.
 
-The extension can create bounded dynamic blocking rules and remove relevant browser cookies after a user action. Browser installation, native-host registration, and a real browser/service E2E run are not yet verification evidence.
+The extension can create bounded dynamic blocking rules and remove relevant browser cookies after a user action. MAIN-world wrappers are best effort. Known upload paths can wait up to four seconds for initial analysis and then fail open; an `INTERVENE` decision waits for its safe 60-second service timeout. Synchronous file XHR can be aborted while ordinary XHR and beacons pass through. Firefox CNAME/DNS signals are cached best effort. Chromium native-host handshake and a fixture form-badge path have evidence; browser action coverage remains incomplete.
 
 ## Verification
 
-Sol writes independent tests. Platform-specific real checks are separate from injected adapter tests. No claim of real Windows execution without a successful runner result. UI uses `tr()` for strings; optional LLM is disabled by default, sanitized at one choke point, keyring credentials only.
+Sol writes independent tests. Platform-specific real checks are separate from injected adapter tests. No claim of real Windows execution without a successful runner result. UI uses `tr()` for strings; optional LLM is disabled by default, sanitized at one choke point inside the optional process, and uses keyring credentials only.
+
+### Metadata scheduling and cache concurrency
+
+Forms, consent, and tracking metadata are analyzed by a bounded two-thread executor (at most eight outstanding jobs). File and clipboard contents stay in the single analysis process; metadata scheduling cannot access worker payload handles. Policy/terms cache entries are envelopes keyed by document kind under the existing origin/content-hash key. Purpose-dependent necessity is recomputed on cache reads. Profile mutation reloads current storage after all analysis awaits and merges the completed facts without another await, preserving concurrent observations. Native host and Windows named-pipe transports each cap concurrent request handling at eight.

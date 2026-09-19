@@ -54,3 +54,11 @@ Root independent unit/integration evidence: 157 passed, one logging token-format
 Compatibility audit found Homebrew OCR bottle requires macOS27. Replaced packaging path with a source-built static Tesseract5.5.3 + Leptonica1.87.0 + libpng1.6.58 targeting macOS13. `vtool` verifies minos13.0; `otool` only system libSystem/libz/libc++ dependencies. Qt6.11.2 binary inspected for arm64+x86_64: minos13.0. First DMG remains superseded until rebuilt with static OCR.
 
 Remaining acceptance: full browser E2E (including native host and actions), actual platform/native lifecycle tests, full-app five-minute idle measurement, final coverage gates and both installer smoke tests. Windows CI has not passed beyond lint yet; no Windows native verification is claimed.
+
+### Integration checkpoint (12:43 UTC, T+0:54)
+
+Latest coherent source `959e1b2` and independent Sol tests `45e1857` pushed for cross-platform CI. CI surfaced Windows-only typing errors and a Meta shortcut alias regression; both corrected and local strict mypy now passes all70 modules on native and `--platform win32`. Root independently verified38 UI/platform tests (2 platform skips); onboarding availability wording correction pending retest. Static source Ruff and Bandit medium/high gate pass.
+
+Native transport now supports bounded concurrent requests on both platforms, with contained maintenance/listener recovery. Metadata-only forms/consent/tracking use a bounded two-thread executor so file extraction cannot block badges. Raw file/clipboard contents remain solely in the analysis process beyond transport. Document cache retains separate typed policy/terms profiles under origin+text hash, recomputes purpose-dependent necessity, and merges concurrent profile updates after analysis.
+
+Real Chromium+native host handshake and three free-download field badges pass. Dynamic shadow-root inventory currently867.8ms versus required500ms despite discovery fixes; investigating transport startup versus DOM scheduling with Sol. Direct service form analysis45ms cold/under5ms warm. Coverage gate now explicitly measures70% overall line and85% scoped line; packaging smoke continues if only coverage fails, but workflow still fails the final gate. No acceptance threshold has been lowered.

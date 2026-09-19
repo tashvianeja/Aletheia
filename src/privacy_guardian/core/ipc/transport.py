@@ -39,7 +39,18 @@ def endpoint(data_dir: Path) -> str:
     if sys.platform == "win32":
         digest = hashlib.sha256(str(data_dir.resolve()).encode()).hexdigest()[:20]
         return rf"\\.\pipe\PrivacyGuardian-{digest}"
-    return str(data_dir / "control.sock")
+    path = data_dir / "control.sock"
+    if len(os.fsencode(path)) >= 100:
+        import tempfile
+
+        digest = hashlib.sha256(str(data_dir.resolve()).encode()).hexdigest()[:20]
+        private = Path(tempfile.gettempdir()) / f"pg-{os.getuid()}-{digest}"
+        private.mkdir(mode=0o700, exist_ok=True)
+        if private.is_symlink() or private.stat().st_uid != os.getuid():
+            raise PermissionError("IPC directory ownership mismatch")
+        private.chmod(0o700)
+        path = private / "control.sock"
+    return str(path)
 
 
 class ControlServer:
@@ -50,17 +61,21 @@ class ControlServer:
         self.server: asyncio.AbstractServer | None = None
         self.listener: Any = None
         self._closed = threading.Event()
+        self._pipe_thread: threading.Thread | None = None
+        self._pipe_slots = threading.BoundedSemaphore(8)
         self._tasks: set[asyncio.Task[None]] = set()
 
     async def start(self) -> None:
+        self._closed.clear()
         if sys.platform == "win32":
             loop = asyncio.get_running_loop()
             self.listener = Listener(
                 endpoint(self.data_dir), family="AF_PIPE", authkey=self.token.encode()
             )
-            threading.Thread(
+            self._pipe_thread = threading.Thread(
                 target=self._pipe_loop, args=(loop,), daemon=True, name="guardian-pipe"
-            ).start()
+            )
+            self._pipe_thread.start()
         else:
             path = Path(endpoint(self.data_dir))
             # The process lock must be acquired before removing a stale socket.
@@ -132,16 +147,36 @@ class ControlServer:
                 continue
             except (OSError, EOFError):
                 return
-            try:
-                data = connection.recv_bytes(MAX_MESSAGE_BYTES)
-                result = asyncio.run_coroutine_threadsafe(
-                    self._dispatch(decode_message(data)), loop
-                ).result(timeout=30)
-                connection.send_bytes(json.dumps(result).encode())
-            except (OSError, EOFError, ValueError, TimeoutError):
-                pass
-            finally:
+            if not self._pipe_slots.acquire(blocking=False):
                 connection.close()
+                continue
+            threading.Thread(target=self._pipe_client, args=(connection, loop), daemon=True).start()
+
+    def _pipe_client(self, connection: Any, loop: asyncio.AbstractEventLoop) -> None:
+        try:
+            if not connection.poll(5):
+                return
+            data = connection.recv_bytes(MAX_MESSAGE_BYTES)
+            result = asyncio.run_coroutine_threadsafe(
+                self._dispatch(decode_message(data)), loop
+            ).result(timeout=30)
+            connection.send_bytes(json.dumps(result).encode())
+        except (OSError, EOFError, ValueError, TimeoutError):
+            pass
+        finally:
+            connection.close()
+            self._pipe_slots.release()
+
+    async def ensure_running(self) -> None:
+        healthy = (
+            self._pipe_thread is not None and self._pipe_thread.is_alive()
+            if sys.platform == "win32"
+            else self.server is not None and self.server.is_serving()
+        )
+        if not healthy and not self._closed.is_set():
+            if self.listener:
+                self.listener.close()
+            await self.start()
 
     async def stop(self) -> None:
         self._closed.set()

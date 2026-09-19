@@ -115,6 +115,7 @@ class MacOSAdapter(PlatformAdapter):
                 Path("/Library/LaunchAgents"),
                 Path("/Library/LaunchDaemons"),
                 Path.home() / "Library/Application Support/com.apple.backgroundtaskmanagementagent",
+                Path("/var/db/com.apple.backgroundtaskmanagement"),
                 Path("/Library/SystemExtensions"),
                 Path("/Library/Extensions"),
             ]
@@ -127,6 +128,8 @@ class MacOSAdapter(PlatformAdapter):
         self._emit: Emit = lambda _event: None
         self._tcc: dict[tuple[str, str], dict[str, Any]] = {}
         self._files: dict[str, int] = {}
+        self._background_items: dict[str, Requester] = {}
+        self._background_changed = True
         self._latest: list[PrivacyEvent] = []
         self._access: dict[str, set[DataCategory]] = {}
         self._extension_state: dict[str, str] = {}
@@ -243,6 +246,9 @@ class MacOSAdapter(PlatformAdapter):
                     current[str(path)] = path.stat().st_mtime_ns
                     if self._files.get(str(path)) == current[str(path)]:
                         continue
+                    if path.suffix == ".btm":
+                        self._background_changed = True
+                        continue
                     label = path.stem
                     executable = ""
                     if path.suffix == ".plist":
@@ -275,6 +281,18 @@ class MacOSAdapter(PlatformAdapter):
                             )
                         except (OSError, ValueError):
                             pass
+                    if root.name in {"SystemExtensions", "Extensions"}:
+                        events.append(
+                            SystemAccessEvent(
+                                source="os",
+                                platform="macos",
+                                requester=requester,
+                                data_categories=[DataCategory.FILES_BROAD, DataCategory.AUTOMATION],
+                                accesses=["system_extension"],
+                                breadth=1.0,
+                            )
+                        )
+                        continue
                     self._startup_requesters[str(path)] = requester
                     self._access.setdefault(requester.key, set()).update(
                         {DataCategory.STARTUP, DataCategory.BACKGROUND_EXECUTION}
@@ -302,6 +320,75 @@ class MacOSAdapter(PlatformAdapter):
                     {DataCategory.STARTUP, DataCategory.BACKGROUND_EXECUTION}
                 )
         self._files = current
+        return events
+
+    @staticmethod
+    def parse_background_items(text: str) -> dict[str, Requester]:
+        from urllib.parse import unquote, urlsplit
+
+        result: dict[str, Requester] = {}
+        # sfltool emits numbered item records with a UUID followed by public app metadata.
+        for block in re.split(r"(?m)^\s*#\d+:|(?=^\s*UUID:)", text, flags=re.M):
+            values = {
+                key.strip().lower(): value.strip()
+                for key, value in re.findall(r"(?m)^\s*([A-Za-z ]+):\s*(.+)$", block)
+            }
+            identifier = values.get("identifier", "")
+            executable = values.get("executable path", values.get("url", ""))
+            if executable.startswith("file:"):
+                executable = unquote(urlsplit(executable).path)
+            if not identifier and not executable:
+                continue
+            disposition = values.get("disposition", "").lower()
+            if disposition and "enabled" not in disposition and "allowed" not in disposition:
+                continue
+            requester = enrich_requester(
+                Requester(
+                    kind="application",
+                    bundle_id=identifier,
+                    exe_path=executable,
+                    display_name=values.get("name", identifier or Path(executable).name),
+                )
+            )
+            result[requester.key] = requester
+        return result
+
+    def poll_background_items(self) -> list[PrivacyEvent]:
+        if self._injected or sys.platform != "darwin":
+            return []
+        try:
+            completed = subprocess.run(
+                ["/usr/bin/sfltool", "dumpbtm"],
+                capture_output=True,
+                text=True,
+                timeout=3,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return []
+        if completed.returncode:
+            return []
+        current = self.parse_background_items(completed.stdout)
+        startup = {DataCategory.STARTUP, DataCategory.BACKGROUND_EXECUTION}
+        events: list[PrivacyEvent] = []
+        for key in self._background_items.keys() - current.keys():
+            self._access.setdefault(key, set()).difference_update(startup)
+        for key, requester in current.items():
+            self._access.setdefault(key, set()).update(startup)
+            if key not in self._background_items:
+                events.extend(
+                    [
+                        StartupRegistrationEvent(
+                            source="os",
+                            platform="macos",
+                            requester=requester,
+                            data_categories=sorted(startup, key=str),
+                            mechanism="background_item",
+                        ),
+                        self._breadth(requester),
+                    ]
+                )
+        self._background_items = current
         return events
 
     def parse_log(self, record: dict[str, Any]) -> list[PrivacyEvent]:
@@ -407,6 +494,9 @@ class MacOSAdapter(PlatformAdapter):
                 break
             try:
                 events = self.poll_files() if changed else []
+                if self._background_changed:
+                    events.extend(self.poll_background_items())
+                    self._background_changed = False
                 if time.monotonic() - last_tcc >= 10:
                     events.extend(self.poll_tcc())
                     last_tcc = time.monotonic()
@@ -506,6 +596,8 @@ class MacOSAdapter(PlatformAdapter):
         )
 
     def set_autostart(self, enabled: bool) -> None:
+        if sys.platform != "darwin":
+            return
         target = Path.home() / "Library/LaunchAgents/com.privacyguardian.app.plist"
         import os
 

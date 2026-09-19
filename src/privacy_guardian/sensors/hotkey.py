@@ -34,6 +34,9 @@ class GlobalHotkey:
                 required |= {
                     "ctrl": NSEventModifierFlagCommand,
                     "cmd": NSEventModifierFlagCommand,
+                    "meta": NSEventModifierFlagCommand,
+                    "win": NSEventModifierFlagCommand,
+                    "option": NSEventModifierFlagOption,
                     "control": NSEventModifierFlagControl,
                     "shift": NSEventModifierFlagShift,
                     "alt": NSEventModifierFlagOption,
@@ -66,9 +69,16 @@ class GlobalHotkey:
         parts = self.shortcut.lower().split("+")
         modifiers = 0x4000
         for token in parts[:-1]:
-            modifiers |= {"ctrl": 2, "control": 2, "alt": 1, "shift": 4, "win": 8, "cmd": 8}.get(
-                token, 0
-            )
+            modifiers |= {
+                "ctrl": 2,
+                "control": 2,
+                "alt": 1,
+                "option": 1,
+                "shift": 4,
+                "win": 8,
+                "cmd": 8,
+                "meta": 8,
+            }.get(token, 0)
         key = ord(parts[-1].upper()) if len(parts[-1]) == 1 else 0x50
         if not user32.RegisterHotKey(None, 1, modifiers, key):
             return

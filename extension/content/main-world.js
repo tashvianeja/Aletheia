@@ -1,6 +1,7 @@
 /* Sensor/actuator only: Python makes all privacy and purpose decisions. */
 (() => {
   if(window.__privacyGuardianMain)return;window.__privacyGuardianMain=true;
+  const capturedOpen=XMLHttpRequest.prototype.open,xhrAsync=new WeakMap();
   const capturedFetch=window.fetch, capturedSend=XMLHttpRequest.prototype.send, capturedSubmit=HTMLFormElement.prototype.submit;
   const waiting=new Map(),binaryFiles=new WeakMap(),storageKeys=new Map(),databaseKeys=[],confirmedHashes=new Set();
   const blobArrayBuffer=Blob.prototype.arrayBuffer;
@@ -21,6 +22,7 @@
     if(event.data.pgBridge==='upload_hold'){waiter.intervene=true;return;}
     if(event.data.pgBridge==='upload_result'){waiting.delete(event.data.id);waiter.resolve(event.data);}
   });
+  function hasFiles(body){return body instanceof Blob||(body instanceof FormData&&Array.from(body.values()).some(value=>value instanceof File&&value.size))||(body instanceof ArrayBuffer&&binaryFiles.has(body))||(ArrayBuffer.isView(body)&&binaryFiles.has(body.buffer));}
   async function checkBody(body){let files=[],binary=false;
     if(body instanceof FormData)files=Array.from(body.values()).filter(value=>value instanceof File&&value.size);
     else if(body instanceof Blob)files=[body];
@@ -46,8 +48,9 @@
     if(input instanceof Request&&body){const headers=new Headers(init?.headers||input.headers);if(result.body instanceof FormData)headers.delete('content-type');request=new Request(input,{...init,headers,body:result.body});return capturedFetch.call(this,request);}
     return capturedFetch.call(this,request,init?{...init,body:result.body}:init);
   };
-  XMLHttpRequest.prototype.send=function(body){const xhr=this;checkBody(body).then(result=>{if(result.allowed)capturedSend.call(xhr,result.body);else xhr.abort();}).catch(()=>xhr.abort());};
-  const sendBeacon=navigator.sendBeacon?.bind(navigator);if(sendBeacon)navigator.sendBeacon=function(url,data){checkBody(data).then(result=>{if(result.allowed)sendBeacon(url,result.body);});return true;};
+  XMLHttpRequest.prototype.open=function(method,url,async=true,...args){xhrAsync.set(this,async!==false);return capturedOpen.call(this,method,url,async,...args);};
+  XMLHttpRequest.prototype.send=function(body){if(!hasFiles(body))return capturedSend.call(this,body);if(xhrAsync.get(this)===false){this.abort();throw new DOMException("Synchronous file uploads cannot wait for privacy review","InvalidStateError");}const xhr=this;checkBody(body).then(result=>{if(result.allowed)capturedSend.call(xhr,result.body);else xhr.abort();}).catch(()=>xhr.abort());};
+  const sendBeacon=navigator.sendBeacon?.bind(navigator);if(sendBeacon)navigator.sendBeacon=function(url,data){if(!hasFiles(data))return sendBeacon(url,data);checkBody(data).then(result=>{if(result.allowed)sendBeacon(url,result.body);});return true;};
   HTMLFormElement.prototype.submit=function(){const event=new Event('submit',{bubbles:true,cancelable:true});if(this.dispatchEvent(event))capturedSubmit.call(this);};
   const observed=new Set();let timer=null;
   function report(name){observed.add(name);if(!timer)timer=setTimeout(()=>{window.postMessage({pgBridge:'tracking_signals',api_calls:[...observed]},location.origin);timer=null;},200);}

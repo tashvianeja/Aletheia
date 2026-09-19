@@ -5,6 +5,7 @@ import contextlib
 from typing import Any
 
 from privacy_guardian.core.events import ClipboardReadEvent, DataCategory, Requester
+from privacy_guardian.util.privacy import public_identity
 
 
 class ClipboardMonitor:
@@ -55,6 +56,7 @@ class ClipboardMonitor:
             and self.categories
             and requester.key != self.writer_key
             and requester.key not in self.allowlist
+            and public_identity(requester.key) not in self.allowlist
         ):
             cloud = (
                 bool(self.backend.cloud_sync()) if hasattr(self.backend, "cloud_sync") else False
@@ -89,7 +91,11 @@ class ClipboardMonitor:
             )
 
             loop = asyncio.get_running_loop()
-            self.listener = ClipboardListener(lambda: loop.call_soon_threadsafe(self.changed.set))
+
+            def changed() -> None:
+                loop.call_soon_threadsafe(self.changed.set)
+
+            self.listener = ClipboardListener(changed)
             self.listener.start()
         self._task = asyncio.create_task(self._loop())
 

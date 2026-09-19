@@ -22,6 +22,18 @@ _PATTERNS = (
 
 
 def redact_text(value: str) -> str:
+    def strip_url(match: re.Match[str]) -> str:
+        try:
+            parsed = urlsplit(match[0])
+            host = parsed.hostname or ""
+            if ":" in host:
+                host = "[" + host + "]"
+            port = f":{parsed.port}" if parsed.port else ""
+            return urlunsplit((parsed.scheme, host + port, "", "", ""))
+        except ValueError:
+            return "<redacted:url>"
+
+    value = re.sub(r'https?://[^\s<>"\']+', strip_url, value)
     from privacy_guardian.analysis.pii import redact_text as redact_pii
 
     value = redact_pii(value, use_ner=False)
@@ -87,6 +99,8 @@ def _safe_identifier(key: str, value: Any) -> bool:
 
 def sanitize(value: Any) -> Any:
     if isinstance(value, str):
+        if value.startswith(("/", "\\\\")) or re.match(r"^[A-Za-z]:[\\/]", value):
+            return public_identity(value)
         return redact_text(value)
     if isinstance(value, dict):
         return {

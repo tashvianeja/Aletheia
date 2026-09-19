@@ -3,6 +3,7 @@ if (typeof importScripts === 'function') importScripts('schema-validator.js');
 const api = globalThis.browser || chrome;
 const HOST = 'com.privacyguardian.host';
 let port = null, reconnectTimer = null, reconnectDelay = 250;
+const acknowledgedDocuments=new Set();
 const pending = new Map(), tabSignals = new Map(), tabContexts = new Map(), storageOrigins = new Map(), storageTabs = new Map(), dnsCache = new Map();
 let sequence = 0, schemas = null;
 const schemaReady = Promise.all(['request','response','event'].map(async name => [name, await (await fetch(api.runtime.getURL(`schema/${name}.json`))).json()])).then(entries => {schemas = Object.fromEntries(entries);});
@@ -76,6 +77,13 @@ async function route(message,sender) {
   const tabId = sender.tab.id, requester = trustedRequester(sender);
   rememberSignals(tabId,message.signals);
   const payload = {...(message.payload || {})};
+  if(message.type==='document_acknowledged'||message.type==='document_acknowledge'){
+    if(!/^(policy|terms):[a-f0-9]{64}$/.test(payload.key||''))throw new Error('Invalid document key');
+    const key=requester.origin+':'+payload.key;
+    if(message.type==='document_acknowledge'){acknowledgedDocuments.add(key);if(api.storage.session)await api.storage.session.set({['document:'+key]:true});return {acknowledged:true};}
+    const stored=api.storage.session?await api.storage.session.get('document:'+key):{};
+    return {acknowledged:acknowledgedDocuments.has(key)||!!stored['document:'+key]};
+  }
   if (message.type === 'event') {
     payload.event = {...payload.event,source:'browser',requester};
     if (payload.event.fields) {

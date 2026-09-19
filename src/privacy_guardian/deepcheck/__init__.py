@@ -134,7 +134,9 @@ async def run_deep_check(service: Any, payload: dict[str, Any] | None = None) ->
             from privacy_guardian.engine.decision import decide
 
             decision = decide(
-                event, preferences=service.preferences, learned_rules=service.learned_rules
+                event,
+                preferences=service.preferences_for(event.requester),
+                learned_rules=service.learned_rules,
             )
             if decision.outcome != Outcome.IGNORE:
                 findings.append(

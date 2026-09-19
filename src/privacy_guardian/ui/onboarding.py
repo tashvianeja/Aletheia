@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from typing import Any
 
 from PySide6.QtCore import QTimer
@@ -23,10 +24,12 @@ class Onboarding(QWizard):
         self.service = service
         self.setWindowTitle(tr("app_name"))
         self.setMinimumSize(520, 360)
+        self.setWizardStyle(QWizard.WizardStyle.ModernStyle)
         self.permission_status: QLabel | None = None
         self.autostart = QCheckBox(tr("autostart"))
         self.autostart.setChecked(service.settings.autostart)
         self.cloud_enabled = QCheckBox(tr("llm_enable"))
+        self.cloud_enabled.setChecked(service.settings.llm.enabled)
         self.key_input = QLineEdit()
         self.key_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.key_input.setAccessibleName(tr("api_key"))
@@ -40,9 +43,19 @@ class Onboarding(QWizard):
             if key == "permissions":
                 self.permission_status = QLabel()
                 layout.addWidget(self.permission_status)
-                button = QPushButton(tr("open_settings"))
-                button.clicked.connect(lambda: service.open_settings("full_disk"))
-                layout.addWidget(button)
+                choices = (
+                    [("full_disk", "full_disk_access"), ("accessibility", "accessibility")]
+                    if sys.platform == "darwin"
+                    else [("full_disk", "app_permissions")]
+                )
+                for permission, label in choices:
+                    button = QPushButton(tr(label))
+                    button.clicked.connect(
+                        lambda _checked=False, permission=permission: service.open_settings(
+                            permission
+                        )
+                    )
+                    layout.addWidget(button)
             elif key == "extension":
                 button = QPushButton(tr("extension_install"))
                 button.clicked.connect(service.open_extension_folder)
@@ -63,7 +76,13 @@ class Onboarding(QWizard):
         if self.permission_status:
             status = self.service.permissions_status()
             self.permission_status.setText(
-                tr("permissions_ready") if all(status.values()) else tr("permissions_missing")
+                "\n".join(
+                    ("✓ " if available else "○ ")
+                    + tr(name)
+                    + ": "
+                    + tr("available" if available else "unavailable")
+                    for name, available in status.items()
+                )
             )
 
     def _finish(self) -> None:

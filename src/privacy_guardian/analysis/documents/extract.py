@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import re
 import signal
+import sys
 import time
 import zipfile
 from collections.abc import Iterator
@@ -43,8 +44,8 @@ class AnalysisTimeout(TimeoutError):
 @contextmanager
 def _deadline(seconds: float) -> Iterator[None]:
     previous: Any = None
-    armed = hasattr(signal, "SIGALRM")
-    if armed:
+    armed = sys.platform != "win32"
+    if sys.platform != "win32":
         try:
             previous = signal.getsignal(signal.SIGALRM)
 
@@ -58,7 +59,7 @@ def _deadline(seconds: float) -> Iterator[None]:
     try:
         yield
     finally:
-        if armed:
+        if sys.platform != "win32" and armed:
             signal.setitimer(signal.ITIMER_REAL, 0)
             signal.signal(signal.SIGALRM, previous)
 
