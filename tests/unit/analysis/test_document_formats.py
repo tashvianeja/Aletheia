@@ -83,17 +83,33 @@ def test_pptx_extracts_slide_text_and_table() -> None:
 
 
 @pytest.mark.parametrize("suffix", ["txt", "csv", "json", "md", "xml", "py", "js"])
-def test_text_formats_decode_non_utf8_and_apply_length_limit(
+def test_text_formats_decode_non_utf8_completely_despite_expansion_limit(
     suffix: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(extraction, "MAX_TEXT", 20)
-    content = "Résumé synthetic account number".encode("cp1252")
+    text = "Résumé synthetic account number"
+    content = text.encode("cp1252")
 
     extracted = extract_document(content, f"document.{suffix}")
 
-    assert extracted.pages[0].text.startswith("Résumé synthetic")
-    assert len(extracted.pages[0].text) == 20
+    assert extracted.pages[0].text == text
+    assert extracted.partial is False
+
+
+def test_plain_text_above_byte_bound_samples_first_and_last_bytes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(extraction, "MAX_BYTES", 20)
+    monkeypatch.setattr(extraction, "SAMPLE_BYTES", 5)
+    content = b"AAAAA01234567890ZZZZZ"
+
+    extracted = extract_document(content, "oversized.txt")
+
+    assert extracted.pages[0].text == "AAAAAZZZZZ"
     assert extracted.partial is True
+    assert extracted.warnings == [
+        "Large document sampled: first and last 5 MB; unsampled content was not checked."
+    ]
 
 
 def test_image_ocr_timeout_is_partial_without_leaking_parser_error(
