@@ -8,7 +8,14 @@ from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from privacy_guardian.core.events import Decision, Outcome
-from privacy_guardian.ui.card import CARD_WIDTH, SCREEN_MARGIN, GuardianCard, glyph
+from privacy_guardian.ui.card import (
+    CARD_WIDTH,
+    SCREEN_MARGIN,
+    GuardianCard,
+    anchor_bottom_right,
+    glyph,
+    scrollable,
+)
 from privacy_guardian.ui.theme import card_stylesheet, palette
 from privacy_guardian.util.i18n import tr
 
@@ -49,9 +56,10 @@ class InterventionPopup(QWidget):
         self.setFixedWidth(CARD_WIDTH + 2 * SCREEN_MARGIN)
         self.setStyleSheet(card_stylesheet(mode))
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(SCREEN_MARGIN, SCREEN_MARGIN, SCREEN_MARGIN, SCREEN_MARGIN)
-        self.card = GuardianCard(mode, self)
-        outer.addWidget(self.card)
+        outer.setContentsMargins(0, 0, 0, 0)
+        self.card = GuardianCard(mode)
+        self.scroller = scrollable(self.card)
+        outer.addWidget(self.scroller)
         self._build()
         self.buttons = self.card.buttons
         if on_action:
@@ -152,7 +160,17 @@ class InterventionPopup(QWidget):
         showing = not self.rationale.isVisible()
         self.rationale.setVisible(showing and bool(self.decision.rationale))
         self.remember.setVisible(showing)
-        self.adjustSize()
+        self.reanchor()
+
+    def reanchor(self) -> None:
+        """Re-measure and re-pin: the card grows and shrinks as the user expands it."""
+        anchor_bottom_right(self, self.scroller.widget())
+
+    def showEvent(self, event: Any) -> None:
+        super().showEvent(event)
+        # A word-wrapped label only reports its real height once it has been laid out
+        # at its final width, so the first honest measurement is after the first show.
+        QTimer.singleShot(0, self.reanchor)
 
     def update_decision(self, decision: Decision) -> None:
         """Refinement arriving after the widget is up must not rewrite it underneath the user."""
@@ -237,6 +255,7 @@ class PopupQueue(QWidget):
             return
         if self.current and self.current.decision.event_id == decision.event_id:
             self.current.update_decision(decision)
+            self.current.reanchor()
             return
         if any(item.event_id == decision.event_id for item in self.queue):
             self.queue = deque(
@@ -256,15 +275,8 @@ class PopupQueue(QWidget):
             return
         self.current = InterventionPopup(decision, self._respond)
         self.current.closed.connect(self._closed)
-        self.current.adjustSize()
-        screen = QGuiApplication.primaryScreen()
-        if screen:
-            rect = screen.availableGeometry()
-            self.current.move(
-                rect.right() - self.current.width() + 1,
-                rect.bottom() - self.current.height() + 1,
-            )
         self.current.show()
+        self.current.reanchor()
 
     def _reconcile(self) -> None:
         core = getattr(self.service, "core", None)
@@ -326,6 +338,10 @@ class ConfirmationBar(QWidget):
         outer.addWidget(card)
         self.setAccessibleName(message)
         QTimer.singleShot(6000, self._finish)
+
+    def showEvent(self, event: Any) -> None:
+        super().showEvent(event)
+        QTimer.singleShot(0, lambda: anchor_bottom_right(self))
 
     def _finish(self) -> None:
         self.hide()

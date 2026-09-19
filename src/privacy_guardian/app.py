@@ -352,11 +352,6 @@ def main() -> int:
             from privacy_guardian.ui.popup import ConfirmationBar
 
             bar = ConfirmationBar(message)
-            screen = QApplication.primaryScreen()
-            if screen:
-                bar.adjustSize()
-                rect = screen.availableGeometry()
-                bar.move(rect.right() - bar.width() + 1, rect.bottom() - bar.height() + 1)
             self.confirmation = bar
             bar.show()
 

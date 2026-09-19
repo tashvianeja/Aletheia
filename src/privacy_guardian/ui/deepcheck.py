@@ -9,12 +9,24 @@ from __future__ import annotations
 from typing import Any
 
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QGuiApplication
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
+)
 
 from privacy_guardian.core.events import DecisionFinding
 from privacy_guardian.ui import icons
-from privacy_guardian.ui.card import CARD_WIDTH, SCREEN_MARGIN, GuardianCard
+from privacy_guardian.ui.card import (
+    CARD_WIDTH,
+    SCREEN_MARGIN,
+    GuardianCard,
+    anchor_bottom_right,
+    scrollable,
+)
 from privacy_guardian.ui.theme import card_stylesheet, palette
 from privacy_guardian.util.i18n import tr
 
@@ -50,7 +62,8 @@ class DeepCheckWindow(QWidget):
         self.setStyleSheet(card_stylesheet(mode))
         self.setFixedWidth(CARD_WIDTH + 2 * SCREEN_MARGIN)
         self._outer = QVBoxLayout(self)
-        self._outer.setContentsMargins(SCREEN_MARGIN, SCREEN_MARGIN, SCREEN_MARGIN, SCREEN_MARGIN)
+        self._outer.setContentsMargins(0, 0, 0, 0)
+        self.scroller: QScrollArea | None = None
         self.card: GuardianCard | None = None
         self.stage_glyphs: dict[str, QLabel] = {}
         self._show_running()
@@ -58,12 +71,13 @@ class DeepCheckWindow(QWidget):
     # -- states ---------------------------------------------------------------
 
     def _reset_card(self) -> GuardianCard:
-        if self.card is not None:
-            self._outer.removeWidget(self.card)
-            self.card.deleteLater()
-        self.card = GuardianCard(self.mode, self)
+        if self.scroller is not None:
+            self._outer.removeWidget(self.scroller)
+            self.scroller.deleteLater()
+        self.card = GuardianCard(self.mode)
         self.card.closed.connect(self.close)
-        self._outer.addWidget(self.card)
+        self.scroller = scrollable(self.card)
+        self._outer.addWidget(self.scroller)
         return self.card
 
     def _show_running(self) -> None:
@@ -85,7 +99,6 @@ class DeepCheckWindow(QWidget):
         card.add_layout(box)
         card.add_footer()
         self.status = card.headline_label or QLabel()
-        self.adjustSize()
         self._anchor()
 
     def show_progress(self, update: dict[str, str] | str) -> None:
@@ -138,7 +151,6 @@ class DeepCheckWindow(QWidget):
         card.add_footer()
         # Keep the attribute the older report tests and screenshot tooling reach for.
         self.status = card.headline_label or QLabel()
-        self.adjustSize()
         self._anchor()
 
     def _open_full(self) -> None:
@@ -157,10 +169,7 @@ class DeepCheckWindow(QWidget):
         return str(getattr(core, "focused_origin", "") or "")
 
     def _anchor(self) -> None:
-        screen = QGuiApplication.primaryScreen()
-        if screen:
-            rect = screen.availableGeometry()
-            self.move(rect.right() - self.width() + 1, rect.bottom() - self.height() + 1)
+        anchor_bottom_right(self, self.scroller.widget() if self.scroller else None)
 
     def showEvent(self, event: Any) -> None:
         super().showEvent(event)

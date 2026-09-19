@@ -35,6 +35,12 @@ All notable changes will be documented here. This project has not produced a ver
 
 ### Fixed
 
+- Floating widgets were placed partly off the bottom of the screen and behind the Dock.
+  Three causes, all now fixed: the window was measured before its word-wrapped labels had
+  been laid out, so its height was underestimated; it was anchored to the primary screen
+  rather than the one in use; and Qt's always-on-top maps to a window level below the
+  Dock, which draws over anything pinned to the bottom edge. A card taller than the
+  screen now scrolls instead of overflowing.
 - Browser events raised both an in-page widget and a desktop popup. The page now owns events it can
   render; the desktop owns the rest, and picks up browser events only when no extension is live.
 - Pausing did not hold for privacy-policy events: a partial document could still raise the outcome

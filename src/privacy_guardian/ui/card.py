@@ -18,9 +18,12 @@ Layout, in the order the mockups put it:
 
 from __future__ import annotations
 
+import logging
+import sys
 from collections.abc import Callable
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QCursor, QGuiApplication, QScreen
 from PySide6.QtWidgets import (
     QFrame,
     QGraphicsDropShadowEffect,
@@ -28,6 +31,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QProgressBar,
     QPushButton,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -273,11 +277,86 @@ class GuardianCard(QFrame):
         self._layout.setContentsMargins(18, 16, 18, 16)
 
 
-def anchor_bottom_right(widget: QWidget, available: object) -> None:
-    """Every widget in the reference set is pinned 24px from the bottom-right corner."""
-    rect = available
-    widget.adjustSize()
-    widget.move(
-        rect.right() - widget.width() - SCREEN_MARGIN + 1,  # type: ignore[attr-defined]
-        rect.bottom() - widget.height() - SCREEN_MARGIN + 1,  # type: ignore[attr-defined]
+def scrollable(card: GuardianCard) -> QScrollArea:
+    """Hold the card in a transparent scroller so a tall one can never overflow the screen.
+
+    The card keeps its margin inside the scrolled content, which leaves the drop shadow
+    room to draw and means the scrollbar only appears when the card really is too tall.
+    """
+    container = QWidget()
+    container.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+    layout = QVBoxLayout(container)
+    layout.setContentsMargins(SCREEN_MARGIN, SCREEN_MARGIN, SCREEN_MARGIN, SCREEN_MARGIN)
+    layout.addWidget(card)
+    area = QScrollArea()
+    area.setWidget(container)
+    area.setWidgetResizable(True)
+    area.setFrameShape(QFrame.Shape.NoFrame)
+    area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+    area.viewport().setAutoFillBackground(False)
+    area.setStyleSheet("QScrollArea, QScrollArea > QWidget > QWidget { background: transparent; }")
+    return area
+
+
+def target_screen(widget: QWidget) -> QScreen | None:
+    """The screen the person is working on, not whichever one macOS calls primary."""
+    return (
+        QGuiApplication.screenAt(QCursor.pos())
+        or widget.screen()
+        or QGuiApplication.primaryScreen()
     )
+
+
+def keep_above_dock(widget: QWidget) -> None:
+    """Float the window above the Dock.
+
+    Qt's always-on-top maps to NSFloatingWindowLevel (3), which is below the Dock (20),
+    so a widget pinned to the bottom of the screen disappears behind the Dock the moment
+    it slides up. An auto-hiding Dock makes this worse: availableGeometry() then reports
+    the whole height as usable, so the widget is anchored right where the Dock appears.
+    A warning the person cannot see or click is worse than no warning.
+    """
+    if sys.platform != "darwin" or not widget.isVisible():
+        # winId() would force a native handle early; the level is reapplied on show.
+        return
+    try:
+        import objc
+        from AppKit import NSStatusWindowLevel
+
+        view = objc.objc_object(c_void_p=int(widget.winId()))
+        window = view.window()
+        if window is not None:
+            window.setLevel_(NSStatusWindowLevel)
+    except Exception:
+        # Placement still works without it; the Dock may simply overlap the widget.
+        logging.getLogger(__name__).debug("window level unchanged")
+
+
+def anchor_bottom_right(widget: QWidget, content: QWidget | None = None) -> None:
+    """Pin the window to the bottom-right of the usable screen area.
+
+    Two things have to happen before the move, or the window lands partly off screen
+    and underneath the Dock, which draws above an always-on-top tool window:
+
+    * the layout has to be activated, because a word-wrapped label reports far too
+      small a height until it has been laid out at its real width, and
+    * the height has to be capped to the space actually available.
+    """
+    layout = widget.layout()
+    if layout is not None:
+        layout.activate()
+    screen = target_screen(widget)
+    if screen is None:
+        widget.adjustSize()
+        return
+    rect = screen.availableGeometry()
+    wanted = (content or widget).sizeHint()
+    width = min(max(wanted.width(), widget.minimumWidth()), rect.width())
+    height = min(max(wanted.height(), widget.minimumHeight()), rect.height())
+    widget.resize(width, height)
+    widget.move(
+        max(rect.left(), rect.right() - width + 1),
+        max(rect.top(), rect.bottom() - height + 1),
+    )
+    keep_above_dock(widget)
