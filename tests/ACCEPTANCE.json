@@ -3,23 +3,23 @@
         "FR-1": [
             "unit/analysis/test_documents.py",
             "e2e/test_real_extension.py",
-            "perf/test_latency_budgets.py",
+            "perf/test_latency_budgets.py"
         ],
         "FR-2": ["unit/analysis/test_forms.py", "e2e/test_real_extension.py"],
         "FR-3": [
             "unit/analysis/test_policy_corpus.py",
             "e2e/test_real_extension.py",
-            "fixtures/corpora/terms",
+            "fixtures/corpora/terms"
         ],
         "FR-4": [
             "unit/analysis/test_policy_corpus.py",
             "e2e/test_real_extension.py",
-            "fixtures/corpora/policies",
+            "fixtures/corpora/policies"
         ],
         "FR-5": [
             "unit/analysis/test_consent.py",
             "e2e/site_content.py",
-            "e2e/test_real_extension.py",
+            "e2e/test_real_extension.py"
         ],
         "FR-6": ["platform/test_adapters.py"],
         "FR-7": ["platform/test_adapters.py", "unit/sensors/test_filesystem_hotkey.py"],
@@ -32,7 +32,7 @@
         "FR-14": [
             "integration/test_service.py",
             "unit/ui/test_onboarding_deepcheck.py",
-            "e2e/test_real_extension.py",
+            "e2e/test_real_extension.py"
         ],
         "FR-15": ["unit/engine/test_preferences.py", "unit/storage/test_store.py"],
         "FR-16": ["unit/storage/test_store.py"],
@@ -40,19 +40,19 @@
             "integration/test_ipc_transport.py",
             "integration/test_installation.py",
             "unit/core/test_ipc_protocol.py",
-            "e2e/test_real_extension.py",
+            "e2e/test_real_extension.py"
         ],
         "FR-18": ["unit/ui/test_onboarding_deepcheck.py"],
         "FR-19": [
             "integration/test_installation.py",
             "packaging/test_macos_minimum_version.py",
-            "packaging/verify_packaged_installation.py",
+            "packaging/verify_packaged_installation.py"
         ],
         "FR-20": [
             "unit/util/test_logging.py",
             "integration/test_service.py",
-            "e2e/test_real_extension.py",
-        ],
+            "e2e/test_real_extension.py"
+        ]
     },
     "end_to_end_scenarios": {
         "1": "real Chromium, native host, service, redaction/rescan/swap and cancel covered; connected file-change to visible warning is 1.095 s, while the 2.386 s cold-first-action measurement remains a documented target miss; 5 MiB ordinary text scans a valid end-of-file identifier without a partial result in 1.822472 s, above the raw 1.5 s target but within the allowed 1.875 s tolerance",
@@ -70,8 +70,18 @@
         "13": "clipboard writer/reader/allow-list/cloud-sync and persistence redaction covered; the native macOS write through the spawned analysis worker is 185.7 ms",
         "14": "real browser composite returns exactly tracking, consent and retention findings; clean blog returns all clean marks",
         "15": "learning and preference round-trip covered",
-        "16": "graceful close reconnects within five seconds; instrumented abrupt Chromium kill during file_finish persists an aborted event and service survives",
+        "16": "graceful close reconnects within five seconds; a real 38,207,030-byte PDF keeps file_finish active with measured worker CPU before abrupt Chromium termination, then persists an aborted event and leaves the service responsive; independent headed verification passed in 14.78 s",
         "17": "native host install/stdio/uninstall integration covered; the installed macOS lifecycle is verified and the installed Windows lifecycle remains pending",
-        "18": "five-minute native Cocoa measurement: tray 0.8232 s, warm median RSS 197.734 MiB, initial 200.500 MiB, peak 200.781 MiB, final 192.781 MiB, CPU 0.04423%; peak exceeds the raw 200 MiB target by 0.781 MiB and remains within the allowed 25% tolerance",
+        "18": "five-minute native Cocoa measurement: tray 0.8232 s, warm median RSS 207.33952 MB, peak 210.5344 MB, CPU 0.04423%; warm median exceeds the raw decimal 200 MB target by 7.33952 MB and peak exceeds it by 10.5344 MB, both within the allowed 25% tolerance"
     },
+    "final_verification": {
+        "commit": "2af6d4a",
+        "tests": 311,
+        "skipped": 5,
+        "instrumented_tests": 277,
+        "runtime_tests": 34,
+        "core_coverage": "85.55% (1687/1972)",
+        "overall_coverage": "75.43% (4136/5483)",
+        "windows_installer": "pending verification"
+    }
 }
