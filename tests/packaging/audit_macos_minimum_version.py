@@ -16,7 +16,7 @@ MACH_O_MAGICS = {
     b"\xca\xfe\xba\xbf",
     b"\xbf\xba\xfe\xca",
 }
-MINIMUM_PATTERN = re.compile(r"^\s+(?:minos|version)\s+([0-9]+(?:\.[0-9]+){1,2})\s*$")
+MINIMUM_PATTERN = re.compile(r"^(?:minos|version)\s+([0-9]+(?:\.[0-9]+){1,2})$")
 
 
 @dataclass(frozen=True)
@@ -66,11 +66,19 @@ def minimum_version(path: Path, architecture: str) -> tuple[int, ...]:
         capture_output=True,
         text=True,
     )
-    versions = [
-        version_tuple(match.group(1))
-        for line in result.stdout.splitlines()
-        if (match := MINIMUM_PATTERN.match(line))
-    ]
+    versions: list[tuple[int, ...]] = []
+    command = ""
+    for line in result.stdout.splitlines():
+        value = line.strip()
+        if value.startswith("cmd "):
+            command = value.removeprefix("cmd ")
+            continue
+        match = MINIMUM_PATTERN.match(value)
+        if match and (
+            (command == "LC_BUILD_VERSION" and value.startswith("minos "))
+            or (command == "LC_VERSION_MIN_MACOSX" and value.startswith("version "))
+        ):
+            versions.append(version_tuple(match.group(1)))
     if not versions:
         raise RuntimeError(f"no macOS minimum-version load command in {path} ({architecture})")
     return max(versions)

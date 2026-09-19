@@ -46,7 +46,14 @@ def test_minimum_version_reads_build_and_legacy_load_commands(
         return subprocess.CompletedProcess(
             [],
             0,
-            stdout="cmd LC_VERSION_MIN_MACOSX\n  version 12.0\ncmd LC_BUILD_VERSION\n    minos 13.0\n",
+            stdout=(
+                "cmd LC_VERSION_MIN_MACOSX\n"
+                "  version 12.0\n"
+                "cmd LC_BUILD_VERSION\n"
+                "    minos 13.0\n"
+                "     tool 3\n"
+                "  version 1267.0\n"
+            ),
             stderr="",
         )
 
