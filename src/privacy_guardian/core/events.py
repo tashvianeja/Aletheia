@@ -104,6 +104,7 @@ class PrivacyEvent(Model):
 class FileUploadEvent(PrivacyEvent):
     event_type: Literal["file_upload"] = "file_upload"
     document_type: str = "generic"
+    filename: str = ""
     file_count: int = Field(default=1, ge=1)
     size_bytes: int = Field(default=0, ge=0)
     partial: bool = False
@@ -216,14 +217,41 @@ class Outcome(StrEnum):
     INTERVENE = "INTERVENE"
 
 
+class DecisionFinding(Model):
+    """One row in the widget: a warning triangle, a green tick or a neutral note."""
+
+    label: str
+    severity: Literal["warn", "ok", "info"] = "warn"
+    detail: str = ""
+
+
 class Decision(Model):
     event_id: str
     outcome: Outcome
     risk: float = Field(ge=0, le=1)
     explanation: str
+    headline: str = ""
+    body: str = ""
+    findings: list[DecisionFinding] = Field(default_factory=list)
+    subject: str = ""
+    destination: str = ""
     rationale: list[str] = Field(default_factory=list)
     actions: list[str] = Field(default_factory=list)
+    action_labels: dict[str, str] = Field(default_factory=dict)
+    primary_action: str = ""
+    tertiary_action: str = ""
+    # Set only when the user has authorised this action to run without being asked.
+    auto_action: str = ""
+    layout: Literal["body_first", "findings_first"] = "body_first"
     default_action: str = "cancel"
+
+    @property
+    def title(self) -> str:
+        return self.headline or self.explanation
+
+    @property
+    def detail(self) -> str:
+        return self.body if self.headline else ""
 
 
 class UserResponse(Model):

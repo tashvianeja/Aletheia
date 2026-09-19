@@ -136,7 +136,7 @@ def test_screen_activity_informs_but_denied_permission_is_ignored() -> None:
     assert active.outcome == Outcome.INFORM
     assert any("now active" in note for note in active.rationale)
     assert denied.outcome == Outcome.IGNORE
-    assert denied.explanation == "Access was denied or stopped; no active grant was detected."
+    assert denied.explanation == "Access was denied or stopped. No active grant was detected."
 
 
 def test_clipboard_writer_suppression_and_cloud_sync_warning() -> None:

@@ -129,7 +129,12 @@ class Store:
     def history(
         self, limit: int = 100, requester: str | None = None, outcome: str | None = None
     ) -> list[dict[str, Any]]:
-        sql = "SELECT e.*,d.decision_json FROM events e LEFT JOIN decisions d ON d.id=(SELECT MAX(id) FROM decisions WHERE event_id=e.id) WHERE 1=1"
+        sql = (
+            "SELECT e.*,d.decision_json,r.action FROM events e"
+            " LEFT JOIN decisions d ON d.id=(SELECT MAX(id) FROM decisions WHERE event_id=e.id)"
+            " LEFT JOIN user_responses r ON r.id=(SELECT MAX(id) FROM user_responses"
+            " WHERE event_id=e.id) WHERE 1=1"
+        )
         args: list[Any] = []
         if requester:
             sql += " AND e.requester=?"
@@ -145,9 +150,20 @@ class Store:
                 "event": json.loads(row["event_json"]),
                 "decision": json.loads(row["decision_json"]) if row["decision_json"] else None,
                 "status": row["status"],
+                "action": row["action"] or "",
             }
             for row in rows
         ]
+
+    def outcome_counts(self) -> dict[str, int]:
+        """How often each tier fired, for the Intervened / Informed / Ignored tiles."""
+        with self._lock:
+            rows = self.connection.execute(
+                "SELECT d.outcome, COUNT(*) FROM decisions d"
+                " WHERE d.id=(SELECT MAX(id) FROM decisions WHERE event_id=d.event_id)"
+                " GROUP BY d.outcome"
+            ).fetchall()
+        return {str(row[0]): int(row[1]) for row in rows}
 
     def set_preference(self, key: str, value: Any) -> None:
         with self._lock, self.connection:

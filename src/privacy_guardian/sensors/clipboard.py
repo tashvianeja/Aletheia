@@ -109,6 +109,16 @@ class ClipboardMonitor:
             self.listener.start()
         self._task = asyncio.create_task(self._loop())
 
+    def stop_now(self) -> None:
+        """Drop the monitor from outside its own loop, used when the service is restarted."""
+        if self.listener:
+            with contextlib.suppress(Exception):
+                self.listener.stop()
+            self.listener = None
+        if self._task:
+            self._task.cancel()
+            self._task = None
+
     async def stop(self) -> None:
         if self.listener:
             await asyncio.to_thread(self.listener.stop)

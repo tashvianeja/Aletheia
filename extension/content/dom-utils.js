@@ -17,31 +17,170 @@
   };
   PG.wait = milliseconds=>new Promise(resolve=>setTimeout(resolve,milliseconds));
   PG.safeRace = (promise,milliseconds,fallback)=>Promise.race([promise,PG.wait(milliseconds).then(()=>fallback)]);
-  const names={cancel:"Don't share",continue:'Continue',redact:'Create redacted copy',strip_metadata:'Strip location metadata',review_fields:'Review fields',reject_optional:'Reject optional',block:'Block if possible',open_settings:'Open system settings',mark_expected:'Mark as expected',view_details:'View details',learn_more:'Learn more',clear_clipboard:'Clear clipboard'};
+  const FALLBACK_LABELS={cancel:"Cancel",continue:'Continue',redact:'Create redacted copy',strip_metadata:'Remove location first',review_fields:'Review fields',reject_optional:'Reject optional',block:'Block if possible',open_settings:'Review access',mark_expected:'Expected',view_details:'View details',learn_more:'Learn more',clear_clipboard:'Clear clipboard'};
+  const SVG='http://www.w3.org/2000/svg';
+  // Same glyph set as the desktop widget, drawn inline so no network request is needed.
+  const GLYPHS={
+    padlock:{c:'#3b5bdb',d:'<path fill="none" stroke="#3b5bdb" stroke-width="1.7" stroke-linecap="round" d="M6.4 10.2V7.3a3.6 3.6 0 0 1 7.2 0v2.9"/><rect x="4.2" y="10.2" width="11.6" height="8.1" rx="2.2" fill="none" stroke="#3b5bdb" stroke-width="1.7"/>'},
+    shield:{d:'<path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" d="M10 2.6 16.4 5v5.1c0 4-3.8 6.4-6.4 7.6-2.6-1.2-6.4-3.6-6.4-7.6V5z"/>'},
+    warn:{d:'<path fill="#d97706" d="M10 2.9 18.6 17H1.4z"/><path fill="#fff" d="M9.1 7.3h1.8v5h-1.8zM9.1 13.6h1.8v1.8H9.1z"/>'},
+    ok:{d:'<circle cx="10" cy="10" r="7.6" fill="#059669"/><path fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="m6.6 10.2 2.4 2.4 4.4-5"/>'},
+    info:{d:'<rect x="4" y="9.2" width="12" height="1.7" rx="0.85" fill="#9ca3af"/>'},
+    close:{d:'<path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="m5.8 5.8 8.4 8.4M14.2 5.8l-8.4 8.4"/>'},
+    arrow:{d:'<path fill="none" stroke="#9ca3af" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" d="M4 10h11m-3.4-3.4L15 10l-3.4 3.4"/>'}
+  };
+  function icon(name){const node=document.createElementNS(SVG,'svg');node.setAttribute('viewBox','0 0 20 20');node.setAttribute('aria-hidden','true');node.innerHTML=GLYPHS[name]?.d||'';return node;}
+  function element(tag,className,text){const node=document.createElement(tag);if(className)node.className=className;if(text!==undefined)node.textContent=text;return node;}
   PG.decisionStates=new Map();
+  // The widget: one card, laid out exactly as the desktop popup lays it out.
+  function buildPanel(decision,state){
+    const informational=decision.outcome==='INFORM';
+    const panel=element('section','pg-panel');
+    panel.setAttribute('role',informational?'status':'alertdialog');
+    panel.setAttribute('aria-label','Privacy Guardian');
+    panel.setAttribute('aria-live',informational?'polite':'assertive');
+    const headline=element('p','pg-headline',decision.headline||decision.explanation);
+    if(informational){
+      const head=element('div','pg-head');
+      const severity=(decision.findings||[]).some(item=>item.severity==='warn')?'warn':'ok';
+      head.append(icon(severity),headline);
+      headline.style.margin='0';
+      panel.append(head);
+    }else{
+      const head=element('div','pg-head');
+      head.append(icon('padlock'),element('span','pg-name','Privacy Guardian'));
+      if(decision.destination)head.append(element('span','pg-origin',decision.destination));
+      const close=element('button','pg-close');close.type='button';close.setAttribute('aria-label','Dismiss');
+      close.append(icon('close'));
+      close.addEventListener('click',()=>state.dismiss());
+      head.append(close);
+      panel.append(head,headline);
+    }
+    const body=element('p','pg-body',decision.body||'');
+    const rows=element('ul','pg-rows');
+    for(const finding of decision.findings||[]){
+      const item=document.createElement('li');
+      item.append(icon(finding.severity||'warn'));
+      const text=element('span','pg-row-label',finding.label);
+      if(finding.detail)text.append(element('span','pg-row-detail',finding.detail));
+      item.append(text);
+      rows.append(item);
+    }
+    const order=decision.layout==='findings_first'?[rows,body]:[body,rows];
+    for(const part of order){if(part===body&&!decision.body)continue;if(part===rows&&!rows.children.length)continue;panel.append(part);}
+    const rationale=element('ul','pg-rationale');
+    for(const line of decision.rationale||[])rationale.append(element('li',null,line));
+    rationale.hidden=true;panel.append(rationale);
+    const remember=element('label','pg-remember');
+    const check=document.createElement('input');check.type='checkbox';
+    remember.append(check,document.createTextNode("Don't ask again for this site"));
+    remember.hidden=true;panel.append(remember);
+    if(!informational){
+      if(decision.subject||decision.destination){
+        panel.append(element('hr','pg-rule'));
+        const context=element('div','pg-context');
+        context.append(element('span',null,decision.subject||''));
+        if(decision.destination){context.append(icon('arrow'),element('span',null,decision.destination));}
+        panel.append(context);
+      }
+      const labels=decision.action_labels||{};
+      const primary=decision.primary_action||decision.default_action;
+      const tertiary=decision.tertiary_action||'';
+      const make=(action,tier)=>{
+        const button=element('button','pg-'+tier,labels[action]||FALLBACK_LABELS[action]||action);
+        button.type='button';button.dataset.pgAction=action;
+        button.addEventListener('click',async()=>{
+          button.disabled=true;
+          try{await state.apply(await PG.request('action',{event_id:decision.event_id,action,remember:check.checked}));}
+          catch(_){body.textContent='That action could not be completed. Your submission remains held.';}
+          finally{button.disabled=false;}
+        });
+        return button;
+      };
+      const actions=element('div','pg-actions');
+      for(const action of decision.actions||[]){if(action===tertiary||action===primary)continue;actions.append(make(action,'secondary'));}
+      if((decision.actions||[]).includes(primary))actions.append(make(primary,'primary'));
+      if(tertiary&&(decision.actions||[]).includes(tertiary))actions.prepend(make(tertiary,'tertiary'));
+      panel.append(actions);
+    }
+    const foot=element('div','pg-foot');
+    foot.append(icon('shield'),element('span',null,'Analysed on this device'));
+    if(!informational){
+      const why=element('button','pg-why','Why am I seeing this?');why.type='button';
+      why.addEventListener('click',()=>{const showing=rationale.hidden;rationale.hidden=!showing||!(decision.rationale||[]).length;remember.hidden=!showing;});
+      foot.append(why);
+    }
+    panel.append(foot);
+    if(informational){
+      const bar=element('div','pg-countdown');const fill=document.createElement('span');
+      bar.append(fill);panel.append(bar);
+      requestAnimationFrame(()=>{fill.style.transition='transform 8s linear';fill.style.transform='scaleX(0)';});
+    }
+    return {panel,body};
+  }
   PG.showDecision = (decision,onAction) => {
     if(!decision||decision.outcome==='IGNORE')return Promise.resolve({action:'continue'});
     const previous=PG.decisionStates.get(decision.event_id);
     if(previous){if(!previous.onAction&&onAction)previous.onAction=onAction;return previous.promise;}
     const state={onAction,resolved:false,processing:false,selected:null};
     state.promise=new Promise(resolve=>{state.resolve=resolve;});PG.decisionStates.set(decision.event_id,state);
-    const panel=document.createElement('section');panel.className='pg-panel';panel.setAttribute('role','status');panel.setAttribute('aria-label','Privacy Guardian');
-    const title=document.createElement('strong');title.textContent='Privacy Guardian';panel.append(title);
-    const explanation=document.createElement('p');explanation.textContent=decision.explanation;panel.append(explanation);
-    for(const line of decision.rationale||[]){if(/^[⚠✓]/u.test(line)){const item=document.createElement('p');item.textContent=line;panel.append(item);}}
-    const details=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Why?';details.append(summary);
-    const rationale=document.createElement('p');rationale.textContent=(decision.rationale||[]).join(' ');details.append(rationale);panel.append(details);
-    state.apply=async result=>{if(state.resolved||state.processing)return;state.processing=true;try{await state.onAction?.(result);state.selected=result;state.resolved=true;panel.remove();PG.panels.delete(decision.event_id);state.resolve(result);}catch(_){explanation.textContent='That action could not be completed. Your submission remains held.';}finally{state.processing=false;}};
-    const actions=document.createElement('div');actions.className='pg-actions';
-    for(const action of decision.actions||[]){const button=document.createElement('button');button.type='button';button.textContent=names[action]||action;button.dataset.pgAction=action;button.addEventListener('click',async()=>{button.disabled=true;try{await state.apply(await PG.request('action',{event_id:decision.event_id,action}));}catch(_){explanation.textContent='That action could not be completed. Your submission remains held.';}finally{button.disabled=false;}});actions.append(button);}
-    panel.append(actions);(document.body||document.documentElement).append(panel);PG.panels.set(decision.event_id,panel);
-    if(decision.outcome==='INFORM')setTimeout(()=>{panel.remove();PG.panels.delete(decision.event_id);},8000);
-    (async()=>{const started=Date.now();while(!state.resolved&&Date.now()-started<61000){try{const reply=await PG.request('action_poll',{event_id:decision.event_id});if(!reply.pending&&reply.action)await state.apply(reply.action);}catch(_){}if(!state.resolved)await PG.wait(300);}if(!state.resolved&&decision.outcome==='INTERVENE')await state.apply({action:decision.default_action||'cancel'});setTimeout(()=>PG.decisionStates.delete(decision.event_id),240000);})();
+    const informational=decision.outcome==='INFORM';
+    const close=()=>{view.panel.remove();PG.panels.delete(decision.event_id);};
+    state.apply=async result=>{if(state.resolved||state.processing)return;state.processing=true;try{await state.onAction?.(result);state.selected=result;state.resolved=true;close();state.resolve(result);}catch(_){view.body.textContent='That action could not be completed. Your submission remains held.';}finally{state.processing=false;}};
+    // Dismissing an intervention is the same as letting it time out: the safe default stands.
+    state.dismiss=()=>{if(decision.outcome==='INTERVENE'){state.apply({action:decision.default_action||'cancel'});}else{state.resolved=true;close();state.resolve({action:'continue'});}};
+    const view=buildPanel(decision,state);
+    (document.body||document.documentElement).append(view.panel);PG.panels.set(decision.event_id,view.panel);
+    if(decision.auto_action){
+      // The user authorised this action; carry it out, record it, let the toast report it.
+      (async()=>{try{await state.onAction?.({action:decision.auto_action});}catch(_){}
+        try{await PG.request('action',{event_id:decision.event_id,action:decision.auto_action});}catch(_){}})();
+    }
+    if(informational){setTimeout(()=>{if(!state.resolved){state.resolved=true;close();state.resolve({action:'continue'});}},8000);return state.promise;}
+    (async()=>{const started=Date.now();while(!state.resolved&&Date.now()-started<61000){try{const reply=await PG.request('action_poll',{event_id:decision.event_id});if(!reply.pending&&reply.action)await state.apply(reply.action);}catch(_){}if(!state.resolved)await PG.wait(300);}if(!state.resolved)await state.apply({action:decision.default_action||'cancel'});setTimeout(()=>PG.decisionStates.delete(decision.event_id),240000);})();
     return state.promise;
   };
   PG.awaitDecision = async(decision,onAction)=> {
     if(!decision||decision.outcome!=='INTERVENE'){PG.showDecision(decision,onAction);return {action:'continue'};}
     return PG.showDecision(decision,onAction);
+  };
+  // The compact bar from the component set: what just happened, and a way to dismiss it.
+  PG.confirm = message=>{
+    document.querySelector('.pg-panel[data-pg-confirm]')?.remove();
+    const panel=element('section','pg-panel');panel.dataset.pgConfirm='1';
+    panel.setAttribute('role','status');panel.style.width='auto';panel.style.padding='12px 14px';
+    const row=element('div','pg-head');row.style.margin='0';
+    row.append(icon('padlock'),element('span','pg-row-label',message));
+    const done=element('button','pg-primary','Done');done.type='button';
+    done.style.marginLeft='14px';
+    done.addEventListener('click',()=>panel.remove());
+    row.append(done);panel.append(row);
+    (document.body||document.documentElement).append(panel);
+    setTimeout(()=>panel.remove(),8000);
+    return panel;
+  };
+  // "Show me where": find the quoted clause on the page and take the reader to it.
+  PG.showClauses = citations=>{
+    const wanted=(citations||[]).map(text=>String(text).replace(/\s+/g,' ').trim().slice(0,120)).filter(Boolean);
+    let first=null,found=0;
+    if(wanted.length){
+      const walker=document.createTreeWalker(document.body||document.documentElement,NodeFilter.SHOW_TEXT);
+      const seen=new Set();
+      for(let node=walker.nextNode();node;node=walker.nextNode()){
+        const text=(node.textContent||'').replace(/\s+/g,' ');
+        for(const phrase of wanted){
+          if(seen.has(phrase)||phrase.length<24||!text.includes(phrase))continue;
+          const host=node.parentElement;
+          if(!host||host.closest('.pg-panel'))continue;
+          seen.add(phrase);host.classList.add('pg-review');
+          host.setAttribute('aria-description','Privacy Guardian flagged this clause');
+          first=first||host;found++;
+        }
+      }
+    }
+    if(first)first.scrollIntoView({behavior:'smooth',block:'center'});
+    PG.confirm(found?`${found} clause${found===1?'':'s'} highlighted on this page`:'The clause text could not be located on this page');
+    return found;
   };
   PG.highlight = fields=>{for(const field of fields||[]){const element=PG.queryAll('[data-pg-field-id]').find(node=>node.dataset.pgFieldId===field.field_id);if(element){element.classList.add('pg-review');element.setAttribute('aria-description','Review this information before sharing');}}};
   PG.collectContext = async(requestId)=>{

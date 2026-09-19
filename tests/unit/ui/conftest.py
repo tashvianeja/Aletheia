@@ -69,6 +69,9 @@ class UiController:
     def show_dashboard(self, tab: str = "history") -> None:
         self.calls.append(("dashboard", tab))
 
+    def show_report_window(self, report: dict[str, Any]) -> None:
+        self.calls.append(("report", report))
+
     def show_permissions(self) -> None:
         self.calls.append(("permissions",))
 

@@ -46,6 +46,8 @@ class Settings(BaseSettings):
     hotkey: str = "Ctrl+Shift+P"
     log_level: str = "INFO"
     reject_optional_cookies: bool = True
+    # Learned defaults are only ever offered, never applied silently.
+    learning_enabled: bool = True
     llm: LLMSettings = Field(default_factory=LLMSettings)
     allowed_extension_ids: list[str] = Field(
         default_factory=lambda: [

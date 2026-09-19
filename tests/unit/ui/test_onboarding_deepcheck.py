@@ -62,26 +62,75 @@ def test_onboarding_keychain_failure_is_visible(qtbot, ui_controller, monkeypatc
     assert ui_controller.settings.onboarding_complete is False
 
 
-def test_deep_check_renders_findings_clean_unavailable_and_missing_context(
-    qtbot, ui_controller
-) -> None:
+def _labels(window) -> list[str]:
+    from PySide6.QtWidgets import QLabel
+
+    widgets = window.card.findChildren(QLabel) + window.card.findChildren(QPushButton)
+    return [widget.text() for widget in widgets if widget.text()]
+
+
+def test_deep_check_progresses_then_renders_grouped_result(qtbot, ui_controller) -> None:
+    from privacy_guardian.deepcheck import build_groups
+
+    window = DeepCheckWindow(ui_controller)
+    qtbot.addWidget(window)
+
+    # While running it is a checklist of the four sections.
+    assert set(window.stage_glyphs) == {"permissions", "tracking", "policy", "forms"}
+    assert "Privacy policy" in _labels(window)
+    window.show_progress({"stage": "tracking", "state": "done"})
+
+    findings = [
+        {
+            "kind": "tracking",
+            "severity": "INFORM",
+            "summary": "Advertising profile",
+            "detail": "Your activity may be used for personalised advertising.",
+        }
+    ]
+    checked = [
+        {"kind": "tracking", "available": True, "clean": False},
+        {"kind": "forms", "available": True, "clean": True},
+        {"kind": "policy", "available": False, "clean": False},
+    ]
+    window.show_report(
+        {
+            "summary": "Overall: 1 things to review",
+            "origin": "dropcrate.example",
+            "findings": findings,
+            "checked": checked,
+            "groups": build_groups(findings, checked),
+            "context_available": True,
+        }
+    )
+    labels = _labels(window)
+
+    assert window.status.text() == "Overall: 1 things to review"
+    assert "Advertising profile" in labels
+    assert "Your activity may be used for personalised advertising." in labels
+    assert "No sensitive file currently shared" in labels
+    assert "dropcrate.example" in labels
+    assert {"Done", "View full analysis"} <= set(labels)
+
+
+def test_deep_check_full_analysis_opens_the_report(qtbot, ui_controller) -> None:
+    window = DeepCheckWindow(ui_controller)
+    qtbot.addWidget(window)
+    report = {
+        "summary": "Nothing to review",
+        "findings": [],
+        "groups": [],
+        "context_available": True,
+    }
+    window.show_report(report)
+    window._open_full()
+    assert ("report", report) in ui_controller.calls
+
+
+def test_deep_check_without_context_says_so(qtbot, ui_controller) -> None:
     window = DeepCheckWindow(ui_controller)
     qtbot.addWidget(window)
     window.show_report(
-        {
-            "summary": "2 things to review",
-            "findings": [{"summary": "Advertising profile"}],
-            "checked": [
-                {"kind": "forms", "available": True, "clean": True},
-                {"kind": "screen", "available": False, "clean": False},
-            ],
-            "context_available": False,
-        }
+        {"summary": "Nothing to review", "findings": [], "groups": [], "context_available": False}
     )
-    rows = [window.results.item(index).text() for index in range(window.results.count())]
-    assert window.progress.maximum() == 1
-    assert window.status.text() == "2 things to review"
-    assert any("Advertising profile" in row for row in rows)
-    assert any(row.startswith("✓") for row in rows)
-    assert any(row.startswith("○") for row in rows)
-    assert any("context" in row.lower() for row in rows)
+    assert any("context" in label.lower() for label in _labels(window))

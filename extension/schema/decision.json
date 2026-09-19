@@ -1,5 +1,35 @@
 {
   "$defs": {
+    "DecisionFinding": {
+      "additionalProperties": false,
+      "description": "One row in the widget: a warning triangle, a green tick or a neutral note.",
+      "properties": {
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "severity": {
+          "default": "warn",
+          "enum": [
+            "warn",
+            "ok",
+            "info"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "detail": {
+          "default": "",
+          "title": "Detail",
+          "type": "string"
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "title": "DecisionFinding",
+      "type": "object"
+    },
     "Outcome": {
       "enum": [
         "IGNORE",
@@ -29,6 +59,33 @@
       "title": "Explanation",
       "type": "string"
     },
+    "headline": {
+      "default": "",
+      "title": "Headline",
+      "type": "string"
+    },
+    "body": {
+      "default": "",
+      "title": "Body",
+      "type": "string"
+    },
+    "findings": {
+      "items": {
+        "$ref": "#/$defs/DecisionFinding"
+      },
+      "title": "Findings",
+      "type": "array"
+    },
+    "subject": {
+      "default": "",
+      "title": "Subject",
+      "type": "string"
+    },
+    "destination": {
+      "default": "",
+      "title": "Destination",
+      "type": "string"
+    },
     "rationale": {
       "items": {
         "type": "string"
@@ -42,6 +99,37 @@
       },
       "title": "Actions",
       "type": "array"
+    },
+    "action_labels": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Action Labels",
+      "type": "object"
+    },
+    "primary_action": {
+      "default": "",
+      "title": "Primary Action",
+      "type": "string"
+    },
+    "tertiary_action": {
+      "default": "",
+      "title": "Tertiary Action",
+      "type": "string"
+    },
+    "auto_action": {
+      "default": "",
+      "title": "Auto Action",
+      "type": "string"
+    },
+    "layout": {
+      "default": "body_first",
+      "enum": [
+        "body_first",
+        "findings_first"
+      ],
+      "title": "Layout",
+      "type": "string"
     },
     "default_action": {
       "default": "cancel",

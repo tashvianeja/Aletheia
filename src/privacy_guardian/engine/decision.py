@@ -20,12 +20,22 @@ from privacy_guardian.core.events import (
     TrackingEvent,
 )
 from privacy_guardian.engine.context import SiteOrAppProfile, analyze_context
-from privacy_guardian.engine.explain import explain
+from privacy_guardian.engine.explain import explain, summarize
 from privacy_guardian.engine.necessity import Necessity
 from privacy_guardian.engine.preferences import LearnedRules, Preference, UserPreferences, protected
+from privacy_guardian.engine.presentation import decorate, findings_for, policy_rows
 from privacy_guardian.engine.risk import score_risk
 
 _LEVELS = [Outcome.IGNORE, Outcome.INFORM, Outcome.INTERVENE]
+# What an automatic action reports back once it has run.
+AUTOMATIC_HEADLINES = {
+    "reject_optional": "Optional cookies rejected for you.",
+    "block": "Advertising identifiers blocked.",
+}
+AUTOMATIC_BODIES = {
+    "reject_optional": "Necessary cookies were kept. You set this as your default.",
+    "block": "This page can no longer link your visit to other websites. You set this as your default.",
+}
 _ACTIONS: dict[str, tuple[list[str], str]] = {
     "file_upload": (["cancel", "continue", "redact"], "cancel"),
     "form_submit": (["cancel", "continue", "review_fields"], "cancel"),
@@ -227,23 +237,64 @@ def decide(
         default_action = "view_details"
     if event.event_type == "file_upload" and DataCategory.LOCATION_PRECISE in categories:
         actions.insert(0, "strip_metadata")
-    explanation, rationale = explain(event, assessments, profile, notes)
+    automatic = (
+        default_action
+        if default_action in preferences.automatic_actions and default_action in actions
+        else ""
+    )
+    if automatic:
+        # The user authorised this; take it, say so, and stop interrupting.
+        level = min(level, 1)
+        notes.append("You asked Privacy Guardian to do this automatically.")
+    headline, body, findings_rows, rationale = explain(
+        event, assessments, profile, notes, informational=_LEVELS[level] == Outcome.INFORM
+    )
+    unnecessary = {
+        item.category
+        for item in assessments
+        if item.verdict in {Necessity.UNNECESSARY, Necessity.RED_FLAG}
+    }
+    findings_rows = findings_for(event, findings_rows, unnecessary)
+    if isinstance(event, PolicyDocumentEvent):
+        rows = policy_rows(list(profile.clauses), [])
+        if rows:
+            findings_rows = rows
+        clause_count = len(rows)
+        if clause_count:
+            headline = "Before you accept"
+            body = (
+                f"{clause_count} clause{'s' if clause_count != 1 else ''} in these "
+                f"{'terms' if event.kind == 'terms' else 'policies'} affect your privacy. "
+                "Everything else looks standard."
+            )
     if partial_upload:
-        explanation = (
-            "This file was only partially checked; " + explanation[:1].lower() + explanation[1:]
-        )
+        body = "This file was only partially checked. " + body
     if isinstance(event, PermissionRequestEvent) and event.state in {"denied", "stopped"}:
         level = 0
-        explanation = "Access was denied or stopped; no active grant was detected."
-        rationale.append(explanation)
-    return Decision(
-        event_id=event.id,
-        outcome=_LEVELS[level],
-        risk=risk,
-        explanation=explanation,
-        rationale=rationale,
-        actions=actions,
-        default_action=default_action,
+        headline = "Access was denied or stopped."
+        body = "No active grant was detected."
+        findings_rows = []
+        rationale.append(summarize(headline, body))
+    if automatic:
+        headline = AUTOMATIC_HEADLINES.get(automatic, headline)
+        body = AUTOMATIC_BODIES.get(automatic, body)
+    explanation = summarize(headline, body)
+    return decorate(
+        Decision(
+            event_id=event.id,
+            outcome=_LEVELS[level],
+            risk=risk,
+            explanation=explanation,
+            headline=headline,
+            body=body,
+            findings=findings_rows,
+            rationale=rationale,
+            actions=actions,
+            default_action=default_action,
+            auto_action=automatic,
+        ),
+        event,
+        filename=getattr(event, "filename", ""),
     )
 
 

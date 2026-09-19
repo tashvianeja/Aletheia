@@ -20,7 +20,7 @@
   PG.submitChecks.push(async form=>{
     const items=fields(form);if(!items.some(field=>field.filled))return true;
     const result=await PG.safeRace(PG.request('event',{event:{event_type:'form_submit',fields:items}}),4000,null);if(!result)return true;
-    const action=await PG.awaitDecision(result.decision,selected=>{if(selected.action==='review_fields')PG.highlight(assessments.filter(assessment=>assessment.badge).map(assessment=>assessment.field).filter(field=>items.some(item=>item.field_id===field.field_id)));});
+    const action=await PG.awaitDecision(result.decision,selected=>{if(selected.action!=='review_fields')return;const flagged=assessments.filter(assessment=>assessment.badge).map(assessment=>assessment.field).filter(field=>items.some(item=>item.field_id===field.field_id));PG.highlight(flagged);PG.confirm(`${flagged.length} field${flagged.length===1?'':'s'} marked as not needed`);});
     return action.action==='continue';
   });
   // Open shadow roots attached later are inventoried by the regular mutation pass and a low-frequency check.

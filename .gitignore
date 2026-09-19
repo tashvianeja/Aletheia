@@ -19,3 +19,7 @@ dist/
 .DS_Store
 artifacts/
 playwright-report/
+
+# Design reference media (212 MB of renders, footage and voiceover). Kept locally;
+# the README screenshots are generated from the real widgets instead.
+mockups/

@@ -43,6 +43,8 @@ class UserPreferences(BaseModel):
     expected_permissions: dict[str, list[DataCategory]] = Field(default_factory=dict)
     clipboard_allowlist: list[str] = Field(default_factory=list)
     reject_optional_cookies: bool = True
+    # Actions the user has explicitly authorised Privacy Guardian to take without asking.
+    automatic_actions: list[str] = Field(default_factory=list)
 
     def for_category(self, category: DataCategory) -> Preference:
         return self.categories.get(
@@ -68,8 +70,44 @@ class LearnedRule(BaseModel):
         return self.consecutive_continue >= 3 and not protected(self.category)
 
 
+# Only choices that are reversible and never high-impact may ever become automatic.
+AUTOMATABLE: dict[str, str] = {
+    "reject_optional": "reject optional cookies",
+    "block": "block advertising identifiers",
+}
+SUGGEST_AFTER_SITES = 5
+
+
 class LearnedRules(BaseModel):
     rules: list[LearnedRule] = Field(default_factory=list)
+    # Distinct sites or apps where the same protective choice was made.
+    action_sites: dict[str, list[str]] = Field(default_factory=dict)
+    # Offers already made, so the same question is never asked twice.
+    suggested: list[str] = Field(default_factory=list)
+    declined: list[str] = Field(default_factory=list)
+
+    def observe(self, action: str, requester_key: str) -> None:
+        if action not in AUTOMATABLE or not requester_key:
+            return
+        sites = self.action_sites.setdefault(action, [])
+        if requester_key not in sites:
+            sites.append(requester_key)
+            del sites[:-50]
+
+    def suggestion(self, already_automatic: list[str]) -> str:
+        """The one repeated choice worth offering to make automatic, if any."""
+        for action, sites in self.action_sites.items():
+            if (
+                len(sites) >= SUGGEST_AFTER_SITES
+                and action not in self.suggested
+                and action not in self.declined
+                and action not in already_automatic
+            ):
+                return action
+        return ""
+
+    def site_count(self, action: str) -> int:
+        return len(self.action_sites.get(action, []))
 
     def allows_downgrade(self, category: DataCategory, purpose: str) -> bool:
         return any(
@@ -90,6 +128,9 @@ class LearnedRules(BaseModel):
 
     def reset(self) -> None:
         self.rules.clear()
+        self.action_sites.clear()
+        self.suggested.clear()
+        self.declined.clear()
 
 
 def learn(

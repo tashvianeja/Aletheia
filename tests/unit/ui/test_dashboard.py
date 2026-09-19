@@ -44,7 +44,7 @@ def test_history_filters_and_detail_view(qtbot, ui_controller) -> None:
     assert dashboard.history.rowCount() == 1
     dashboard.show_event_detail(0, 0)
 
-    assert dashboard.tabs.currentIndex() == 3
+    assert dashboard.current_section == "sites_and_apps"
     detail = json.loads(dashboard.profile_detail.toPlainText())
     assert detail["decision"]["outcome"] == "INTERVENE"
     assert "secret=yes" not in dashboard.profile_detail.toPlainText()

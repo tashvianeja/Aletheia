@@ -8,6 +8,72 @@ from typing import Any
 from privacy_guardian.core.events import Outcome, Requester
 from privacy_guardian.util.i18n import tr
 
+# The four things a thorough check reports on, in the order the mockups show them.
+GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("permissions", "Permissions", ("permissions", "system_access", "permission_request")),
+    ("tracking", "Tracking", ("tracking", "consent", "clipboard_read", "screen_capture")),
+    ("policy", "Privacy policy", ("policy", "terms")),
+    ("forms", "Current form", ("forms", "uploads")),
+)
+# What a clean section says, so an all-clear is as readable as a warning.
+CLEAN = {
+    "permissions": (
+        "No unnecessary permissions found",
+        "Nothing is asking for more access than it appears to need.",
+    ),
+    "tracking": (
+        "No advertising profile detected",
+        "Nothing on this page links your activity to other websites.",
+    ),
+    "policy": (
+        "Nothing unusual in the policy",
+        "Collection, sharing and retention read as ordinary for this kind of service.",
+    ),
+    "forms": (
+        "No sensitive file currently shared",
+        "Nothing in this page's forms or uploads contains identity or payment information.",
+    ),
+}
+UNAVAILABLE = {
+    "permissions": "Desktop monitoring did not report in time.",
+    "tracking": "No page context was available to check.",
+    "policy": "No policy or terms document was found to read.",
+    "forms": "No form or upload control is present on this page.",
+}
+
+
+def _finding(kind: str, severity: str, summary: str, detail: str = "") -> dict[str, Any]:
+    return {"kind": kind, "severity": severity, "summary": summary, "detail": detail}
+
+
+def build_groups(
+    findings: list[dict[str, Any]], checked: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Fold flat findings into the four report sections, filling in the all-clears."""
+    availability = {item["kind"]: item for item in checked}
+    groups: list[dict[str, Any]] = []
+    for key, title, kinds in GROUPS:
+        rows = [
+            {
+                "severity": "warn",
+                "summary": finding["summary"],
+                "detail": finding.get("detail", ""),
+            }
+            for finding in findings
+            if finding["kind"] in kinds
+        ]
+        available = any(availability.get(kind, {}).get("available") for kind in kinds)
+        if not rows:
+            if available:
+                summary, detail = CLEAN[key]
+                rows = [{"severity": "ok", "summary": summary, "detail": detail}]
+            else:
+                rows = [
+                    {"severity": "info", "summary": tr("not_observed"), "detail": UNAVAILABLE[key]}
+                ]
+        groups.append({"key": key, "title": title, "rows": rows, "available": available})
+    return groups
+
 
 async def run_deep_check(
     service: Any,
@@ -32,8 +98,12 @@ async def run_deep_check(
             name in identity
             for name in ("chrome", "chromium", "firefox", "safari", "edge", "brave", "browser")
         )
-    for callback in service.progress_listeners:
-        callback(tr("checking"))
+
+    def progress(stage: str, state: str) -> None:
+        for callback in service.progress_listeners:
+            callback({"stage": stage, "state": state})
+
+    progress("start", "running")
     if browser_foreground and service.connected_browsers and not payload.get("cached_only"):
         from uuid import uuid4
 
@@ -60,44 +130,55 @@ async def run_deep_check(
         profile = analysis.get("profile", {})
         if analysis.get("partial") or profile.get("partial"):
             findings.append(
-                {
-                    "kind": name,
-                    "severity": "INFORM",
-                    "summary": "Document analysis is partial; omitted content has not been checked.",
-                }
+                _finding(
+                    name,
+                    "INFORM",
+                    "Document analysis is partial",
+                    "Some of the document could not be read, so part of it has not been checked.",
+                )
             )
         if name == "tracking" and (
             profile.get("fingerprinting")
             or profile.get("tracker_domains")
             or profile.get("tracking_confidence", 0) > 0.2
         ):
+            others = len(profile.get("tracker_domains", []))
             findings.append(
-                {
-                    "kind": "tracking",
-                    "severity": "INFORM",
-                    "summary": "Advertising profile detected",
-                }
+                _finding(
+                    "tracking",
+                    "INFORM",
+                    "Advertising profile",
+                    "Your activity may be used for personalised advertising"
+                    + (f", linked across {others} other sites." if others else "."),
+                )
             )
         elif name == "consent" and profile.get("dark_patterns"):
             findings.append(
-                {
-                    "kind": "consent",
-                    "severity": "INTERVENE",
-                    "summary": "Cookie choices make rejecting optional tracking harder",
-                }
+                _finding(
+                    "consent",
+                    "INTERVENE",
+                    "Cookie choices are weighted against you",
+                    "Rejecting optional tracking takes more steps than accepting it.",
+                )
             )
         elif name == "policy":
             if profile.get("missing"):
                 findings.append(
-                    {"kind": "policy", "severity": "INFORM", "summary": "No privacy policy found"}
+                    _finding(
+                        "policy",
+                        "INFORM",
+                        "No privacy policy found",
+                        "What is collected, shared and kept could not be checked.",
+                    )
                 )
             if profile.get("retention") == "after_deletion":
                 findings.append(
-                    {
-                        "kind": "policy",
-                        "severity": "INFORM",
-                        "summary": "Data may be retained after account deletion",
-                    }
+                    _finding(
+                        "policy",
+                        "INFORM",
+                        "Data retention",
+                        "Uploaded files may be kept after you delete them.",
+                    )
                 )
             for statement in profile.get("necessity_statements", []):
                 if (
@@ -105,16 +186,19 @@ async def run_deep_check(
                     or "not appear necessary" in statement.lower()
                     or "does not" in statement.lower()
                 ):
-                    findings.append({"kind": "policy", "severity": "INFORM", "summary": statement})
+                    findings.append(
+                        _finding("policy", "INFORM", "Collects more than it needs", statement)
+                    )
             for clause in profile.get("clauses", []):
                 category = clause.get("category", "") if isinstance(clause, dict) else str(clause)
                 if category in {"data_sale", "training_on_user_content", "third_party_sharing"}:
                     findings.append(
-                        {
-                            "kind": "policy",
-                            "severity": "INFORM",
-                            "summary": category.replace("_", " ").capitalize(),
-                        }
+                        _finding(
+                            "policy",
+                            "INFORM",
+                            category.replace("_", " ").capitalize(),
+                            str(clause.get("citation", "")) if isinstance(clause, dict) else "",
+                        )
                     )
         elif name == "terms":
             for clause in profile.get("clauses", []):
@@ -124,33 +208,33 @@ async def run_deep_check(
                     for item in findings
                 ):
                     findings.append(
-                        {
-                            "kind": "terms",
-                            "severity": "INFORM",
-                            "summary": category.replace("_", " ").capitalize(),
-                        }
+                        _finding(
+                            "terms",
+                            "INFORM",
+                            category.replace("_", " ").capitalize(),
+                            str(clause.get("citation", "")) if isinstance(clause, dict) else "",
+                        )
                     )
         elif name == "uploads" and profile.get("in_progress", 0):
             findings.append(
-                {
-                    "kind": "uploads",
-                    "severity": "INFORM",
-                    "summary": "Files are selected for sharing; review their upload decisions",
-                }
+                _finding(
+                    "uploads",
+                    "INFORM",
+                    "Files are selected for sharing",
+                    "Review their upload decisions before this page sends them.",
+                )
             )
         elif name == "forms":
             for field in analysis.get("fields", []):
-                if (field.get("necessity") or {}).get("verdict") in {"unnecessary", "red_flag"}:
+                necessity = field.get("necessity") or {}
+                if necessity.get("verdict") in {"unnecessary", "red_flag"}:
                     findings.append(
-                        {
-                            "kind": "forms",
-                            "severity": "INFORM",
-                            "summary": str(
-                                (field.get("necessity") or {}).get(
-                                    "rationale", "A field may be unnecessary"
-                                )
-                            ),
-                        }
+                        _finding(
+                            "forms",
+                            "INFORM",
+                            "This form asks for more than it needs",
+                            str(necessity.get("rationale", "")),
+                        )
                     )
         checked.append(
             {
@@ -159,6 +243,7 @@ async def run_deep_check(
                 "available": bool(analysis),
             }
         )
+        progress(name, "done" if analysis else "unavailable")
     if service.adapter:
         before_desktop = len(findings)
         try:
@@ -196,11 +281,12 @@ async def run_deep_check(
             )
             if decision.outcome != Outcome.IGNORE:
                 findings.append(
-                    {
-                        "kind": event.event_type,
-                        "severity": str(decision.outcome),
-                        "summary": decision.explanation,
-                    }
+                    _finding(
+                        event.event_type,
+                        str(decision.outcome),
+                        decision.headline or decision.explanation,
+                        decision.body,
+                    )
                 )
         checked.append(
             {
@@ -209,15 +295,20 @@ async def run_deep_check(
                 "available": desktop_available,
             }
         )
+        progress("permissions", "done" if desktop_available else "unavailable")
     findings.sort(key=lambda item: item["severity"] != "INTERVENE")
+    count = len(findings)
     report: dict[str, Any] = {
-        "origin": context.get("origin", origin),
+        "origin": context.get("origin", origin) or (foreground.display_name if foreground else ""),
+        "ran_at": datetime.now(UTC).isoformat(),
         "findings": findings,
         "checked": checked,
-        "summary": tr("check_summary", count=len(findings)),
+        "groups": build_groups(findings, checked),
+        "summary": tr("check_summary", count=count) if count else tr("check_clean"),
         "context_available": bool(context) or service.adapter is not None,
         "fresh": fresh,
     }
+    progress("complete", "done")
 
     if service.settings.llm.enabled and service.settings.llm.deep_check_narrative:
         from functools import partial

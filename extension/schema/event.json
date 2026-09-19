@@ -382,6 +382,11 @@
           "title": "Document Type",
           "type": "string"
         },
+        "filename": {
+          "default": "",
+          "title": "Filename",
+          "type": "string"
+        },
         "file_count": {
           "default": 1,
           "minimum": 1,

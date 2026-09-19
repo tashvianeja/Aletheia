@@ -1,204 +1,273 @@
 # Privacy Guardian
 
-Privacy Guardian is a local-first background app for macOS and Windows that helps people make privacy decisions at the moment a site or application asks for data or access. It examines supported browser and desktop signals, applies a shared decision engine, and stays quiet when the event does not need attention.
+**A small app that lives in your menu bar and speaks up right before you make a privacy decision.**
 
-The app can classify sensitive categories in documents and forms, inspect consent and tracking signals, and relate a request to the apparent purpose of a site or application. It presents one of three outcomes: **Ignore**, **Inform**, or **Intervene**, with an explanation and an action where one is available.
+You make dozens of them a day. You drag a file into a free website. You tick a box. You hit Accept
+because the reject button is two screens deep. Nobody tells you what is being taken, who is taking
+it, or whether they need it at all.
 
-This repository is an in-progress initial build. All 20 functional requirements are implemented, with independent evidence recorded in `docs/PLAN.md`; physical Windows validation, protected macOS permission grants, and a green CI run remain pending. The final `1539390` macOS artifact passed its installed lifecycle. Corrected Intel static-crypto packaging and installed-package smoke/audit passed at 14:14 UTC, but its earlier job remains failed and is not green evidence. The [latest-source CI run](https://github.com/tashvianeja/Privacy-Guardian/actions/runs/35449032544) has no jobs because of an account billing limit. No GitHub release has been published.
+Privacy Guardian watches for those moments, works out what is actually being asked for, and asks
+one question on your behalf:
 
-## Feature matrix
+> **Does this site or app actually need this, for what you are doing?**
 
-| Capability | Browser extension | macOS desktop | Windows desktop | Offline | Optional LLM-assisted |
-|---|---:|---:|---:|---:|---:|
-| Document category detection and redaction | Connected warning visible in 1.095 s; bounded 5 MiB full scan passes current gate | — | — | Yes | No |
-| Form field semantics | Connected form DOM badge in 137.8 ms; host-side comparison 252.649 ms | — | — | Yes | No |
-| Policy and terms clause extraction | Wired, including exact three-finding Deep Check coverage | — | — | Yes | Policy refinement only |
-| Consent-banner analysis | Five known CMPs, three heuristics, and three rejects pass | — | — | Yes | No |
-| Tracker and fingerprinting signal analysis | DNR/cookie blocking and session preservation tested | — | — | Yes | No |
-| Permission, startup, and broad-access observation | — | Adapter/UI coverage; protected live grants pending | Adapter coverage; physical/CI verification pending | Yes | No |
-| Clipboard and screen-access signals | — | Foreground-change proxy; see limitations | Foreground-change proxy; see limitations | Yes | No |
-| Decision engine, preferences, and local history | Service API wired | Service/UI wired | Service/UI wired; platform verification pending | Yes | Explanation polish only |
-| Deep Check | Context supplied by extension | UI rendered; exact three-finding coverage | UI rendered; Windows validation pending | Yes | Narrative only |
+It stays quiet the rest of the time. Everything is analysed on your own machine.
 
-The final local headed check at source `1539390` has 34 runtime passes and one skip; all 23 real Chromium cases and Firefox pass. A connected passport DOM-change-to-visible warning took 1.095 s (host-side 1.327781 s), and native-bridge setup took 1.354564 s, within its separate five-second budget. Historical cold first action before bridge readiness was 2.386 s. A dash means that the capability is outside that surface.
+---
 
-## Screenshots
+## What it looks like
 
-These Cocoa-rendered UI snapshots are checked into `docs/img/` and are readable visual evidence of the rendered views. They are not evidence of a live macOS permission grant or an end-to-end browser decision.
+When a scanned passport goes into a free image compressor:
 
-| Intervention | Dashboard |
+![The intervention widget](docs/img/intervention-popup.png)
+
+*The safe option is the big one. "Upload anyway" is still there, in plain text, because it is your
+file and your decision.*
+
+| Event history | Preferences |
 |---|---|
-| ![Intervention popup](docs/img/intervention-popup.png) | ![Dashboard](docs/img/dashboard.png) |
+| ![Events](docs/img/dashboard.png) | ![Preferences](docs/img/preferences.png) |
 
-| Onboarding | Deep Check |
+| Thorough check | Full report |
 |---|---|
-| ![Onboarding](docs/img/onboarding.png) | ![Deep Check](docs/img/deep-check.png) |
+| ![Thorough check](docs/img/deep-check.png) | ![Sites and apps](docs/img/sites-and-apps.png) |
 
-System Settings is intentionally not screenshot: its application lists expose user-installed app names. The onboarding screen provides the permission guidance instead.
+Screenshots are rendered from the real Qt widgets by
+[`tests/unit/ui/render_screenshots.py`](tests/unit/ui/render_screenshots.py), so they cannot drift
+from the code. System Settings is deliberately never captured: its lists expose the names of apps
+you have installed.
 
-## Requirements
+---
 
-Supported targets are macOS 13 or later (Apple Silicon or Intel) and Windows 10 21H2 or later / Windows 11 x64. This build has been developed on macOS 27 arm64; physical Windows UI validation remains unverified and final installer/runtime CI is pending.
+## Install on macOS
 
-Source work requires Python 3.12 (the project constrains Python to `>=3.12,<3.13`), [uv](https://docs.astral.sh/uv/), and Tesseract for OCR. The pinned Qt runtime is PySide6 6.8.3; NumPy 2.5.3 supplies deployment wheels for macOS 11 arm64 and macOS 10.13 Intel. Browser integration targets Chrome, Edge, Brave, and Firefox through Manifest V3-style native messaging; Node 24, Firefox, and web-ext 10.6.0 are provisioned by `make setup`/CI for browser work.
-
-On macOS, Homebrew, Xcode Command Line Tools, and `create-dmg` are needed for the packaging path. A macOS packaging build additionally compiles a macOS-13-compatible static Tesseract bundle, which needs CMake, a compiler, Autotools, libtool, pkg-config, and network access for its source downloads. Intel macOS source packaging also rebuilds cryptography through `scripts/build_crypto.py` with checksum-pinned static OpenSSL 3.5.8; install Rust/Cargo before that path. This Intel prerequisite was not exercised on the arm64 development machine. On Windows, use winget for prerequisites and install Inno Setup before attempting an installer build. The repository does not currently contain published installers.
-
-## Install from release
-
-There are no verified release artifacts for version 0.1.0 yet. Once a signed macOS `.dmg` or Windows setup executable has been built and uploaded, the intended steps are:
-
-1. Download the artifact from the project’s GitHub Releases page and verify its release notes/checksum when supplied.
-2. On macOS, open the `.dmg`, move `PrivacyGuardian.app` to Applications, then open it. An ad-hoc-signed build may require Control-click → **Open** at first launch.
-3. On Windows, run `PrivacyGuardian-Setup-<version>.exe` and accept the installer’s visible autostart option.
-4. Install the matching browser extension once its signed/published package is available. Development loading is described below.
-
-macOS monitoring may require Full Disk Access and Accessibility permission. The checked-in onboarding screenshot shows the in-app permission guidance; System Settings itself is intentionally not shown because its application lists can expose user-installed app names. Protected grant/revocation behavior remains unverified. These permissions are not a guarantee that every OS signal can be observed; see [Platform limitations](#platform-limitations).
-
-## Build from source
-
-These are the repository’s declared commands. The final source `1539390` macOS DMG passed deep/strict codesign, a 339-file macOS-13 deployment audit, and its installed lifecycle: mounted onboarding/tray, native version `0.1.0`/protocol `1` readiness, bundled OCR, uninstall/registration restoration, and unmount. Its SHA-256 is `85b4ac8513e34bfeb9df37129abd19f4706176073ea6166c7a1122df801b66ad`. Windows run `35448070182` built the installer and its packaged `diagnose` emitted valid JSON with OCR and registry checks true, but a PowerShell windowed-executable `$LASTEXITCODE` gate failed before an installed lifecycle could run. `1539390` replaces that gate with `Start-Process -Wait -PassThru` and reads `ExitCode`, but a Windows rerun is unverified because the latest-source CI is billing-blocked.
-
-macOS:
+Requires macOS 13 (Ventura) or newer, on Apple Silicon or Intel.
 
 ```sh
-xcode-select --install
-brew install uv tesseract create-dmg cmake autoconf automake libtool pkg-config
-uv sync
-make setup
-make run
-make build-extension
-make build-mac
+git clone https://github.com/tashvianeja/Privacy-Guardian.git
+cd Privacy-Guardian
+./install.sh
 ```
 
-Windows (PowerShell):
+The script checks your prerequisites, installs [uv](https://docs.astral.sh/uv/) if it is missing,
+builds `PrivacyGuardian.app`, copies it to `/Applications`, registers the browser bridge for
+Chrome, Edge, Brave and Firefox, starts the app, and prints how to load the extension.
 
-```powershell
-winget install --id astral-sh.uv -e
-winget install --id UB-Mannheim.TesseractOCR -e
-winget install --id JRSoftware.InnoSetup -e
-winget install --id OpenJS.NodeJS.LTS -e
-uv sync
-uv run python scripts/setup.py
-uv run privacy-guardian
-uv run python scripts/build_extension.py
-uv run python scripts/build.py windows
-```
+| Flag | What it does |
+|---|---|
+| `--skip-ocr` | Skips compiling the bundled OCR engine. Much faster. Scanned images are then reported as *unchecked* rather than silently skipped. |
+| `--no-autostart` | Does not start Privacy Guardian when you log in. |
+| `--uninstall` | Removes the app, the browser bridge, autostart and the local database. |
 
-`make build-extension` writes `dist/privacy-guardian-chromium.zip` and `dist/privacy-guardian-firefox.zip`. `make build-mac` builds `dist/PrivacyGuardian.app` and `dist/PrivacyGuardian-<version>.dmg`; it signs ad hoc by default, or uses `CODESIGN_IDENTITY` and optional `NOTARY_PROFILE`. The refreshed main app/DMG passed visible onboarding/tray, native protocol-v1 `0.1.0` readiness, bundled OCR, uninstall, registration restoration, codesign, and a 339-Mach-O-slice maximum deployment target of macOS 13. `make build-win` invokes PyInstaller and Inno Setup on Windows; Windows installer/runtime verification remains required. For non-English OCR, install the appropriate Tesseract language data in the host operating system; English and OSD data are the currently bundled packaging target.
+The first build with OCR compiles a static Tesseract from source and takes several minutes. Use
+`--skip-ocr` if you only care about forms, cookies, policies, tracking and desktop permissions.
 
-## Run in development
+### Then load the extension
 
-Start the desktop process with:
+Most of what Privacy Guardian sees comes through the browser, so the extension is not optional.
+
+- **Chrome, Edge, Brave** — extensions page → Developer mode → *Load unpacked* → select `extension/`
+- **Firefox** — `about:debugging#/runtime/this-firefox` → *Load Temporary Add-on* → select
+  `extension/manifest.firefox.json`
+
+Packaged zips are written to `dist/` by the same build.
+
+### Optional: desktop monitoring
+
+System Settings → Privacy & Security:
+
+- **Full Disk Access** lets Privacy Guardian see the permissions other apps have been granted
+- **Accessibility** enables the ⌘⇧P thorough-check shortcut
+
+Everything in the browser works without either.
+
+---
+
+## What it watches
+
+| | What it notices | Where |
+|---|---|---|
+| **File uploads** | Government IDs, financial and medical details, contact details, faces, location metadata — then asks whether the destination needs them. Offers a redacted copy. | Browser |
+| **Form fields** | Which fields a form asks for that its stated purpose does not need. | Browser |
+| **Terms & conditions** | The clauses that actually change what happens to your data, and points at them on the page. | Browser |
+| **Privacy policies** | What is collected, who it is shared with, how long it is kept. | Browser |
+| **Cookie banners** | What each choice really means, including banners designed to wear you down. Can reject the optional ones for you. | Browser |
+| **Advertising profiles** | Cross-site identifiers, fingerprinting, persistent cookies — described as profiling, not as mechanisms. | Browser |
+| **App permissions** | A permission compared against what the app appears to do. | macOS |
+| **Broad system access** | Full disk access, startup, background execution, screen recording, accessibility. | macOS |
+| **Clipboard** | An app reading your clipboard while it holds something sensitive. | macOS |
+
+Every one of these goes through the same engine: **what is being taken → who is taking it → why do
+they need it → is it necessary here → what happens to it → what do you normally allow**. The answer
+is one of three things.
+
+**Ignore.** Nothing appears. This is what happens almost all the time.
+
+**Inform.** A toast, bottom right, gone in eight seconds. No buttons. *"Identity document shared
+with Government of Verdania eVisa Portal — expected for an identity check."*
+
+**Intervene.** The widget, with the safe option as the easy one, and the way past it still there.
+
+### Thorough check
+
+Click the menu bar padlock → **Run thorough check**, or press ⌘⇧P. It looks at the current site and
+app together — permissions, tracking, the privacy policy, the form in front of you — and gives one
+consolidated answer. Useful when something feels off but nothing has been flagged.
+
+### Learning
+
+Privacy Guardian notices when you keep making the same protective choice. After you have rejected
+optional cookies on five different sites it asks, once:
+
+> **Make "reject optional cookies" your default?**
+> *Keep asking me* · **Yes, do it automatically**
+
+It never decides for you, and it never offers to automate anything involving government IDs,
+medical, financial or credential data. That boundary is in the code
+([`engine/preferences.py`](src/privacy_guardian/engine/preferences.py)), not just in the copy.
+
+---
+
+## Everything stays here
+
+- Documents, clipboard contents and form values are analysed in a local worker process. Raw bytes
+  live only for the length of that analysis.
+- The extension sends field *metadata*, never field values.
+- Local history stores category names, not content: no field labels, no URL query strings, no
+  extracted text. It is deleted after your retention period.
+- There is no telemetry, no account and no server.
+
+Network access is limited to four things, all of which you trigger: an optional OpenAI call when
+you enable cloud assistance, fetching a policy page the site itself links to, the tracker-list
+refresh button, and the update check. Cloud assistance is off by default; when on, it sends
+category tokens rather than values and drops anything that still looks like an identifier. See
+[LLM usage](docs/LLM_USAGE.md) and the [threat model](docs/THREAT_MODEL.md).
+
+---
+
+## Develop
 
 ```sh
-make run
+uv sync                 # dependencies
+make run                # start the desktop app
+make check              # lint, strict mypy, tests
+make build-extension    # dist/privacy-guardian-{chromium,firefox}.zip
+make build-mac          # dist/PrivacyGuardian.app and the .dmg
 ```
 
-The console entry point is `privacy-guardian`; the native host entry point is `privacy-guardian-host`. Diagnose a profile without starting the UI with:
+`make setup` additionally provisions Firefox, Node and web-ext for the browser end-to-end suite.
+`uv run privacy-guardian --diagnose` prints platform, OCR availability, host registrations,
+detected browsers, database counts and permission status without starting the UI.
 
-```sh
-uv run privacy-guardian --diagnose
+Current state on macOS 26 arm64: **274 passed, 4 skipped** across `tests/unit`,
+`tests/integration` and `tests/platform`; Ruff and strict mypy clean across 76 modules. The
+browser end-to-end suite (`make e2e`) and the performance suite need a headed browser and are run
+separately. Windows support is in the codebase but has not been validated on a physical machine,
+and `install.sh` is macOS only.
+
+### How it fits together
+
+```
+  Browser extension                    macOS adapter
+  uploads · forms · cookies            permissions · system access
+  policies · terms · tracking          clipboard · screen · startup
+          │                                    │
+          └──────────────┬─────────────────────┘
+                         ↓
+              Background service  ──  local analysis workers
+                         ↓
+       Decision engine: necessity × sensitivity × consequence × your preferences
+                         ↓
+          Ignore   ·   Inform   ·   Intervene      →   SQLite, on this device
 ```
 
-The report contains platform/Python information, OCR availability, native-host registrations, detected browsers, local database counts, token presence, and permission status. `--smoke-test` starts an isolated UI smoke path, and `--no-autostart` suppresses autostart for that invocation.
+The in-page widget and the desktop widget are the same design and read from the same structured
+`Decision`: a headline, a short body, severity-marked finding rows, a context line, and actions
+ranked so the protective one is the easiest to hit. Read
+[Architecture](docs/ARCHITECTURE.md), [the decision engine](docs/DECISION_ENGINE.md) and
+[detector scope](docs/DETECTORS.md) for the contracts.
 
-For a development registration, start the desktop service then run:
-
-```sh
-uv run privacy-guardian --install-native-host
-```
-
-Load the matching unpacked extension source in the browser’s developer-extension view. Chromium-family browsers use ID `bfdjphkbgihhbonhnmjbbfhckdddonob`; Firefox uses `privacy-guardian@privacyguardian.local`. The installer writes native-host manifests for Chrome, Edge, Brave, and Firefox. Chromium and Firefox native-host handshakes, browser recovery after a killed upload analysis, and a three-badge fixture path are verified. Local headed coverage is evidence only; the CI result remains pending.
-
-Runtime data defaults to `~/Library/Application Support/PrivacyGuardian` on macOS, `%APPDATA%\\PrivacyGuardian` on Windows, and `$XDG_DATA_HOME/PrivacyGuardian` on other systems. Logs are configured below that data directory.
-
-## Testing
-
-Run the declared checks with:
-
-```sh
-make test
-make e2e
-make lint
-make typecheck
-make check
-```
-
-The final local headed `make check` at source `1539390` with tests `aefa972` reports **312 passed, 5 skipped**: 278 instrumented passes with four skips and two deselections in 42.31 seconds, plus 34 runtime passes and one skip in 101.30 seconds. Ruff checks 176 files; strict mypy checks 73 modules. Exact line coverage is **85.55%** scoped (`1,687/1,972`) and **75.46%** overall (`4,144/5,492`), above the 85%/70% gates.
-
-Use `-m macos`, `-m windows`, `-m e2e`, `-m perf`, and `-m llm` only in an environment that supports those markers. The final native-Cocoa 300-second run measured 0.823200875-second tray readiness, 207.33952 MB warm-median RSS, 210.5344 MB peak RSS, and 0.0442277493% CPU. CPU meets its target; raw RSS misses the decimal 200-MB target by 7.33952 MB at the median and 10.5344 MB at peak, though the 25% tolerance gate passes. Two first-phase perf cases are excluded from the initial phase but included in runtime acceptance. Current outstanding checks include a Windows rerun for the fixed lifecycle gate, protected macOS TCC/Full Disk Access/Accessibility/screen grant tests, and a green CI result; the latest-source run is currently blocked by an account billing limit.
+---
 
 ## Configuration
 
-Settings are loaded from `settings.toml` in the data directory, then overridden by environment variables beginning with `PRIVACY_GUARDIAN_`. Nested keys use a double underscore. Values are parsed as JSON when possible, so booleans must be `true`/`false`, lists must be JSON arrays, and paths should be JSON strings.
+`settings.toml` in the data directory
+(`~/Library/Application Support/PrivacyGuardian` on macOS), overridden by environment variables
+prefixed `PRIVACY_GUARDIAN_`. Nested keys use a double underscore. Values are parsed as JSON, so
+booleans are `true`/`false` and lists are JSON arrays.
 
-| TOML key | Environment variable | Default | Meaning |
+| Key | Environment variable | Default | Meaning |
 |---|---|---|---|
-| `data_dir` | `PRIVACY_GUARDIAN_DATA_DIR` | OS-specific data directory | Local data, settings, token, logs, and SQLite location. |
-| `retention_days` | `PRIVACY_GUARDIAN_RETENTION_DAYS` | `90` | Retention period, 1–3650 days. |
-| `analysis_timeout_seconds` | `PRIVACY_GUARDIAN_ANALYSIS_TIMEOUT_SECONDS` | `20` | Per-analysis deadline, 1–120 seconds. |
-| `popup_timeout_seconds` | `PRIVACY_GUARDIAN_POPUP_TIMEOUT_SECONDS` | `60` | Popup wait/timeout, 1–60 seconds. |
-| `autostart` | `PRIVACY_GUARDIAN_AUTOSTART` | `true` | Whether the app should configure startup behavior. |
-| `onboarding_complete` | `PRIVACY_GUARDIAN_ONBOARDING_COMPLETE` | `false` | Whether onboarding has been completed. |
-| `hotkey` | `PRIVACY_GUARDIAN_HOTKEY` | `"Ctrl+Shift+P"` | Configured hotkey text. |
-| `log_level` | `PRIVACY_GUARDIAN_LOG_LEVEL` | `"INFO"` | Application logging level. |
-| `reject_optional_cookies` | `PRIVACY_GUARDIAN_REJECT_OPTIONAL_COOKIES` | `true` | Preference for optional-cookie handling. |
-| `allowed_extension_ids` | `PRIVACY_GUARDIAN_ALLOWED_EXTENSION_IDS` | `["privacy-guardian@privacyguardian.local", "bfdjphkbgihhbonhnmjbbfhckdddonob"]` | Native-host caller allowlist. |
-| `clipboard_allowlist` | `PRIVACY_GUARDIAN_CLIPBOARD_ALLOWLIST` | `[]` | Requester keys permitted to read clipboard without an intervention. |
-| `llm.enabled` | `PRIVACY_GUARDIAN_LLM__ENABLED` | `false` | Enables optional cloud assistance. |
-| `llm.model` | `PRIVACY_GUARDIAN_LLM__MODEL` | `"gpt-6-astra"` | Model identifier currently supplied by the code and checked against current OpenAI model documentation; no live API call was made. |
-| `llm.policy_refinement` | `PRIVACY_GUARDIAN_LLM__POLICY_REFINEMENT` | `true` | Allows optional public-policy refinement. |
-| `llm.purpose_refinement` | `PRIVACY_GUARDIAN_LLM__PURPOSE_REFINEMENT` | `true` | Allows optional purpose refinement. |
-| `llm.explanation_polishing` | `PRIVACY_GUARDIAN_LLM__EXPLANATION_POLISHING` | `true` | Allows optional category-level explanation polish. |
-| `llm.deep_check_narrative` | `PRIVACY_GUARDIAN_LLM__DEEP_CHECK_NARRATIVE` | `true` | Allows optional Deep Check narrative generation. |
+| `data_dir` | `PRIVACY_GUARDIAN_DATA_DIR` | OS data directory | Settings, token, logs and SQLite location. |
+| `retention_days` | `..._RETENTION_DAYS` | `90` | How long event history is kept, 1–3650. |
+| `analysis_timeout_seconds` | `..._ANALYSIS_TIMEOUT_SECONDS` | `20` | Per-analysis deadline, 1–120. |
+| `popup_timeout_seconds` | `..._POPUP_TIMEOUT_SECONDS` | `60` | How long a widget waits before taking its safe default, 1–60. |
+| `autostart` | `..._AUTOSTART` | `true` | Start when you log in. |
+| `learning_enabled` | `..._LEARNING_ENABLED` | `true` | Offer to turn repeated choices into defaults. |
+| `hotkey` | `..._HOTKEY` | `"Ctrl+Shift+P"` | Thorough-check shortcut. `Ctrl` maps to ⌘ on macOS. |
+| `log_level` | `..._LOG_LEVEL` | `"INFO"` | Logging level. |
+| `reject_optional_cookies` | `..._REJECT_OPTIONAL_COOKIES` | `true` | Make "reject optional" the recommended cookie action. |
+| `clipboard_allowlist` | `..._CLIPBOARD_ALLOWLIST` | `[]` | Apps allowed to read the clipboard without a warning. |
+| `allowed_extension_ids` | `..._ALLOWED_EXTENSION_IDS` | the two shipped IDs | Native-host caller allowlist. |
+| `llm.enabled` | `..._LLM__ENABLED` | `false` | Optional cloud assistance. |
+| `llm.model` | `..._LLM__MODEL` | `"gpt-6-astra"` | Model identifier. |
+| `llm.policy_refinement` | `..._LLM__POLICY_REFINEMENT` | `true` | Refine public policy and terms clauses. |
+| `llm.purpose_refinement` | `..._LLM__PURPOSE_REFINEMENT` | `true` | Refine what a site or app appears to be for. |
+| `llm.explanation_polishing` | `..._LLM__EXPLANATION_POLISHING` | `true` | Improve category-only wording. |
+| `llm.deep_check_narrative` | `..._LLM__DEEP_CHECK_NARRATIVE` | `true` | Improve thorough-check summaries. |
 
-Example:
+API keys never go in `settings.toml` or the environment. The app stores them in the system keychain
+under service `PrivacyGuardian`, account `openai_api_key`.
 
-```toml
-retention_days = 30
-reject_optional_cookies = true
+---
 
-[llm]
-enabled = false
-model = "gpt-6-astra"
-policy_refinement = true
-purpose_refinement = true
-explanation_polishing = true
-deep_check_narrative = true
-```
+## Limits worth knowing
 
-Do not place API keys in `settings.toml` or environment variables. When LLM assistance is enabled, the UI/client stores the key in the operating-system keychain under service `PrivacyGuardian`, account `openai_api_key`; unsupported keyring backends are rejected.
+Privacy Guardian gives guidance. It cannot intercept every application, permission change or
+network transfer, and it is not a compliance tool.
 
-## Architecture overview
+On macOS it **observes** permission grants; it cannot revoke them. When a permission looks
+unnecessary the widget takes you to the exact pane in System Settings where you can turn it off
+yourself. Clipboard and screen access are detected through a foreground-change proxy rather than a
+kernel hook, so an app reading the clipboard entirely in the background may be missed. Built
+without OCR, scanned pages are reported as unchecked — never silently treated as clean.
 
-The service routes typed `PrivacyEvent` objects from platform or browser sensors through local analysis and the decision engine, then records redacted projections in SQLite and emits UI decisions. Native messaging uses length-prefixed JSON and an authenticated local channel. Read [Architecture](docs/ARCHITECTURE.md), [the decision engine](docs/DECISION_ENGINE.md), and [detector scope](docs/DETECTORS.md) for the implemented contracts.
+Full detail in [Platform limitations](docs/PLATFORM_LIMITATIONS.md).
 
-## Privacy statement
-
-The implemented analysis worker returns opaque payload handles plus category findings. Raw upload bytes may pass only to the active local analysis session and are then discarded. Form values never leave the page: the extension sends constrained field metadata only. The storage contract excludes raw payload references, field labels/names, file names, URL query strings, and raw extracted text.
-
-Privacy Guardian has no telemetry in its declared design. Network use is limited to optional OpenAI API calls when enabled, a policy/terms fetch requested by a page context when inline text is unavailable, an explicit user-clicked tracker-list refresh, and a GitHub Releases API request only after the user selects **Check for updates**. Cloud assistance is disabled by default, sanitizes every outbound string, replaces detected values with category tokens, and rejects validated identifiers that survive sanitization. See [LLM usage](docs/LLM_USAGE.md) and [Threat model](docs/THREAT_MODEL.md).
-
-## Platform limitations
-
-Read [Platform limitations](docs/PLATFORM_LIMITATIONS.md) before relying on a signal for security or compliance decisions. Real TCC grant/screen-capture verification, final Windows installer/runtime acceptance, and CI are pending. The tool gives privacy guidance; it cannot guarantee interception of every application, browser, permission change, or network transfer.
+---
 
 ## Troubleshooting
 
-If OCR is unavailable, run `tesseract --version`, install Tesseract with the platform command above, and restart the app. For a packaged macOS app, rebuild if the bundled OCR binary is absent. If native messaging cannot find the host, run `uv run privacy-guardian --install-native-host`, confirm the browser-specific host registration and allowed extension ID, then inspect the data-directory logs.
+**The browser extension cannot reach the app.** Run
+`/Applications/PrivacyGuardian.app/Contents/MacOS/PrivacyGuardian --install-native-host`, restart
+the browser, and check `--diagnose` for `native_host_registrations`.
 
-If macOS events are missing, grant the requested Full Disk Access or Accessibility permission through System Settings, then restart the monitor. If an extension disconnects, restart the browser and the app; recovery after a killed upload analysis and the native-host death/result race are covered. If `uv sync` fails on the spaCy model dependency, ensure GitHub access is available because the current package declaration uses the model wheel’s direct GitHub URL.
+**macOS says the app is damaged or from an unidentified developer.** A locally built app is signed
+ad hoc, not notarised. `install.sh` clears the quarantine flag; if you moved the app by hand, run
+`xattr -dr com.apple.quarantine /Applications/PrivacyGuardian.app`.
+
+**Desktop events are missing.** Grant Full Disk Access, then quit and reopen the app — TCC changes
+are only picked up on restart.
+
+**`uv sync` fails on the spaCy model.** The model is declared as a direct GitHub URL, so that
+dependency needs GitHub reachable.
+
+**OCR is unavailable.** Check `--diagnose` for `ocr_available`. Rebuild without `--skip-ocr`, or
+`brew install tesseract` for a source checkout.
+
+---
 
 ## Uninstall
 
-The native-host deregistration/uninstall path is implemented and the current macOS packaged lifecycle passed it. The declared macOS target is:
-
 ```sh
-make uninstall-mac
+./install.sh --uninstall
 ```
 
-For development profiles, the equivalent command is `uv run privacy-guardian --uninstall`. Both paths remove known Privacy Guardian files, browser-host registrations, and autostart entries while avoiding recursive deletion of an arbitrary configured data directory. Do not manually delete a data directory if you need its local preferences or event history. Once verified installers are available, use the operating-system uninstaller first.
+Or, from a source checkout, `make uninstall-mac`. Both remove the app's own files, the browser host
+registrations and the autostart entry, and neither recursively deletes a data directory you
+configured yourself. Remove the extension from your browser's extensions page.
+
+---
 
 ## License
 

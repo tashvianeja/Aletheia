@@ -625,9 +625,19 @@ class MacOSAdapter(PlatformAdapter):
             "photos": "Photos",
             "bluetooth": "Bluetooth",
         }.get(permission, "AllFiles")
-        self.backend.open_url(
-            "x-apple.systempreferences:com.apple.preference.security?Privacy_" + pane
+        # System Settings (macOS 13+) moved the privacy anchors out of the old pane id.
+        import platform
+
+        try:
+            major = int(platform.mac_ver()[0].split(".")[0] or 0)
+        except ValueError:
+            major = 0
+        prefix = (
+            "com.apple.settings.PrivacySecurity.extension"
+            if major >= 13
+            else "com.apple.preference.security"
         )
+        self.backend.open_url(f"x-apple.systempreferences:{prefix}?Privacy_{pane}")
 
     def set_autostart(self, enabled: bool) -> None:
         if sys.platform != "darwin":

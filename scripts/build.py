@@ -5,6 +5,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import tomllib
 from pathlib import Path
 
@@ -12,6 +13,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def bundle_ocr() -> None:
+    if os.getenv("PRIVACY_GUARDIAN_SKIP_OCR") == "1":
+        # Ships without scanned-image text extraction; every other detector is unaffected
+        # and scanned pages are reported as unchecked rather than silently skipped.
+        target = ROOT / "build/tesseract"
+        if target.exists():
+            shutil.rmtree(target)
+        print("Skipping OCR bundling (PRIVACY_GUARDIAN_SKIP_OCR=1)")
+        return
     if sys.platform == "darwin":
         compatible = ROOT / "build/tesseract13"
         if not (compatible / "tesseract").exists():
@@ -88,6 +97,19 @@ def bundle_ocr() -> None:
         raise RuntimeError("Tesseract English language data is required")
 
 
+def stage_clean_copy(app: Path, stage: Path) -> Path:
+    """Copy the bundle somewhere signable, with no extended attributes at all.
+
+    Several PySide6 framework directories carry com.apple.FinderInfo, which codesign
+    --strict rejects as "resource fork, Finder information, or similar detritus" and
+    which notarisation refuses outright. A cloud-synced source tree also re-adds the
+    attribute as fast as xattr removes it, so sign a clean copy outside it instead.
+    """
+    target = stage / app.name
+    subprocess.run(["ditto", "--norsrc", "--noextattr", str(app), str(target)], check=True)
+    return target
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("platform", choices=["mac", "windows"])
@@ -108,38 +130,43 @@ def main() -> None:
     if args.platform == "mac":
         app = ROOT / "dist/PrivacyGuardian.app"
         identity = os.getenv("CODESIGN_IDENTITY", "-")
-        subprocess.run(
-            [
-                "codesign",
-                "--deep",
-                "--force",
-                "--sign",
-                identity,
-                *(["--options", "runtime", "--timestamp"] if identity != "-" else []),
-                "--entitlements",
-                str(ROOT / "packaging/macos/entitlements.plist"),
-                str(app),
-            ],
-            check=True,
-        )
         dmg = ROOT / f"dist/PrivacyGuardian-{version}.dmg"
-        if dmg.exists():
-            dmg.unlink()
-        subprocess.run(
-            [
-                "hdiutil",
-                "create",
-                "-volname",
-                "Privacy Guardian",
-                "-srcfolder",
-                str(app),
-                "-ov",
-                "-format",
-                "UDZO",
-                str(dmg),
-            ],
-            check=True,
-        )
+        with tempfile.TemporaryDirectory(prefix="privacy-guardian-sign-") as workspace:
+            signed = stage_clean_copy(app, Path(workspace))
+            subprocess.run(
+                [
+                    "codesign",
+                    "--deep",
+                    "--force",
+                    "--sign",
+                    identity,
+                    *(["--options", "runtime", "--timestamp"] if identity != "-" else []),
+                    "--entitlements",
+                    str(ROOT / "packaging/macos/entitlements.plist"),
+                    str(signed),
+                ],
+                check=True,
+            )
+            subprocess.run(["codesign", "--verify", "--deep", "--strict", str(signed)], check=True)
+            if dmg.exists():
+                dmg.unlink()
+            subprocess.run(
+                [
+                    "hdiutil",
+                    "create",
+                    "-volname",
+                    "Privacy Guardian",
+                    "-srcfolder",
+                    str(signed),
+                    "-ov",
+                    "-format",
+                    "UDZO",
+                    str(dmg),
+                ],
+                check=True,
+            )
+            shutil.rmtree(app)
+            subprocess.run(["ditto", "--norsrc", "--noextattr", str(signed), str(app)], check=True)
         if os.getenv("NOTARY_PROFILE"):
             subprocess.run(
                 [

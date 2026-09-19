@@ -222,9 +222,20 @@ def extract_document(
                     else:
                         import pypdfium2
 
-                        with pypdfium2.PdfDocument(data) as raster:
-                            image = raster[index].render(scale=2).to_pil()
-                            result.pages.append(_ocr(image, index + 1, remaining()))
+                        try:
+                            with pypdfium2.PdfDocument(data) as raster:
+                                image = raster[index].render(scale=2).to_pil()
+                                result.pages.append(_ocr(image, index + 1, remaining()))
+                        except (RuntimeError, OSError, ValueError) as error:
+                            # Without OCR a scanned page must be reported as unchecked, never
+                            # allowed to fail the whole analysis and let the file through.
+                            result.partial = True
+                            if not result.warnings:
+                                result.warnings.append(
+                                    "OCR unavailable or timed out; "
+                                    "scanned pages were not fully checked."
+                                )
+                            del error
                     if sum(len(page.text) for page in result.pages) >= MAX_TEXT:
                         result.partial = True
                         break

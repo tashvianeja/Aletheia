@@ -204,6 +204,7 @@ def main() -> int:
     class Bridge(QObject):
         decision_ready = Signal(object)
         report_ready = Signal(object)
+        progress = Signal(object)
         focus_requested = Signal()
         deep_check_requested = Signal()
         error = Signal(str)
@@ -224,11 +225,15 @@ def main() -> int:
             self.deepcheck_window: DeepCheckWindow | None = None
             self.onboarding: Onboarding | None = None
             self.clipboard: Any = None
+            self.confirmation: Any = None
+            self.last_report: dict[str, Any] | None = None
             self._closing = False
             self.core.decision_listeners.append(self.bridge.decision_ready.emit)
             self.core.focus_listeners.append(self.bridge.focus_requested.emit)
             self.core.action_listeners.append(self.bridge.action_ready.emit)
+            self.core.progress_listeners.append(self.bridge.progress.emit)
             self.bridge.action_ready.connect(self.actuate)
+            self.bridge.progress.connect(self.show_progress)
             self.bridge.decision_ready.connect(self.show_decision)
             self.bridge.report_ready.connect(self.show_report)
             self.bridge.update_ready.connect(
@@ -246,7 +251,6 @@ def main() -> int:
             )
             self.tray = GuardianTray(self)
             self.popups = PopupQueue(self)
-            self.popups.anchor = self.tray.geometry()
             self.thread.start()
             self.submit(self._start())
             self.supervisor = QTimer(self.bridge)
@@ -297,10 +301,27 @@ def main() -> int:
             return future
 
         def show_decision(self, decision: Decision) -> None:
-            self.tray.set_state("attention")
             self.popups.enqueue(decision)
+            self.refresh_tray()
+
+        def refresh_tray(self) -> None:
+            """The dot and the status line follow what is actually outstanding."""
+            if self.core.paused_until:
+                resumes = self.core.paused_until.astimezone().strftime("%H:%M")
+                self.tray.set_state("paused", resumes=resumes)
+                return
+            pending = sum(
+                1 for event_id in self.core.pending_since if event_id not in self.core.actions
+            )
+            self.tray.set_state("attention" if pending else "idle", pending=pending)
 
         def submit_response(self, event_id: str, action: str, remember: bool) -> Future[Any]:
+            if event_id.startswith("suggestion:"):
+                future = self.submit(
+                    self.core.resolve_suggestion(event_id, action == "make_default")
+                )
+                future.add_done_callback(lambda _value: None)
+                return future
             future = self.submit(
                 self.core.respond(UserResponse(event_id=event_id, action=action, remember=remember))
             )
@@ -321,14 +342,29 @@ def main() -> int:
                 )
             elif action == "clear_clipboard" and self.core.adapter:
                 self.core.adapter.backend.clear_clipboard()
+                self.confirm(tr("clipboard_cleared"))
             elif action in {"learn_more", "view_details"}:
-                self.show_dashboard()
-            self.tray.set_state("idle")
+                self.show_dashboard("events")
+            self.refresh_tray()
+
+        def confirm(self, message: str) -> None:
+            """The compact bar that reports what just happened, then gets out of the way."""
+            from privacy_guardian.ui.popup import ConfirmationBar
+
+            bar = ConfirmationBar(message)
+            screen = QApplication.primaryScreen()
+            if screen:
+                bar.adjustSize()
+                rect = screen.availableGeometry()
+                bar.move(rect.right() - bar.width() + 1, rect.bottom() - bar.height() + 1)
+            self.confirmation = bar
+            bar.show()
 
         def supervise(self) -> None:
             if self._closing:
                 return
             if self.thread.is_alive():
+                self.refresh_tray()
                 return
             old = self.core
             if old.adapter:
@@ -342,23 +378,34 @@ def main() -> int:
                 old.control.listener.close()
             with contextlib.suppress(Exception):
                 old.store.close()
+            if self.clipboard is not None:
+                # The old monitor holds the previous adapter's backend; drop it before the
+                # restarted service creates its replacement.
+                with contextlib.suppress(Exception):
+                    self.clipboard.stop_now()
+                self.clipboard = None
             self.loop = asyncio.new_event_loop()
             self.core = Service(settings)
             self.core.decision_listeners.append(self.bridge.decision_ready.emit)
             self.core.focus_listeners.append(self.bridge.focus_requested.emit)
             self.core.action_listeners.append(self.bridge.action_ready.emit)
+            self.core.progress_listeners.append(self.bridge.progress.emit)
             self.thread = threading.Thread(
                 target=self._run_loop, daemon=True, name="guardian-service"
             )
             self.thread.start()
             self.submit(self._start())
-            self.tray.set_state("attention")
+            self.refresh_tray()
             self.tray.showMessage(tr("app_name"), tr("service_restarted"))
 
         def deep_check(self) -> None:
             foreground = self.core.adapter.foreground_requester() if self.core.adapter else None
-            self.deepcheck_window = DeepCheckWindow(self)
+            if self.deepcheck_window is None:
+                self.deepcheck_window = DeepCheckWindow(self)
+            else:
+                self.deepcheck_window._show_running()
             self.deepcheck_window.show()
+            self.deepcheck_window.raise_()
 
             async def run_check() -> None:
                 from privacy_guardian.deepcheck import run_deep_check
@@ -368,25 +415,39 @@ def main() -> int:
 
             self.submit(run_check())
 
+        def show_progress(self, update: Any) -> None:
+            if self.deepcheck_window:
+                self.deepcheck_window.show_progress(update)
+
         def show_report(self, report: dict[str, Any]) -> None:
+            self.last_report = report
             if self.deepcheck_window:
                 self.deepcheck_window.show_report(report)
 
-        def pause(self, seconds: int) -> None:
-            if seconds == 86400:
-                from datetime import datetime, timedelta
+        def show_report_window(self, report: dict[str, Any]) -> None:
+            self.show_dashboard("sites_and_apps")
+            if self.dashboard is not None:
+                self.dashboard.show_report(report)
 
+        def pause(self, seconds: int) -> None:
+            from datetime import UTC, datetime, timedelta
+
+            if seconds == 86400:
                 tomorrow = (datetime.now() + timedelta(days=1)).replace(
                     hour=0, minute=0, second=0, microsecond=0
                 )
                 seconds = int((tomorrow - datetime.now()).total_seconds())
             self.loop.call_soon_threadsafe(self.core.pause, seconds)
-            self.tray.set_state("paused" if seconds else "idle")
+            # Mirror the deadline here too: the tray reads it before the loop has run.
+            self.core.paused_until = (
+                datetime.now(UTC) + timedelta(seconds=seconds) if seconds else None
+            )
+            self.refresh_tray()
 
-        def show_dashboard(self, tab: str = "history") -> None:
+        def show_dashboard(self, tab: str = "events") -> None:
             if self.dashboard is None:
                 self.dashboard = Dashboard(self)
-            self.dashboard.tabs.setCurrentIndex(1 if tab == "preferences" else 0)
+            self.dashboard.select(tab)
             self.dashboard.refresh()
             self.dashboard.show()
             self.dashboard.raise_()

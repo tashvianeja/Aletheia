@@ -72,7 +72,7 @@ def test_popup_does_not_take_initial_focus_and_supports_theme_and_keyboard(qtbot
     assert "#ffffff" in light
     popup.set_theme("dark")
     assert popup.styleSheet() != light
-    assert "#202329" in popup.styleSheet()
+    assert "#1c1f26" in popup.styleSheet()
     assert all(button.accessibleName() for button in popup.buttons.values())
 
 

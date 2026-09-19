@@ -2336,7 +2336,7 @@
       "accessibility": "unnecessary",
       "age": "unnecessary",
       "automation": "unnecessary",
-      "background_execution": "reasonable",
+      "background_execution": "unnecessary",
       "biometric_photo": "unnecessary",
       "browser_history": "unnecessary",
       "browsing_activity": "unnecessary",
@@ -2380,7 +2380,7 @@
       "phone": "unnecessary",
       "postal_address": "unnecessary",
       "screen": "unnecessary",
-      "startup": "reasonable"
+      "startup": "unnecessary"
     },
     "justification": "A wallpaper utility needs information related to its stated task."
   },

@@ -379,7 +379,7 @@ async def test_hidden_reject_desktop_action_rejects_only_optional_cookies(
     decision = await latest_decision(real_browser, "consent_banner")
     assert decision is not None and decision[1] == "INTERVENE"
     panel_text = (await page.locator(".pg-panel").inner_text()).lower()
-    assert "harder" in panel_text
+    assert "hidden behind extra screens" in panel_text
 
     response = await desktop_action(real_browser, decision[0], "reject_optional")
     assert response["ok"] is True
@@ -624,7 +624,9 @@ async def test_recipe_deep_check_reports_unnecessary_precise_location(
         timeout=10,
     )
     assert result["ok"] is True
-    summaries = " ".join(str(item["summary"]) for item in result["result"]["findings"]).lower()
+    summaries = " ".join(
+        f"{item['summary']} {item.get('detail', '')}" for item in result["result"]["findings"]
+    ).lower()
     assert "precise location" in summaries
     assert "not appear necessary" in summaries or "unnecessary" in summaries
 

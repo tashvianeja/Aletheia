@@ -44,6 +44,7 @@ from privacy_guardian.engine.context import Observation, SiteOrAppProfile
 from privacy_guardian.engine.decision import decide
 from privacy_guardian.engine.preferences import LearnedRules, UserPreferences
 from privacy_guardian.storage import Store
+from privacy_guardian.util.i18n import tr
 from privacy_guardian.util.privacy import public_identity, safe_origin, sanitize
 
 
@@ -71,7 +72,7 @@ class Service:
         self.decision_listeners: list[Callable[[Decision], None]] = []
         self.focus_listeners: list[Callable[[], None]] = []
         self.action_listeners: list[Callable[[str, str], None]] = []
-        self.progress_listeners: list[Callable[[str], None]] = []
+        self.progress_listeners: list[Callable[[dict[str, str]], None]] = []
         self.events: dict[str, PrivacyEvent] = {}
         self.decisions: dict[str, Decision] = {}
         self.actions: dict[str, dict[str, Any]] = {}
@@ -347,15 +348,6 @@ class Service:
         decision = decide(
             event, findings, profile, self.preferences_for(event.requester), self.learned_rules
         )
-        if self.paused_until and datetime.now(UTC) < self.paused_until:
-            decision = decision.model_copy(
-                update={
-                    "outcome": Outcome.IGNORE,
-                    "explanation": "Monitoring is paused.",
-                    "actions": ["continue"],
-                    "default_action": "continue",
-                }
-            )
         if event.event_type == "policy_document":
             kind = "terms" if getattr(event, "kind", "") == "terms" else "policy"
             document = (
@@ -377,9 +369,28 @@ class Service:
                     decision.rationale.append("⚠ " + title)
                     if citation:
                         decision.rationale.append("Citation: " + citation)
+            nothing_unusual = [str(item) for item in document.get("nothing_unusual", [])]
+            if document.get("clauses") or nothing_unusual:
+                from privacy_guardian.engine.presentation import policy_rows
+
+                decision.findings = policy_rows(list(document.get("clauses", [])), nothing_unusual)
             decision.rationale.extend(
-                "✓ Nothing unusual about " + str(item).replace("_", " ")
-                for item in document.get("nothing_unusual", [])
+                "✓ Nothing unusual about " + item.replace("_", " ") for item in nothing_unusual
+            )
+        if self.paused_until and datetime.now(UTC) < self.paused_until:
+            decision = decision.model_copy(
+                update={
+                    "outcome": Outcome.IGNORE,
+                    "explanation": "Monitoring is paused.",
+                    "headline": "Monitoring is paused.",
+                    "body": "",
+                    "findings": [],
+                    "actions": ["continue"],
+                    "default_action": "continue",
+                    "primary_action": "continue",
+                    "tertiary_action": "",
+                    "auto_action": "",
+                }
             )
         self.events[event.id] = event
         self.decisions[event.id] = decision
@@ -420,7 +431,7 @@ class Service:
         )
         if decision.outcome == Outcome.INTERVENE:
             self.pending_since[event.id] = time.monotonic()
-        if decision.outcome != Outcome.IGNORE and event.event_type != "form_observed":
+        if self._desktop_owns(event) and decision.outcome != Outcome.IGNORE:
             for callback in tuple(self.decision_listeners):
                 try:
                     callback(decision)
@@ -433,6 +444,61 @@ class Service:
                 lambda: self._refine_decision(event, decision),
             )
         return decision
+
+    def _desktop_owns(self, event: PrivacyEvent) -> bool:
+        """The page renders its own widget; the desktop renders everything else."""
+        if event.event_type == "form_observed":
+            return False
+        if event.source != "browser":
+            return True
+        # A browser event with no live extension session would otherwise go unannounced.
+        return not self.browser_sessions
+
+    def _suggest_learned_default(self, response: UserResponse, event: PrivacyEvent) -> None:
+        """Offer to make a repeated protective choice automatic, never assume it."""
+        if not self.settings.learning_enabled:
+            return
+        self.learned_rules.observe(response.action, public_identity(event.requester.key))
+        action = self.learned_rules.suggestion(self.preferences.automatic_actions)
+        if not action:
+            return
+        from privacy_guardian.engine.preferences import AUTOMATABLE
+
+        self.learned_rules.suggested.append(action)
+        self.store.set_learned_rule("user", self.learned_rules.model_dump(mode="json"))
+        suggestion = Decision(
+            event_id=f"suggestion:{action}",
+            outcome=Outcome.INTERVENE,
+            risk=0.0,
+            explanation=tr("learned_prompt", choice=AUTOMATABLE[action]),
+            headline=tr("learned_prompt", choice=AUTOMATABLE[action]),
+            body=tr("learned_body", count=self.learned_rules.site_count(action)),
+            rationale=[
+                "Privacy Guardian only offers this for choices it can reverse, "
+                "and never for identity, medical, financial or credential data.",
+                "You can change it at any time under Preferences.",
+            ],
+            actions=["keep_asking", "make_default"],
+            action_labels={"keep_asking": tr("keep_asking"), "make_default": tr("make_default")},
+            primary_action="make_default",
+            default_action="keep_asking",
+        )
+        self.decisions[suggestion.event_id] = suggestion
+        for callback in tuple(self.decision_listeners):
+            with contextlib.suppress(Exception):
+                callback(suggestion)
+
+    async def resolve_suggestion(self, action_id: str, accepted: bool) -> None:
+        """Apply, or permanently decline, an offered automatic default."""
+        action = action_id.removeprefix("suggestion:")
+        if accepted:
+            if action not in self.preferences.automatic_actions:
+                self.preferences.automatic_actions.append(action)
+        elif action not in self.learned_rules.declined:
+            self.learned_rules.declined.append(action)
+        self.decisions.pop(action_id, None)
+        self.store.set_preference("user", self.preferences.model_dump(mode="json"))
+        self.store.set_learned_rule("user", self.learned_rules.model_dump(mode="json"))
 
     async def _refine_decision(self, event: PrivacyEvent, decision: Decision) -> None:
         from functools import partial
@@ -579,6 +645,7 @@ class Service:
             )
         for category in event.data_categories:
             self.learned_rules.record(category, event.requester.purpose, response.action)
+        self._suggest_learned_default(response, event)
         self.store.set_preference("user", self.preferences.model_dump(mode="json"))
         self.store.set_learned_rule("user", self.learned_rules.model_dump(mode="json"))
         self.store.save_response(response)
@@ -703,7 +770,11 @@ class Service:
             requester = enrich_browser_requester(
                 Requester.model_validate(payload.get("requester", {})), payload.get("signals", {})
             )
-            initial_event = FileUploadEvent(requester=requester, size_bytes=int(payload["size"]))
+            initial_event = FileUploadEvent(
+                requester=requester,
+                size_bytes=int(payload["size"]),
+                filename=Path(str(payload["filename"])).name[:255],
+            )
             self.store.save_event(initial_event)
             self.store.mark_pending(initial_event.id)
             self.uploads[upload_id] = {
@@ -713,6 +784,7 @@ class Service:
                 "generation": self.pool.generation,
                 "session": session,
                 "event_id": initial_event.id,
+                "filename": initial_event.filename,
             }
             try:
                 await self.pool.run(
@@ -764,6 +836,7 @@ class Service:
                 document_type=analysis.document_type,
                 partial=analysis.partial,
                 size_bytes=meta["size"],
+                filename=meta["filename"],
             )
             for stage, elapsed in analysis.timings_ms.items():
                 logging.getLogger(__name__).debug(
