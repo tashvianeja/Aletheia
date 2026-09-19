@@ -15,6 +15,7 @@ from typing import Any
 from privacy_guardian.core.events import DataCategory
 
 MAX_BYTES = 50 * 1024 * 1024
+SAMPLE_BYTES = 5 * 1024 * 1024
 MAX_TEXT = 2_000_000
 MAX_PAGES = 500
 
@@ -85,7 +86,15 @@ def classify_document(text: str, suffix: str = "") -> str:
         "source_code": (r"\bdef \w+\(", r"\bimport \w+", r"\bfunction\s+\w+\(", r"\bclass \w+"),
     }
     scores = [
-        (sum(bool(re.search(pattern, lower, re.I)) for pattern in patterns), category)
+        (
+            sum(
+                bool(re.search(pattern.lower(), lower))
+                if any(character in pattern for character in r"\.^$*+?{}[]|()")
+                else pattern.lower() in lower
+                for pattern in patterns
+            ),
+            category,
+        )
         for category, patterns in choices.items()
     ]
     best = max(scores)
@@ -160,7 +169,7 @@ def extract_document(
     result = ExtractedDocument(partial=partial)
     suffix = Path(filename).suffix.lower()
     if len(data) > MAX_BYTES:
-        data = data[: 5 * 1024 * 1024] + data[-5 * 1024 * 1024 :]
+        data = data[:SAMPLE_BYTES] + data[-SAMPLE_BYTES:]
         result.partial = True
     if result.partial or (original_size is not None and original_size > MAX_BYTES):
         result.partial = True
@@ -320,9 +329,9 @@ def extract_document(
 
                 encoding = str(chardet.detect(data[:100_000]).get("encoding") or "utf-8")
                 text = data.decode(encoding, errors="replace")
-                result.pages.append(Page(text[:MAX_TEXT], 1))
-                if len(text) > MAX_TEXT:
-                    result.partial = True
+                # The byte limit already bounds ordinary text. Expanded archive/PDF
+                # content retains the stricter MAX_TEXT guard in its own branches.
+                result.pages.append(Page(text, 1))
             else:
                 result.partial = True
                 result.warnings.append(
@@ -344,6 +353,8 @@ def extract_document(
             result.pages.append(
                 Page("\n".join(fragment.decode("ascii") for fragment in fragments)[:MAX_TEXT], 1)
             )
+    if result.partial and not result.warnings:
+        result.warnings.append("Extraction limit reached; omitted content has not been checked.")
     all_text = "\n".join(page.text for page in result.pages)
     result.document_type = classify_document(all_text, suffix)
     if result.document_type == "identity_document" and result.has_images:

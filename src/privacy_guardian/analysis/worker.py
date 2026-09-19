@@ -14,6 +14,7 @@ from privacy_guardian.analysis.documents import (
     extract_document,
     redact_document,
 )
+from privacy_guardian.analysis.documents.extract import MAX_BYTES, SAMPLE_BYTES
 from privacy_guardian.analysis.forms import FieldAssessment, analyze_fields
 from privacy_guardian.analysis.pii import detect_pii
 from privacy_guardian.analysis.policy import analyze_policy, analyze_terms
@@ -117,9 +118,22 @@ def analyze_payload(payload: dict[str, object]) -> AnalysisResult:
         )
     if kind == "text":
         text = str(payload.get("text", ""))
+        encoded = text.encode("utf-8", errors="replace")
+        partial = len(encoded) > MAX_BYTES
+        if partial:
+            text = (
+                encoded[:SAMPLE_BYTES].decode("utf-8", errors="replace")
+                + "\n"
+                + encoded[-SAMPLE_BYTES:].decode("utf-8", errors="replace")
+            )
         return AnalysisResult(
-            findings=detect_pii(text[:2_000_000], use_ner=bool(payload.get("use_ner", False))),
-            partial=len(text) > 2_000_000,
+            findings=detect_pii(text, use_ner=bool(payload.get("use_ner", False))),
+            partial=partial,
+            warnings=(
+                ["Large text sampled: first and last 5 MiB; unsampled content was not checked."]
+                if partial
+                else []
+            ),
         )
     if kind in {"policy", "privacy_policy"}:
         profile = analyze_policy(str(payload.get("text", "")), purpose)

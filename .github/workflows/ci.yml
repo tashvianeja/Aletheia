@@ -55,12 +55,12 @@ jobs:
         timeout-minutes: 15
         id: test_gate
         continue-on-error: true
-        run: uv run pytest tests/unit tests/integration tests/platform tests/packaging --cov=privacy_guardian --cov-report=xml --cov-report=json --cov-report=term-missing --cov-fail-under=0
+        run: uv run pytest tests/unit tests/integration tests/platform tests/packaging -m "not perf" --cov=privacy_guardian --cov-report=xml --cov-report=json --cov-report=term-missing --cov-fail-under=0
       - name: Test real browsers and latency without instrumentation
         timeout-minutes: 15
         id: runtime_gate
         continue-on-error: true
-        run: uv run pytest tests/e2e tests/perf
+        run: uv run pytest tests/e2e tests/perf tests/platform/test_clipboard.py::test_real_macos_clipboard_classifies_synthetic_card_within_500ms tests/platform/test_clipboard.py::test_real_windows_clipboard_classifies_synthetic_card_within_500ms
       - name: Check line coverage
         id: coverage_gate
         continue-on-error: true
