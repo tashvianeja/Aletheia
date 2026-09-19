@@ -6,6 +6,7 @@ import binascii
 import contextlib
 import hashlib
 import logging
+import math
 import multiprocessing
 import time
 from collections.abc import Callable
@@ -15,6 +16,7 @@ from functools import partial
 from pathlib import Path
 from typing import Any
 
+import psutil
 from pydantic import ValidationError
 
 from privacy_guardian.config import Settings
@@ -87,6 +89,7 @@ class Service:
         self.connected_browsers: dict[str, float] = {}
         self.browser_sessions: dict[str, str] = {}
         self.session_last_seen: dict[str, float] = {}
+        self.session_processes: dict[str, tuple[int, float]] = {}
         self.closed_sessions: dict[str, float] = {}
         self.paused_until: datetime | None = None
         self.adapter: Any = None
@@ -203,6 +206,22 @@ class Service:
     async def _on_event(self, event: PrivacyEvent) -> None:
         await self.process_event(event)
 
+    def _session_process_alive(self, session: str) -> bool:
+        identity = self.session_processes.get(session)
+        if identity is None:
+            return True  # Direct local clients retain the bounded heartbeat lease.
+        try:
+            process = psutil.Process(identity[0])
+            return (
+                process.is_running()
+                and process.status() != psutil.STATUS_ZOMBIE
+                and abs(process.create_time() - identity[1]) < 0.001
+            )
+        except psutil.NoSuchProcess:
+            return False
+        except psutil.AccessDenied:
+            return True
+
     async def _maintenance(self) -> None:
         while True:
             await asyncio.sleep(1)
@@ -210,7 +229,7 @@ class Service:
                 await self.control.ensure_running()
                 now = time.monotonic()
                 for browser_session, last_seen in list(self.session_last_seen.items()):
-                    if now - last_seen > 5:
+                    if now - last_seen > 5 or not self._session_process_alive(browser_session):
                         await self._route(
                             Request(
                                 v=1,
@@ -623,6 +642,15 @@ class Service:
             raise ValueError("Browser session has closed")
         if session:
             self.session_last_seen[session] = time.monotonic()
+            pid = payload.pop("_host_pid", None)
+            created = payload.pop("_host_created", None)
+            if type(pid) is int and isinstance(created, (int, float)):
+                if pid <= 0 or not math.isfinite(created) or created <= 0:
+                    raise ValueError("Invalid native host identity")
+                identity = (pid, float(created))
+                previous = self.session_processes.setdefault(session, identity)
+                if previous != identity:
+                    raise ValueError("Native host identity changed within a session")
         if request.type == "ping":
             browser = str(payload.get("browser", "browser"))[:40]
             self.connected_browsers[browser] = time.monotonic()
@@ -742,7 +770,11 @@ class Service:
                     "document_analysis_stage",
                     extra={"purpose": stage, "latency_ms": round(elapsed, 3)},
                 )
-            if session in self.closed_sessions or meta["generation"] != self.pool.generation:
+            if (
+                session in self.closed_sessions
+                or not self._session_process_alive(session)
+                or meta["generation"] != self.pool.generation
+            ):
                 event.data_categories = sorted(
                     {finding.category for finding in analysis.findings}, key=str
                 )
@@ -990,6 +1022,7 @@ class Service:
                 return {"disconnected": True, "event_id": requested_event}
             self.closed_sessions[session] = time.monotonic()
             self.session_last_seen.pop(session, None)
+            self.session_processes.pop(session, None)
             for metadata in self.inflight_uploads.values():
                 if metadata["session"] == session:
                     self.store.mark_aborted(metadata["event_id"])

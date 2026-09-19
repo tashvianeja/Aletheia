@@ -7,6 +7,8 @@ import sys
 from typing import Any
 from urllib.parse import urlsplit
 
+import psutil
+
 from privacy_guardian.config import Settings
 from privacy_guardian.core.ipc.protocol import read_message, write_message
 from privacy_guardian.core.ipc.transport import send_request
@@ -73,6 +75,8 @@ def main() -> int:
     from uuid import uuid4
 
     session = str(uuid4())
+    host = psutil.Process()
+    host_identity = {"_host_pid": host.pid, "_host_created": host.create_time()}
 
     async def relay() -> None:
         slots = asyncio.Semaphore(6)
@@ -99,6 +103,7 @@ def main() -> int:
                                 "_session": session,
                                 "browser": browser,
                                 "heartbeat_only": True,
+                                **host_identity,
                             },
                         },
                         timeout=2,
@@ -126,18 +131,15 @@ def main() -> int:
                     break
                 payload = message.get("payload")
                 if isinstance(payload, dict):
-                    message["payload"] = {**payload, "_session": session}
+                    message["payload"] = {**payload, "_session": session, **host_identity}
                 task = asyncio.create_task(dispatch(message))
                 tasks.add(task)
                 task.add_done_callback(tasks.discard)
         finally:
             heartbeat_task.cancel()
             await asyncio.gather(heartbeat_task, return_exceptions=True)
-            if tasks:
-                done, pending = await asyncio.wait(tasks, timeout=2)
-                for task in pending:
-                    task.cancel()
-                await asyncio.gather(*done, *pending, return_exceptions=True)
+            # Tombstone the session before waiting for data work. A result finishing
+            # during shutdown must not be published for a browser that has gone away.
             with contextlib.suppress(OSError, TimeoutError, ValueError):
                 await send_request(
                     settings.data_dir,
@@ -149,6 +151,11 @@ def main() -> int:
                     },
                     timeout=2,
                 )
+            if tasks:
+                done, pending = await asyncio.wait(tasks, timeout=2)
+                for task in pending:
+                    task.cancel()
+                await asyncio.gather(*done, *pending, return_exceptions=True)
 
     try:
         asyncio.run(relay())
