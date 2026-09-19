@@ -19,6 +19,8 @@ make setup
 
 Tesseract is used only when document extraction needs OCR. Confirm the executable is on `PATH` with `tesseract --version`. The macOS package builds a separate compatible static Tesseract 5.5.3, Leptonica 1.87, and libpng 1.6.58 bundle targeting macOS 13 via `scripts/build_ocr.py`; this needs Xcode compiler tools, CMake, Autotools, libtool, pkg-config, and source downloads. Additional OCR languages are host-installed Tesseract data; the package target currently includes English and OSD.
 
+On Intel macOS, `scripts/build_crypto.py` rebuilds cryptography from source with checksum-pinned static OpenSSL 3.5.8. Install Rust/Cargo first, for example with `brew install rust`; this Intel-only prerequisite was not run on the arm64 development machine.
+
 ## Windows
 
 In PowerShell, install the declared tooling, then run the same source commands:

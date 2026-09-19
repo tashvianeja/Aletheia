@@ -16,4 +16,4 @@ All notable changes will be documented here. This project has not produced a ver
 
 ### Verification pending
 
-- Real TCC/Full Disk Access/Accessibility/screen checks, in-progress Windows installer/runtime acceptance, refreshed host-race artifacts, green CI (the latest-source run is billing-blocked), and release artifacts.
+- Real TCC/Full Disk Access/Accessibility/screen checks, in-progress Windows installer/runtime acceptance, green CI (the latest-source run is billing-blocked), and release artifacts.

@@ -24,8 +24,8 @@
 | FR-16 Event history | store test | Unit evidence present |
 | FR-17 Native messaging | IPC transport/protocol tests; Chromium/Firefox handshakes and recovery exercised | Implemented and exercised |
 | FR-18 Onboarding | UI coverage and packaged onboarding smoke | Implemented and exercised |
-| FR-19 Packaging | Prior app/DMG lifecycle: onboarding/tray, protocol-v1 readiness, OCR, uninstall/restoration, 339 Mach-O slices at macOS 13; refreshed main app codesign/audit pass | Refreshed macOS lifecycle and Windows installer run pending |
-| FR-20 Logging/resilience | SIGKILL-mid-analysis abort/service-alive/reconnect coverage; native-host death/result-race regression passed for Sol | Refreshed artifact/root verification pending |
+| FR-19 Packaging | Refreshed app/DMG lifecycle: onboarding/tray, protocol-v1 readiness, OCR, uninstall/restoration, codesign, 339 Mach-O slices at macOS 13 | macOS exercised; Windows installer run pending |
+| FR-20 Logging/resilience | SIGKILL-mid-analysis abort/service-alive/reconnect coverage; native-host death/result-race regression passed in 14.78 seconds | Implemented and exercised |
 
 ## End-to-end scenarios
 

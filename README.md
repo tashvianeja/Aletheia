@@ -4,7 +4,7 @@ Privacy Guardian is a local-first background app for macOS and Windows that help
 
 The app can classify sensitive categories in documents and forms, inspect consent and tracking signals, and relate a request to the apparent purpose of a site or application. It presents one of three outcomes: **Ignore**, **Inform**, or **Intervene**, with an explanation and an action where one is available.
 
-This repository is an in-progress initial build. All 20 functional requirements are implemented, with independent evidence recorded in `docs/PLAN.md`; physical Windows validation, protected macOS permission grants, refreshed host-race artifact verification, and a green CI run remain pending. Corrected Intel static-crypto packaging and installed-package smoke/audit passed at 14:14 UTC, but its earlier job remains failed and is not green evidence. The latest-source CI run has no jobs because of an account billing limit. No GitHub release has been published.
+This repository is an in-progress initial build. All 20 functional requirements are implemented, with independent evidence recorded in `docs/PLAN.md`; physical Windows validation, protected macOS permission grants, and a green CI run remain pending. The refreshed main macOS artifact passed its installed lifecycle. Corrected Intel static-crypto packaging and installed-package smoke/audit passed at 14:14 UTC, but its earlier job remains failed and is not green evidence. The latest-source CI run has no jobs because of an account billing limit. No GitHub release has been published.
 
 ## Feature matrix
 
@@ -42,7 +42,7 @@ Supported targets are macOS 13 or later (Apple Silicon or Intel) and Windows 10 
 
 Source work requires Python 3.12 (the project constrains Python to `>=3.12,<3.13`), [uv](https://docs.astral.sh/uv/), and Tesseract for OCR. The pinned Qt runtime is PySide6 6.8.3; NumPy 2.5.3 supplies deployment wheels for macOS 11 arm64 and macOS 10.13 Intel. Browser integration targets Chrome, Edge, Brave, and Firefox through Manifest V3-style native messaging; Node 24, Firefox, and web-ext 10.6.0 are provisioned by `make setup`/CI for browser work.
 
-On macOS, Homebrew, Xcode Command Line Tools, and `create-dmg` are needed for the packaging path. A macOS packaging build additionally compiles a macOS-13-compatible static Tesseract bundle, which needs CMake, a compiler, Autotools, libtool, pkg-config, and network access for its source downloads. On Windows, use winget for prerequisites and install Inno Setup before attempting an installer build. The repository does not currently contain published installers.
+On macOS, Homebrew, Xcode Command Line Tools, and `create-dmg` are needed for the packaging path. A macOS packaging build additionally compiles a macOS-13-compatible static Tesseract bundle, which needs CMake, a compiler, Autotools, libtool, pkg-config, and network access for its source downloads. Intel macOS source packaging also rebuilds cryptography through `scripts/build_crypto.py` with checksum-pinned static OpenSSL 3.5.8; install Rust/Cargo before that path. This Intel prerequisite was not exercised on the arm64 development machine. On Windows, use winget for prerequisites and install Inno Setup before attempting an installer build. The repository does not currently contain published installers.
 
 ## Install from release
 
@@ -85,7 +85,7 @@ uv run python scripts/build_extension.py
 uv run python scripts/build.py windows
 ```
 
-`make build-extension` writes `dist/privacy-guardian-chromium.zip` and `dist/privacy-guardian-firefox.zip`. `make build-mac` builds `dist/PrivacyGuardian.app` and `dist/PrivacyGuardian-<version>.dmg`; it signs ad hoc by default, or uses `CODESIGN_IDENTITY` and optional `NOTARY_PROFILE`. The earlier app/DMG lifecycle passed visible onboarding/tray, native protocol-v1 `0.1.0` readiness, bundled OCR, uninstall, registration restoration, and a 339-Mach-O-slice maximum deployment target of macOS 13. The refreshed main app has passed codesign and the same 339-slice/macOS-13 audit; its lifecycle run is in progress. `make build-win` invokes PyInstaller and Inno Setup on Windows; Windows installer/runtime verification remains required. For non-English OCR, install the appropriate Tesseract language data in the host operating system; English and OSD data are the currently bundled packaging target.
+`make build-extension` writes `dist/privacy-guardian-chromium.zip` and `dist/privacy-guardian-firefox.zip`. `make build-mac` builds `dist/PrivacyGuardian.app` and `dist/PrivacyGuardian-<version>.dmg`; it signs ad hoc by default, or uses `CODESIGN_IDENTITY` and optional `NOTARY_PROFILE`. The refreshed main app/DMG passed visible onboarding/tray, native protocol-v1 `0.1.0` readiness, bundled OCR, uninstall, registration restoration, codesign, and a 339-Mach-O-slice maximum deployment target of macOS 13. `make build-win` invokes PyInstaller and Inno Setup on Windows; Windows installer/runtime verification remains required. For non-English OCR, install the appropriate Tesseract language data in the host operating system; English and OSD data are the currently bundled packaging target.
 
 ## Run in development
 
@@ -127,7 +127,7 @@ make check
 
 The final local headed `make check` at source `2af6d4a` reports **311 passed, 5 skipped**: 277 instrumented passes with four skips and two deselections in 42.54 seconds, plus 34 runtime passes and one skip in 104.11 seconds. Ruff checks 176 files; strict mypy checks 73 modules. Exact line coverage is **85.55%** scoped (`1,687/1,972`) and **75.43%** overall (`4,136/5,483`), above the 85%/70% gates. The earlier clean-clone `d3390ba` run remains separately recorded under Build from source.
 
-Use `-m macos`, `-m windows`, `-m e2e`, `-m perf`, and `-m llm` only in an environment that supports those markers. The final native-Cocoa 300-second run measured 0.823200875-second tray readiness, 207.33952 MB warm-median RSS, 210.5344 MB peak RSS, and 0.0442277493% CPU. CPU meets its target; raw RSS misses the decimal 200-MB target by 7.33952 MB at the median and 10.5344 MB at peak, though the 25% tolerance gate passes. Two first-phase perf cases are excluded from the initial phase but included in runtime acceptance. Current outstanding checks include the in-progress Windows installer/runtime CI, protected macOS TCC/Full Disk Access/Accessibility/screen grant tests, refreshed-artifact lifecycle after the native-host death/result-race fix, and a green CI result; the separate latest-source run is currently blocked by an account billing limit.
+Use `-m macos`, `-m windows`, `-m e2e`, `-m perf`, and `-m llm` only in an environment that supports those markers. The final native-Cocoa 300-second run measured 0.823200875-second tray readiness, 207.33952 MB warm-median RSS, 210.5344 MB peak RSS, and 0.0442277493% CPU. CPU meets its target; raw RSS misses the decimal 200-MB target by 7.33952 MB at the median and 10.5344 MB at peak, though the 25% tolerance gate passes. Two first-phase perf cases are excluded from the initial phase but included in runtime acceptance. Current outstanding checks include the in-progress Windows installer/runtime CI, protected macOS TCC/Full Disk Access/Accessibility/screen grant tests, and a green CI result; the separate latest-source run is currently blocked by an account billing limit.
 
 ## Configuration
 
@@ -182,13 +182,13 @@ Privacy Guardian has no telemetry in its declared design. Network use is limited
 
 ## Platform limitations
 
-Read [Platform limitations](docs/PLATFORM_LIMITATIONS.md) before relying on a signal for security or compliance decisions. Real TCC grant/screen-capture verification, final Windows installer/runtime acceptance, refreshed artifacts after the native-host race fix, and CI are pending. The tool gives privacy guidance; it cannot guarantee interception of every application, browser, permission change, or network transfer.
+Read [Platform limitations](docs/PLATFORM_LIMITATIONS.md) before relying on a signal for security or compliance decisions. Real TCC grant/screen-capture verification, final Windows installer/runtime acceptance, and CI are pending. The tool gives privacy guidance; it cannot guarantee interception of every application, browser, permission change, or network transfer.
 
 ## Troubleshooting
 
 If OCR is unavailable, run `tesseract --version`, install Tesseract with the platform command above, and restart the app. For a packaged macOS app, rebuild if the bundled OCR binary is absent. If native messaging cannot find the host, run `uv run privacy-guardian --install-native-host`, confirm the browser-specific host registration and allowed extension ID, then inspect the data-directory logs.
 
-If macOS events are missing, grant the requested Full Disk Access or Accessibility permission through System Settings, then restart the monitor. If an extension disconnects, restart the browser and the app; recovery after a killed upload analysis is covered, while refreshed artifacts for the native-host death/result race remain pending. If `uv sync` fails on the spaCy model dependency, ensure GitHub access is available because the current package declaration uses the model wheel’s direct GitHub URL.
+If macOS events are missing, grant the requested Full Disk Access or Accessibility permission through System Settings, then restart the monitor. If an extension disconnects, restart the browser and the app; recovery after a killed upload analysis and the native-host death/result race are covered. If `uv sync` fails on the spaCy model dependency, ensure GitHub access is available because the current package declaration uses the model wheel’s direct GitHub URL.
 
 ## Uninstall
 
@@ -200,6 +200,6 @@ make uninstall-mac
 
 For development profiles, the equivalent command is `uv run privacy-guardian --uninstall`. Both paths remove known Privacy Guardian files, browser-host registrations, and autostart entries while avoiding recursive deletion of an arbitrary configured data directory. Do not manually delete a data directory if you need its local preferences or event history. Once verified installers are available, use the operating-system uninstaller first.
 
-### License
+## License
 
 MIT. See [LICENSE](LICENSE).
