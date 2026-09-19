@@ -397,6 +397,20 @@ def main() -> int:
             )
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
 
+        def update_trackers(self) -> None:
+            async def update() -> None:
+                from privacy_guardian.util.tracker_update import update_tracker_list
+
+                try:
+                    count = await asyncio.to_thread(
+                        update_tracker_list, settings.data_dir / "trackers.json"
+                    )
+                    self.bridge.update_ready.emit(tr("trackers_updated", count=count))
+                except Exception:
+                    self.bridge.update_ready.emit(tr("tracker_update_failed"))
+
+            self.submit(update())
+
         def check_updates(self) -> None:
             async def check() -> None:
                 import httpx
@@ -436,6 +450,8 @@ def main() -> int:
             app.quit()
 
         def shutdown(self) -> None:
+            if self._closing:
+                return
             self._closing = True
             self.supervisor.stop()
             self.hotkey.stop()
@@ -462,6 +478,7 @@ def main() -> int:
         0, lambda: (settings.data_dir / "tray-ready").write_text("ready", encoding="ascii")
     )
     app.aboutToQuit.connect(controller.shutdown)
+    app.commitDataRequest.connect(lambda _manager: controller.shutdown())
     sys.excepthook = lambda error_type, _error, _traceback: logging.getLogger(__name__).error(
         "ui operation failed", extra={"error_type": error_type.__name__}
     )

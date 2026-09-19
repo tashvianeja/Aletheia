@@ -143,7 +143,10 @@ def analyze_payload(payload: dict[str, object]) -> AnalysisResult:
         consent = analyze_consent(ConsentSnapshot.model_validate(payload.get("snapshot", {})))
         return AnalysisResult(profile=consent.model_dump(mode="json"))
     if kind == "tracking":
-        tracking = analyze_tracking(TrackingSnapshot.model_validate(payload.get("snapshot", {})))
+        tracking = analyze_tracking(
+            TrackingSnapshot.model_validate(payload.get("snapshot", {})),
+            str(payload.get("tracker_path", "")),
+        )
         return AnalysisResult(profile=tracking.model_dump(mode="json"))
     raise ValueError("Unknown analysis kind")
 

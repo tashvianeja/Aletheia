@@ -141,7 +141,10 @@ def _ner() -> Any:
     try:
         import spacy
 
-        return spacy.load("en_core_web_sm", disable=["parser", "tagger", "lemmatizer"])
+        return spacy.load(
+            "en_core_web_sm",
+            exclude=["tok2vec", "parser", "tagger", "lemmatizer", "attribute_ruler"],
+        )
     except (ImportError, OSError):
         return None
 

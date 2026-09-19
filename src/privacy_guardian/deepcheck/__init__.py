@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from datetime import UTC, datetime
 from typing import Any
 
 from privacy_guardian.core.events import Outcome
@@ -12,9 +13,20 @@ async def run_deep_check(service: Any, payload: dict[str, Any] | None = None) ->
     payload = payload or {}
     started = time.monotonic()
     fresh = True
+    foreground = None
+    browser_foreground = True
+    if service.adapter and hasattr(service.adapter, "foreground_requester"):
+        foreground = await asyncio.to_thread(service.adapter.foreground_requester)
+        identity = (
+            foreground.display_name + " " + foreground.bundle_id + " " + foreground.exe_path
+        ).lower()
+        browser_foreground = any(
+            name in identity
+            for name in ("chrome", "chromium", "firefox", "safari", "edge", "brave", "browser")
+        )
     for callback in service.progress_listeners:
         callback(tr("checking"))
-    if service.connected_browsers and not payload.get("cached_only"):
+    if browser_foreground and service.connected_browsers and not payload.get("cached_only"):
         from uuid import uuid4
 
         service.context_updated.clear()
@@ -23,12 +35,14 @@ async def run_deep_check(service: Any, payload: dict[str, Any] | None = None) ->
             {"id": service.pending_context_id, "type": "collect_context"}
         )
         try:
-            await asyncio.wait_for(service.context_updated.wait(), timeout=3.0)
+            await asyncio.wait_for(service.context_updated.wait(), timeout=8.0)
         except TimeoutError:
             fresh = False
     origin = str(payload.get("origin", "")) or service.focused_origin
     context: dict[str, Any] = (
-        service.contexts.get(origin, {}) if (fresh or payload.get("cached_only")) else {}
+        service.contexts.get(origin, {})
+        if browser_foreground and (fresh or payload.get("cached_only"))
+        else {}
     )
     findings: list[dict[str, Any]] = []
     checked: list[dict[str, Any]] = []
@@ -130,11 +144,35 @@ async def run_deep_check(service: Any, payload: dict[str, Any] | None = None) ->
             }
         )
     if service.adapter:
-        for event in await asyncio.to_thread(service.adapter.snapshot):
+        before_desktop = len(findings)
+        try:
+            desktop_events = await asyncio.wait_for(
+                asyncio.to_thread(service.adapter.snapshot),
+                timeout=max(0.1, 9.5 - time.monotonic() + started),
+            )
+            desktop_available = True
+        except TimeoutError:
+            desktop_events = []
+            desktop_available = False
+            fresh = False
+        desktop_events.extend(
+            event
+            for event in getattr(service, "events", {}).values()
+            if event.event_type in {"clipboard_read", "screen_capture"}
+            and (datetime.now(UTC) - event.ts).total_seconds() < 300
+        )
+        observed_ids: set[str] = set()
+        for event in desktop_events:
+            if event.id in observed_ids or (
+                foreground is not None and event.requester.key != foreground.key
+            ):
+                continue
+            observed_ids.add(event.id)
             from privacy_guardian.engine.decision import decide
 
             decision = decide(
                 event,
+                profile=service._profile(event.requester),
                 preferences=service.preferences_for(event.requester),
                 learned_rules=service.learned_rules,
             )
@@ -149,8 +187,8 @@ async def run_deep_check(service: Any, payload: dict[str, Any] | None = None) ->
         checked.append(
             {
                 "kind": "permissions",
-                "clean": not any(f["kind"] == "permission_request" for f in findings),
-                "available": True,
+                "clean": desktop_available and len(findings) == before_desktop,
+                "available": desktop_available,
             }
         )
     findings.sort(key=lambda item: item["severity"] != "INTERVENE")

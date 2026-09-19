@@ -103,13 +103,13 @@ async function route(message,sender) {
     const origins = storageOrigins.get(payload.hash) || new Set();origins.add(requester.origin);storageOrigins.set(payload.hash,origins);
     const tabs=storageTabs.get(payload.hash)||new Set();tabs.add(tabId);storageTabs.set(payload.hash,tabs);
     if(origins.size>1)for(const target of tabs)api.tabs.sendMessage(target,{pg:'tracking_identifier_confirmed',hash:payload.hash}).catch(()=>{});
-    if(storageOrigins.size>2000)storageOrigins.delete(storageOrigins.keys().next().value);
+    if(storageOrigins.size>2000){const expired=storageOrigins.keys().next().value;storageOrigins.delete(expired);storageTabs.delete(expired);}
     return {origin_count:origins.size};
   }
   if(message.type === 'fetch_policy') {
     const url=new URL(payload.url);if(!['https:','http:'].includes(url.protocol))throw new Error('Invalid policy URL');
-    const response=await fetch(url.href,{credentials:'include',redirect:'follow'});if(!response.ok)throw new Error('Policy unavailable');
-    const text=(await response.text()).slice(0,2000000);return {text:text.replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ')};
+    try{const response=await fetch(url.href,{credentials:'include',redirect:'follow',signal:AbortSignal.timeout(2000)});if(!response.ok)throw new Error('Policy unavailable');
+    const text=(await response.text()).slice(0,2000000);return {text:text.replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ')};}catch(_){return native('fetch_document',{url:url.href,origin:requester.origin,user_agent:navigator.userAgent},3500);}
   }
   if (message.type === 'block_tracking') {await blockTracking(tabId,requester.origin,payload.hosts||[]);return {blocked:true};}
   if (message.type === 'tracking_context') {
@@ -117,7 +117,7 @@ async function route(message,sender) {
     const cookies = await api.cookies.getAll({});
     const cname_hosts=[];
     if(api.dns?.resolve){for(const host of [...(observed.request_hosts||[])].slice(0,30)){if(!dnsCache.has(host)){try{const record=await api.dns.resolve(host,['canonical_name','offline']);dnsCache.set(host,record.canonicalName||'');}catch(_){dnsCache.set(host,'');}}const canonical=dnsCache.get(host);if(canonical&&canonical!==host)cname_hosts.push(canonical);}}
-    return {cname_hosts,request_hosts:[...(observed.request_hosts||[])],urls:[...(observed.urls||[])],cookies:cookies.filter(cookie => (observed.request_hosts||new Set()).has(cookie.domain.replace(/^\./,''))).map(cookie=>({domain:cookie.domain,name:cookie.name,third_party:!requester.origin.endsWith(cookie.domain.replace(/^\./,'')),lifetime_days:cookie.expirationDate?Math.max(0,(cookie.expirationDate-Date.now()/1000)/86400):0}))};
+    return {cname_hosts,request_hosts:[...(observed.request_hosts||[])],urls:[...(observed.urls||[])],cookies:cookies.filter(cookie => (observed.request_hosts||new Set()).has(cookie.domain.replace(/^\./,''))).map(cookie=>({domain:cookie.domain,name:cookie.name,third_party:!(new URL(requester.origin).hostname===cookie.domain.replace(/^\./,'')||new URL(requester.origin).hostname.endsWith('.'+cookie.domain.replace(/^\./,''))),lifetime_days:cookie.expirationDate?Math.max(0,(cookie.expirationDate-Date.now()/1000)/86400):0}))};
   }
   if (message.type === 'action_poll') {
     const result = await native(message.type,payload);

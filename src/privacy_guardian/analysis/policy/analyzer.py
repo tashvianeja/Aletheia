@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from privacy_guardian.analysis.pii import redact_text
 from privacy_guardian.core.events import DataCategory
+from privacy_guardian.engine.explain import category_label
 from privacy_guardian.engine.necessity import necessity_for
 
 
@@ -266,7 +267,7 @@ def analyze_policy(text: str, purpose: str = "unknown") -> PolicyProfile:
     profile.shares_with = sorted(shares)
     profile.user_rights = sorted(rights)
     profile.necessity_statements = [
-        f"Collects {category.value.replace('_', ' ').replace('.', ' ')}: {necessity_for(purpose, category).rationale}"
+        f"Collects {category_label(category.value)}: {necessity_for(purpose, category).rationale}"
         for category in profile.collects
     ]
     return profile

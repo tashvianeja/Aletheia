@@ -26,6 +26,8 @@ class ClipboardMonitor:
 
     async def tick(self) -> None:
         sequence, text = await asyncio.to_thread(self.backend.clipboard)
+        if sequence == self.sequence and not self.categories:
+            return
         requester: Requester = await asyncio.to_thread(self.backend.foreground)
         if sequence != self.sequence:
             self.sequence = sequence

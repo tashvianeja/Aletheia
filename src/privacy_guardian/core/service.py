@@ -84,6 +84,7 @@ class Service:
         self.pending_context_id: str | None = None
         self.focused_origin = ""
         self.connected_browsers: dict[str, float] = {}
+        self.browser_sessions: dict[str, str] = {}
         self.paused_until: datetime | None = None
         self.adapter: Any = None
         self._llm_executor: ProcessPoolExecutor | None = None
@@ -193,6 +194,25 @@ class Service:
                         self.decisions.pop(event_id, None)
                         self.actions.pop(event_id, None)
                         self.pending_since.pop(event_id, None)
+                        self.event_owners.pop(event_id, None)
+                        self.response_locks.pop(event_id, None)
+                for browser, last_seen in list(self.connected_browsers.items()):
+                    if now - last_seen > 15:
+                        self.connected_browsers.pop(browser, None)
+                for browser_session, browser in list(self.browser_sessions.items()):
+                    if browser not in self.connected_browsers:
+                        self.browser_sessions.pop(browser_session, None)
+                active_origins = {
+                    self.events[event_id].requester.origin
+                    for event_id in self.pending_since
+                    if event_id in self.events
+                }
+                active_origins.update(meta["requester"].origin for meta in self.uploads.values())
+                for origin, context in list(self.contexts.items()):
+                    if origin not in active_origins and (
+                        now - float(context.get("updated_at", 0)) > 600 or len(self.contexts) > 100
+                    ):
+                        self.contexts.pop(origin, None)
             except Exception as error:
                 logging.getLogger(__name__).warning(
                     "maintenance_recovered", extra={"error_type": type(error).__name__}
@@ -264,7 +284,9 @@ class Service:
                 if isinstance(clause, dict):
                     title = str(clause.get("category", "")).replace("_", " ").capitalize()
                     citation = str(clause.get("citation", ""))
-                    decision.rationale.append(title + (": " + citation if citation else ""))
+                    decision.rationale.append("⚠ " + title)
+                    if citation:
+                        decision.rationale.append("Citation: " + citation)
             decision.rationale.extend(
                 "✓ Nothing unusual about " + str(item).replace("_", " ")
                 for item in document.get("nothing_unusual", [])
@@ -508,10 +530,23 @@ class Service:
         if request.type == "ping":
             browser = str(payload.get("browser", "browser"))[:40]
             self.connected_browsers[browser] = time.monotonic()
+            if session:
+                self.browser_sessions[session] = browser
             commands, self.browser_commands = self.browser_commands, []
             from privacy_guardian import __version__
 
             return {"version": __version__, "protocol": 1, "status": "ready", "commands": commands}
+        if request.type == "fetch_document":
+            from privacy_guardian.util.public_document import fetch_public_document
+
+            return await asyncio.wait_for(
+                fetch_public_document(
+                    str(payload["url"]),
+                    str(payload["origin"]),
+                    str(payload.get("user_agent", "PrivacyGuardian")),
+                ),
+                timeout=3,
+            )
         if request.type == "focus":
             for callback in self.focus_listeners:
                 callback()
@@ -620,7 +655,11 @@ class Service:
                     dict(incoming) if isinstance(incoming, dict) else {"text": str(incoming)}
                 )
                 worker_payload.update(
-                    {"kind": kind, "purpose": str(payload.get("purpose", "unknown"))}
+                    {
+                        "kind": kind,
+                        "purpose": str(payload.get("purpose", "unknown")),
+                        "tracker_path": str(self.settings.data_dir / "trackers.json"),
+                    }
                 )
                 from privacy_guardian.analysis.worker import AnalysisResult
 
@@ -633,12 +672,13 @@ class Service:
                 if cached is not None and isinstance(cached.get(kind), dict):
                     analyzed = AnalysisResult(profile=cached[kind])
                     if kind == "policy":
+                        from privacy_guardian.engine.explain import category_label
                         from privacy_guardian.engine.necessity import necessity_for
 
                         purpose = str(payload.get("purpose", "unknown"))
                         collected = analyzed.profile.get("collects", [])
                         analyzed.profile["necessity_statements"] = [
-                            f"Collects {category.value.replace('_', ' ').replace('.', ' ')}: {necessity_for(purpose, category).rationale}"
+                            f"Collects {category_label(category.value)}: {necessity_for(purpose, category).rationale}"
                             for category in map(
                                 DataCategory, collected if isinstance(collected, list) else []
                             )
@@ -793,6 +833,13 @@ class Service:
             for origin, context in list(self.contexts.items()):
                 if context.get("session") == session:
                     self.contexts.pop(origin, None)
+            disconnected_browser = self.browser_sessions.pop(session, None)
+            if disconnected_browser and disconnected_browser not in self.browser_sessions.values():
+                self.connected_browsers.pop(disconnected_browser, None)
+            for event_id, owner in list(self.event_owners.items()):
+                if owner == session and event_id not in self.pending_since:
+                    self.event_owners.pop(event_id, None)
+                    self.response_locks.pop(event_id, None)
             return {"disconnected": True}
         if request.type == "deep_check":
             from privacy_guardian.deepcheck import run_deep_check

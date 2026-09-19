@@ -25,7 +25,8 @@
         "context",
         "deep_check",
         "disconnect",
-        "focus"
+        "focus",
+        "fetch_document"
       ],
       "title": "Type",
       "type": "string"

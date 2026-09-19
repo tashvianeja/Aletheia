@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QHBoxLayout,
+    QLabel,
     QLineEdit,
     QMessageBox,
     QPushButton,
@@ -146,6 +147,12 @@ class Dashboard(QWidget):
         self.reject_optional = QCheckBox(tr("reject_optional"))
         self.reject_optional.setChecked(service.settings.reject_optional_cookies)
         form.addRow(self.reject_optional)
+        tracker_update = QPushButton(tr("update_trackers"))
+        tracker_update.clicked.connect(lambda: service.update_trackers())
+        form.addRow(tracker_update)
+        attribution = QLabel(tr("tracker_attribution"))
+        attribution.setWordWrap(True)
+        form.addRow(attribution)
         self.tabs.addTab(settings, tr("settings"))
         memory = QWidget()
         memory_layout = QVBoxLayout(memory)

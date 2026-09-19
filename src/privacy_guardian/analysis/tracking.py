@@ -4,6 +4,7 @@ import json
 import re
 from functools import lru_cache
 from importlib.resources import files
+from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from pydantic import BaseModel, Field
@@ -56,24 +57,50 @@ class TrackingAnalysis(BaseModel):
     summary: str = "No persistent profiling signals found."
 
 
-@lru_cache(maxsize=1)
-def tracker_hosts() -> frozenset[str]:
-    value = json.loads(files("privacy_guardian.data").joinpath("trackers.json").read_text())
+@lru_cache(maxsize=8)
+def _tracker_hosts(path: str, modified: int) -> frozenset[str]:
+    del modified
+    try:
+        value = json.loads(Path(path).read_text()) if path else {}
+        domains = value.get("domains", [])
+        if not isinstance(domains, list) or not 100 <= len(domains) <= 100_000:
+            raise ValueError("Invalid cached tracker list")
+        if not all(
+            isinstance(domain, str) and re.fullmatch(r"[a-z0-9.-]+", domain) for domain in domains
+        ):
+            raise ValueError("Invalid tracker domain")
+    except (OSError, ValueError):
+        value = json.loads(files("privacy_guardian.data").joinpath("trackers.json").read_text())
     return frozenset(str(domain) for domain in value["domains"])
 
 
-def is_tracker(host: str) -> bool:
-    host = host.lower().lstrip(".").rstrip(".")
-    return any(host == domain or host.endswith("." + domain) for domain in tracker_hosts())
+def tracker_hosts(path: str = "") -> frozenset[str]:
+    if not path:
+        from privacy_guardian.config import data_directory
+
+        path = str(data_directory() / "trackers.json")
+    try:
+        modified = Path(path).stat().st_mtime_ns
+    except OSError:
+        modified = 0
+    return _tracker_hosts(path, modified)
 
 
-def analyze_tracking(snapshot: TrackingSnapshot | dict[str, object]) -> TrackingAnalysis:
+def is_tracker(host: str, tracker_path: str = "") -> bool:
+    labels = host.lower().lstrip(".").rstrip(".").split(".")
+    domains = tracker_hosts(tracker_path)
+    return any(".".join(labels[index:]) in domains for index in range(len(labels)))
+
+
+def analyze_tracking(
+    snapshot: TrackingSnapshot | dict[str, object], tracker_path: str = ""
+) -> TrackingAnalysis:
     if not isinstance(snapshot, TrackingSnapshot):
         snapshot = TrackingSnapshot.model_validate(snapshot)
     result = TrackingAnalysis()
     hosts = set(snapshot.request_hosts + snapshot.cname_hosts)
     hosts.update(urlsplit(url).hostname or "" for url in snapshot.urls)
-    trackers = {host.lower().lstrip(".") for host in hosts if is_tracker(host)}
+    trackers = {host.lower().lstrip(".") for host in hosts if is_tracker(host, tracker_path)}
     origin_host = urlsplit(snapshot.origin).hostname or ""
     for host in snapshot.pixel_hosts:
         if (
@@ -91,7 +118,11 @@ def analyze_tracking(snapshot: TrackingSnapshot | dict[str, object]) -> Tracking
         ):
             trackers.add(host.lower())
     for cookie in snapshot.cookies:
-        if cookie.third_party and cookie.lifetime_days >= 30 and is_tracker(cookie.domain):
+        if (
+            cookie.third_party
+            and cookie.lifetime_days >= 30
+            and is_tracker(cookie.domain, tracker_path)
+        ):
             trackers.add(cookie.domain.lower().lstrip("."))
             if "persistent_third_party_cookies" not in result.signals:
                 result.signals.append("persistent_third_party_cookies")
@@ -124,7 +155,9 @@ def analyze_tracking(snapshot: TrackingSnapshot | dict[str, object]) -> Tracking
         result.signals.append("fingerprinting")
     if snapshot.storage_shared_identifiers > 0:
         result.signals.append("cross_origin_storage_identifier")
-    if snapshot.cname_hosts and any(is_tracker(host) for host in snapshot.cname_hosts):
+    if snapshot.cname_hosts and any(
+        is_tracker(host, tracker_path) for host in snapshot.cname_hosts
+    ):
         result.signals.append("cname_cloaking")
     if snapshot.pixel_beacons > 0 and trackers:
         result.signals.append("tracking_pixels")

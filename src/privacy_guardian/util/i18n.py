@@ -3,6 +3,10 @@ from __future__ import annotations
 from typing import Any
 
 EN: dict[str, str] = {
+    "update_trackers": "Update tracker list now",
+    "tracker_attribution": "Tracker data: DuckDuckGo Tracker Radar, CC-BY-NC-SA-4.0. Updates download only when you click this button.",
+    "trackers_updated": "Updated {count} tracker domains. The new list is active.",
+    "tracker_update_failed": "The tracker list could not be updated. The previous list remains active.",
     "available": "available",
     "unavailable": "unavailable",
     "full_disk_access": "Full Disk Access",

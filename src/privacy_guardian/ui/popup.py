@@ -42,6 +42,11 @@ class InterventionPopup(QWidget):
         explanation.setWordWrap(True)
         explanation.setAccessibleName(decision.explanation)
         layout.addWidget(explanation)
+        document_summary = [line for line in decision.rationale if line.startswith(("⚠", "✓"))]
+        if document_summary:
+            summary = QLabel("\n".join(document_summary))
+            summary.setWordWrap(True)
+            layout.addWidget(summary)
         self.why_button = QPushButton(tr("why"))
         self.why_button.setCheckable(True)
         self.why_button.installEventFilter(self)

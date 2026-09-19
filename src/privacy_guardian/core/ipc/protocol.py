@@ -41,6 +41,7 @@ class Request(BaseModel):
         "deep_check",
         "disconnect",
         "focus",
+        "fetch_document",
     ]
     payload: dict[str, Any] = Field(default_factory=dict)
 

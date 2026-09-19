@@ -48,6 +48,8 @@ asyncio_mode = "auto"
 markers = ["macos: requires a real macOS desktop", "windows: requires Windows", "llm: opt-in real LLM API", "e2e: browser end-to-end", "perf: performance measurement", "platform: requires interactive platform access"]
 
 [tool.coverage.run]
+patch = ["subprocess"]
+parallel = true
 source = ["privacy_guardian"]
 branch = true
 

@@ -27,7 +27,15 @@ def configure_logging(data_dir: Path, level: str = "INFO") -> None:
             processor=structlog.processors.JSONRenderer(),
             foreign_pre_chain=[
                 structlog.stdlib.ExtraAdder(
-                    allow=["purpose", "input_tokens", "output_tokens", "latency_ms", "error_type"]
+                    allow=[
+                        "purpose",
+                        "input_tokens",
+                        "output_tokens",
+                        "latency_ms",
+                        "token_count",
+                        "fallback_reason",
+                        "error_type",
+                    ]
                 ),
                 redact_processor,
             ],

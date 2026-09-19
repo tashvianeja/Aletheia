@@ -28,6 +28,7 @@
     const panel=document.createElement('section');panel.className='pg-panel';panel.setAttribute('role','status');panel.setAttribute('aria-label','Privacy Guardian');
     const title=document.createElement('strong');title.textContent='Privacy Guardian';panel.append(title);
     const explanation=document.createElement('p');explanation.textContent=decision.explanation;panel.append(explanation);
+    for(const line of decision.rationale||[]){if(/^[⚠✓]/u.test(line)){const item=document.createElement('p');item.textContent=line;panel.append(item);}}
     const details=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Why?';details.append(summary);
     const rationale=document.createElement('p');rationale.textContent=(decision.rationale||[]).join(' ');details.append(rationale);panel.append(details);
     state.apply=async result=>{if(state.resolved||state.processing)return;state.processing=true;try{await state.onAction?.(result);state.selected=result;state.resolved=true;panel.remove();PG.panels.delete(decision.event_id);state.resolve(result);}catch(_){explanation.textContent='That action could not be completed. Your submission remains held.';}finally{state.processing=false;}};
