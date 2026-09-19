@@ -81,10 +81,16 @@ class MacBackend:
 
         board = NSPasteboard.generalPasteboard()
         count = int(board.changeCount())
-        if count == getattr(self, "_clipboard_count", -1):
+        if count == getattr(self, "_clipboard_count", -1) and not getattr(
+            self, "_clipboard_empty", False
+        ):
             return count, ""
         self._clipboard_count = count
-        return count, str(board.stringForType_(NSPasteboardTypeString) or "")
+        text = str(board.stringForType_(NSPasteboardTypeString) or "")
+        # clearContents advances changeCount, while a subsequent setString can
+        # reuse that count. Retry transient empty reads until content is available.
+        self._clipboard_empty = not text
+        return count, text
 
     def clear_clipboard(self) -> None:
         from AppKit import NSPasteboard

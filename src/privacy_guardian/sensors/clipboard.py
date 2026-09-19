@@ -17,6 +17,7 @@ class ClipboardMonitor:
         self.emit = emit
         self.allowlist = allowlist or []
         self.sequence = -1
+        self._sequence_has_text = False
         self.writer_key = ""
         self.foreground_key = ""
         self.categories: list[DataCategory] = []
@@ -26,11 +27,13 @@ class ClipboardMonitor:
 
     async def tick(self) -> None:
         sequence, text = await asyncio.to_thread(self.backend.clipboard)
-        if sequence == self.sequence and not self.categories:
+        new_content = sequence != self.sequence or (bool(text) and not self._sequence_has_text)
+        if not new_content and not self.categories:
             return
         requester: Requester = await asyncio.to_thread(self.backend.foreground)
-        if sequence != self.sequence:
+        if new_content:
             self.sequence = sequence
+            self._sequence_has_text = bool(text)
             owner = (
                 await asyncio.to_thread(self.backend.clipboard_owner)
                 if hasattr(self.backend, "clipboard_owner")
