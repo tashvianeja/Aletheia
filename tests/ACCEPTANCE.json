@@ -75,13 +75,18 @@
         "18": "five-minute native Cocoa measurement: tray 0.8232 s, warm median RSS 207.33952 MB, peak 210.5344 MB, CPU 0.04423%; warm median exceeds the raw decimal 200 MB target by 7.33952 MB and peak exceeds it by 10.5344 MB, both within the allowed 25% tolerance"
     },
     "final_verification": {
-        "commit": "2af6d4a",
-        "tests": 311,
+        "baseline": "source 1539390, tests aefa972",
+        "tests": 312,
         "skipped": 5,
-        "instrumented_tests": 277,
+        "instrumented_tests": 278,
+        "instrumented_skipped": 4,
+        "instrumented_deselected": 2,
         "runtime_tests": 34,
+        "runtime_skipped": 1,
         "core_coverage": "85.55% (1687/1972)",
-        "overall_coverage": "75.43% (4136/5483)",
-        "windows_installer": "pending verification"
+        "overall_coverage": "75.46% (4144/5492)",
+        "windows_ci_prior_run": "273 passed, 2 failed, 5 skipped; scoped coverage 83.34%; this run preceded the latest fixes",
+        "windows_installer": "built and diagnostic JSON passed, but CI misread the windowed process exit and stopped before lifecycle verification; source fix 1539390 awaits rerun",
+        "latest_ci": "35449032544 could not rerun because of billing; Windows lifecycle verification remains pending"
     }
 }
