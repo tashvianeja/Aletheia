@@ -10,10 +10,10 @@ All notable changes will be documented here. This project has not produced a ver
 - Local PII/document, form, consent, policy/terms, purpose, and tracking analysis modules.
 - Optional, disabled-by-default LLM client with a sanitization gate and OS-keychain credentials.
 - macOS and Windows adapter implementations plus Qt UI components, with injected/UI coverage and limited real macOS checks.
-- WebExtension source for Chromium-family browsers and Firefox, with a verified Chromium native-host handshake and form-badge fixture path.
+- WebExtension source for Chromium-family browsers and Firefox, including CMP, Deep Check, tracker DNR/cookie, browser-recovery, and Firefox fixed-ID handshake coverage.
 - macOS packaging scripts and a compatible static Tesseract 5.5.3 / Leptonica 1.87 / libpng 1.6.58 build path targeting macOS 13.
 - Developer, security, platform, detector, LLM, performance, and product documentation grounded in current code/evidence.
 
 ### Verification pending
 
-- Full test suite/coverage gate, remaining Playwright scenarios, real TCC/screen and Windows checks, green CI, fresh-clone validation, final rebuild, installer/uninstaller smoke tests, and release artifacts.
+- Exact raw-passport timing, final browser counts, real TCC/Full Disk Access/Accessibility/screen and Windows checks, green CI, final rebuild/install-uninstall smoke, post-light-worker perf measurement, and release artifacts.

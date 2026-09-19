@@ -13,7 +13,7 @@ The extension does not run the decision engine. The Python service performs loca
 
 ## Development and verification status
 
-Run `make build-extension` from the repository root to generate `dist/privacy-guardian-chromium.zip` and `dist/privacy-guardian-firefox.zip`. For development, start the service and run `uv run privacy-guardian --install-native-host`, then load the unpacked extension source in the matching browser. A real Chromium native-host handshake and three free-download form badges are verified. Upload intervention, tracker blocking, consent actions, reconnect behavior, Firefox, and the remainder of the browser scenarios are still pending.
+Run `make build-extension` from the repository root to generate `dist/privacy-guardian-chromium.zip` and `dist/privacy-guardian-firefox.zip`. For development, start the service and run `uv run privacy-guardian --install-native-host`, then load the unpacked extension source in the matching browser. Headed Chromium exercised 17 cases (15 passed; two timing fixes are in progress), including CMP variants, DNR/cookie blocking that preserves cart and IndexedDB state, exact-three-finding Deep Check, and SIGKILL-mid-analysis recovery. Firefox’s fixed-ID native-host handshake took 3.02 seconds. Final browser totals remain pending.
 
 The extension uses MAIN-world wrappers as a best-effort observation layer. Known uploads fail open after a four-second initial-analysis wait; an actual intervention waits for the service’s safe 60-second decision timeout. This is intentionally narrow: synchronous file XHR can be aborted, while ordinary XHR and beacons are allowed to proceed. Firefox CNAME/DNS tracking signals are cached best effort.
 

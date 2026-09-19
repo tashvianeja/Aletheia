@@ -4,23 +4,23 @@ Privacy Guardian is a local-first background app for macOS and Windows that help
 
 The app can classify sensitive categories in documents and forms, inspect consent and tracking signals, and relate a request to the apparent purpose of a site or application. It presents one of three outcomes: **Ignore**, **Inform**, or **Intervene**, with an explanation and an action where one is available.
 
-This repository is an in-progress initial build. Core, analysis, UI/platform, IPC, and one real Chromium native-host/browser path have independent evidence recorded in `docs/PLAN.md`; the full acceptance suite, real Windows execution, fresh-clone verification, and final release rebuild are still pending. Treat the installation and packaging sections below as build instructions, not a claim that release artifacts exist today.
+This repository is an in-progress initial build. All 20 functional requirements are implemented, with independent evidence recorded in `docs/PLAN.md`; final acceptance counts, the exact raw-passport timing, physical Windows validation, protected macOS permission grants, the latest package rebuild, and a green CI run remain pending. Treat the installation and packaging sections below as build instructions, not a claim that release artifacts exist today.
 
 ## Feature matrix
 
 | Capability | Browser extension | macOS desktop | Windows desktop | Offline | Optional LLM-assisted |
 |---|---:|---:|---:|---:|---:|
-| Document category detection and redaction | Native-host path wired; one Chromium flow verified | — | — | Yes | No |
-| Form field semantics | Native-host path wired; three badges verified on fixture | — | — | Yes | No |
-| Policy and terms clause extraction | Wired; broader browser E2E pending | — | — | Yes | Policy refinement only |
-| Consent-banner analysis | Wired; broader browser E2E pending | — | — | Yes | No |
-| Tracker and fingerprinting signal analysis | Wired; blocking behavior E2E pending | — | — | Yes | No |
-| Permission, startup, and broad-access observation | — | Adapter and UI tests pass; live grant/revocation pending | Adapter test passes; physical/CI verification pending | Yes | No |
+| Document category detection and redaction | Upload flow wired; raw-passport target still optimizing | — | — | Yes | No |
+| Form field semantics | 17 headed browser cases: 15 pass, two timing fixes in progress | — | — | Yes | No |
+| Policy and terms clause extraction | Wired, including exact three-finding Deep Check coverage | — | — | Yes | Policy refinement only |
+| Consent-banner analysis | Five known CMPs, three heuristics, and three rejects pass | — | — | Yes | No |
+| Tracker and fingerprinting signal analysis | DNR/cookie blocking and session preservation tested | — | — | Yes | No |
+| Permission, startup, and broad-access observation | — | Adapter/UI coverage; protected live grants pending | Adapter coverage; physical/CI verification pending | Yes | No |
 | Clipboard and screen-access signals | — | Foreground-change proxy; see limitations | Foreground-change proxy; see limitations | Yes | No |
 | Decision engine, preferences, and local history | Service API wired | Service/UI wired | Service/UI wired; platform verification pending | Yes | Explanation polish only |
-| Deep Check | Context supplied by extension | UI rendered; integration flow pending | UI rendered; Windows validation pending | Yes | Narrative only |
+| Deep Check | Context supplied by extension | UI rendered; exact three-finding coverage | UI rendered; Windows validation pending | Yes | Narrative only |
 
-The verified Chromium fixture result is a native-host handshake and three `free-download` form badges. It does not establish all browser actions or scenarios. A dash means that the capability is outside that surface.
+Headed Chromium has 17 exercised browser cases with 15 passing; Firefox’s fixed-ID native-host handshake takes 3.02 seconds. The final browser count is pending. A dash means that the capability is outside that surface.
 
 ## Screenshots
 
@@ -40,7 +40,7 @@ System Settings is intentionally not screenshot: its application lists expose us
 
 Supported targets are macOS 13 or later (Apple Silicon or Intel) and Windows 10 21H2 or later / Windows 11 x64. This build has been developed on macOS 27 arm64; real Windows execution remains pending CI.
 
-Source work requires Python 3.12 (the project constrains Python to `>=3.12,<3.13`), [uv](https://docs.astral.sh/uv/), and Tesseract for OCR. Browser integration targets Chrome, Edge, Brave, and Firefox through Manifest V3-style native messaging; installation and an end-to-end browser handshake are pending verification.
+Source work requires Python 3.12 (the project constrains Python to `>=3.12,<3.13`), [uv](https://docs.astral.sh/uv/), and Tesseract for OCR. The pinned Qt runtime is PySide6 6.8.3; NumPy 2.5.3 supplies deployment wheels for macOS 11 arm64 and macOS 10.13 Intel. Browser integration targets Chrome, Edge, Brave, and Firefox through Manifest V3-style native messaging; Node 24, Firefox, and web-ext 10.6.0 are provisioned by `make setup`/CI for browser work.
 
 On macOS, Homebrew, Xcode Command Line Tools, and `create-dmg` are needed for the packaging path. A macOS packaging build additionally compiles a macOS-13-compatible static Tesseract bundle, which needs CMake, a compiler, Autotools, libtool, pkg-config, and network access for its source downloads. On Windows, use winget for prerequisites and install Inno Setup before attempting an installer build. The repository does not currently contain published installers.
 
@@ -57,7 +57,7 @@ macOS monitoring may require Full Disk Access and Accessibility permission. Use 
 
 ## Build from source
 
-These are the repository’s declared commands. They have **not** yet been verified by a fresh-clone worker. A first macOS app/DMG build passed codesign, packaged smoke, and UDZO image checks, but it is stale and must be rebuilt after current changes; Windows packaging remains pending.
+These are the repository’s declared commands. A fresh clone at `3bec8897ddccf446282d5fff1c3cecacb4a6339d` passed `uv sync`, setup, diagnose/smoke, lint, mypy, extension build, source macOS build, packaged DMG mount/install/visible tray/onboarding/native handshake, packaged PNG/native-JPEG OCR, uninstall/restore, and a 339-Mach-O macOS-13 deployment audit. Its DMG was 141 MB with SHA-256 `937b23af5760ec3f30d86e5a1d2cddf01337aa10922a0aaa7d4e8114e2a2c100`. It also had one theme-dependent `make test` assertion and one passport timing E2E failure. Windows packaging remains pending.
 
 macOS:
 
@@ -77,11 +77,12 @@ Windows (PowerShell):
 winget install --id AstralSoftware.UV -e
 winget install --id UB-Mannheim.TesseractOCR -e
 winget install --id JRSoftware.InnoSetup -e
+winget install --id OpenJS.NodeJS.LTS -e
 uv sync
-make setup
-make run
-make build-extension
-make build-win
+uv run python scripts/setup.py
+uv run privacy-guardian
+uv run python scripts/build_extension.py
+uv run python scripts/build.py windows
 ```
 
 `make build-extension` writes `dist/privacy-guardian-chromium.zip` and `dist/privacy-guardian-firefox.zip`. `make build-mac` builds `dist/PrivacyGuardian.app` and `dist/PrivacyGuardian-<version>.dmg`; it signs ad hoc by default, or uses `CODESIGN_IDENTITY` and optional `NOTARY_PROFILE`. `make build-win` invokes PyInstaller and Inno Setup on Windows. A final rebuild and installer smoke checks remain required before distributing any artifact. For non-English OCR, install the appropriate Tesseract language data in the host operating system; English and OSD data are the currently bundled packaging target.
@@ -124,9 +125,9 @@ make typecheck
 make check
 ```
 
-Independent evidence includes 115 analysis/engine/LLM/util tests passing; 66 new integration/platform tests passing with one Windows skip; 39 UI tests passing with two platform skips; one real FSEvents test passing; and a Chromium native-host handshake plus three form badges on the free-download fixture. Ruff and strict mypy were clean for 70 macOS source modules; Bandit medium-and-above was clean. These are partial results, not a full `make check` claim.
+The verified coverage checkpoint is 85.09% for core (`1,638/1,925`) and 74.52% overall (`4,034/5,413`), exceeding the final 85% scoped/70% overall targets. A run reported 260 passed, 4 skipped, and one transient macOS permission-status timeout; the isolated retry passed in 0.51 seconds. Final counts are still pending. Ruff was clean for 165 files, strict mypy for 73 modules, and Bandit medium-and-above was clean.
 
-The current combined coverage report was 48% overall and 70.9% for the scoped core/detector/engine/storage set before later UI/platform additions, below the final 70% overall/85% scoped gates. Use `-m macos`, `-m windows`, `-m e2e`, `-m perf`, and `-m llm` only in an environment that supports those markers. Current outstanding checks include full coverage, remaining 18 browser scenarios, real Windows CI, final macOS rebuild/install/uninstall smoke, and fresh-clone verification. CI run [35443041292](https://github.com/tashvianeja/Privacy-Guardian/actions/runs/35443041292) has failures under repair and is not green evidence.
+Use `-m macos`, `-m windows`, `-m e2e`, `-m perf`, and `-m llm` only in an environment that supports those markers. Current outstanding checks include the exact raw-passport 1.5-second target (currently 1.83–2.39 seconds), final browser totals, physical Windows CI, protected macOS TCC/Full Disk Access/Accessibility/screen grant tests, a fresh post-light-worker performance run, final macOS rebuild/install/uninstall smoke, and green CI. The earlier CI run is not green evidence.
 
 ## Configuration
 
@@ -175,9 +176,9 @@ The service routes typed `PrivacyEvent` objects from platform or browser sensors
 
 ## Privacy statement
 
-The implemented analysis worker returns opaque payload handles plus category findings. Raw file/form values remain in worker memory, while the transport may carry bytes only for the active upload and discards them after use. The storage contract excludes raw payload references, field labels/names, file names, URL query strings, and raw extracted text.
+The implemented analysis worker returns opaque payload handles plus category findings. Raw upload bytes may pass only to the active local analysis session and are then discarded. Form values never leave the page: the extension sends constrained field metadata only. The storage contract excludes raw payload references, field labels/names, file names, URL query strings, and raw extracted text.
 
-Privacy Guardian has no telemetry in its declared design. Network use is limited to optional OpenAI API calls when enabled, a policy/terms fetch requested by a page context when inline text is unavailable, and a GitHub Releases API request only after the user selects **Check for updates**. Cloud assistance is disabled by default, sanitizes every outbound string, replaces detected values with category tokens, and rejects validated identifiers that survive sanitization. See [LLM usage](docs/LLM_USAGE.md) and [Threat model](docs/THREAT_MODEL.md).
+Privacy Guardian has no telemetry in its declared design. Network use is limited to optional OpenAI API calls when enabled, a policy/terms fetch requested by a page context when inline text is unavailable, an explicit user-clicked tracker-list refresh, and a GitHub Releases API request only after the user selects **Check for updates**. Cloud assistance is disabled by default, sanitizes every outbound string, replaces detected values with category tokens, and rejects validated identifiers that survive sanitization. See [LLM usage](docs/LLM_USAGE.md) and [Threat model](docs/THREAT_MODEL.md).
 
 ## Platform limitations
 

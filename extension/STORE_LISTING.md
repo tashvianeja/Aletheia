@@ -16,7 +16,7 @@ The extension is designed to keep analysis local. Optional cloud assistance belo
 
 ### Data handling
 
-The extension derives the site identity from browser APIs and sends constrained event metadata to the local service. Upload bytes are passed only to the active local analysis session and discarded afterward; the service stores category-level results rather than raw values. The extension/service bridge and privacy claims require final browser end-to-end verification before this text may be submitted to a store.
+The extension derives the site identity from browser APIs and sends constrained event metadata to the local service. Form values never leave the page. Upload bytes are passed only to the active local analysis session and discarded afterward; the service stores category-level results rather than raw values. The extension/service bridge and privacy claims require final browser totals and release verification before this text may be submitted to a store.
 
 ### Support status
 

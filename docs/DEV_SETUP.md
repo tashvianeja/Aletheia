@@ -2,7 +2,7 @@
 
 ## Status of this guide
 
-The repository has an `uv` project for Python 3.12 and declares `make` targets for setup, checks, extension building, and packaging. Python 3.12.13, uv dependencies, Tesseract 5.5.3, `create-dmg` 1.3, and Xcode Command Line Tools were reported present on the current macOS 27 arm64 development machine. A clean-clone run of this guide is still TODO; do not treat a command below as fresh-clone verified.
+The repository has an `uv` project for Python 3.12 and declares `make` targets for setup, checks, extension building, and packaging. Python 3.12.13, uv dependencies, Tesseract 5.5.3, `create-dmg` 1.3, and Xcode Command Line Tools were reported present on the current macOS 27 arm64 development machine. A clean-clone run at `3bec8897ddccf446282d5fff1c3cecacb4a6339d` verified setup and the macOS package path; rerun after current timing/worker changes before release.
 
 ## macOS
 
@@ -27,8 +27,9 @@ In PowerShell, install the declared tooling, then run the same source commands:
 winget install --id AstralSoftware.UV -e
 winget install --id UB-Mannheim.TesseractOCR -e
 winget install --id JRSoftware.InnoSetup -e
+winget install --id OpenJS.NodeJS.LTS -e
 uv sync
-make setup
+uv run python scripts/setup.py
 ```
 
 Windows has not been executed on a physical machine or runner for this build. In particular, validate how `make` is provided in the selected shell before relying on these commands; this is a TODO for the Windows CI setup.
@@ -51,7 +52,7 @@ Optional OpenAI credentials are stored through the operating-system keychain onl
 
 ## Fresh-clone verification procedure
 
-This is the literal macOS procedure for the independent fresh-clone worker. It is a **TODO** until that worker records outputs, commit SHA, and elapsed times in `docs/PLAN.md`.
+This was executed at `3bec8897ddccf446282d5fff1c3cecacb4a6339d`: setup, diagnose/smoke, lint, mypy, source macOS build, extension archives, packaged install/onboarding/native handshake/PNG and native-JPEG OCR, uninstall/restore, and the 339-Mach-O macOS-13 audit passed. `make test` had one theme-dependent assertion; `make e2e` had one passport timing failure at 1.83173 seconds.
 
 ```sh
 git clone https://github.com/tashvianeja/Privacy-Guardian.git
