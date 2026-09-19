@@ -76,7 +76,7 @@ def minimum_version(path: Path, architecture: str) -> tuple[int, ...]:
     return max(versions)
 
 
-def audit_bundle(bundle: Path, maximum: tuple[int, ...] = (13, 0)) -> list[MachOSlice]:
+def audit_bundle(bundle: Path, maximum: tuple[int, ...] = (13, 0, 0)) -> list[MachOSlice]:
     if not bundle.is_dir():
         raise FileNotFoundError(f"application bundle not found: {bundle}")
     mach_o_files = sorted(path for path in bundle.rglob("*") if is_mach_o(path))

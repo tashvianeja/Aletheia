@@ -17,6 +17,11 @@ from concurrent.futures import TimeoutError as FutureTimeoutError
 from dataclasses import dataclass
 from pathlib import Path
 
+if __package__:
+    from .audit_macos_minimum_version import audit_bundle, version_tuple
+else:
+    from audit_macos_minimum_version import audit_bundle, version_tuple
+
 CHROME_ID = "bfdjphkbgihhbonhnmjbbfhckdddonob"
 HOST_NAME = "com.privacyguardian.host"
 
@@ -264,8 +269,21 @@ def visible_onboarding(app: Path, data_dir: Path, environment: dict[str, str]) -
 
                 found: list[int] = []
                 user32 = ctypes.windll.user32
+                callback_type = ctypes.WINFUNCTYPE(
+                    ctypes.c_bool, ctypes.wintypes.HWND, ctypes.wintypes.LPARAM
+                )
+                user32.GetWindowThreadProcessId.argtypes = [
+                    ctypes.wintypes.HWND,
+                    ctypes.POINTER(ctypes.wintypes.DWORD),
+                ]
+                user32.GetWindowRect.argtypes = [
+                    ctypes.wintypes.HWND,
+                    ctypes.POINTER(ctypes.wintypes.RECT),
+                ]
+                user32.IsWindowVisible.argtypes = [ctypes.wintypes.HWND]
+                user32.EnumWindows.argtypes = [callback_type, ctypes.wintypes.LPARAM]
 
-                @ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+                @callback_type
                 def visit(
                     window: int,
                     _context: int,
@@ -334,6 +352,7 @@ def verify_runtime(
                 if time.monotonic() >= deadline:
                     raise
                 time.sleep(0.2)
+        verify_ocr(install_root, native_host, environment, work_dir)
     finally:
         service.terminate()
         try:
@@ -341,13 +360,10 @@ def verify_runtime(
         except subprocess.TimeoutExpired:
             service.kill()
             service.wait(timeout=5)
-    verify_ocr(install_root, native_host, environment, work_dir)
     return response
 
 
 def verify_macos(artifact: Path, work_dir: Path, maximum_macos: str) -> None:
-    from tests.packaging.audit_macos_minimum_version import audit_bundle, version_tuple
-
     install_dir = work_dir / "Applications"
     install_dir.mkdir()
     mounted: Path | None = None

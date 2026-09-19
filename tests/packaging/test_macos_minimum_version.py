@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -21,6 +22,18 @@ def test_mach_o_detection_uses_magic_and_ignores_symlinks(tmp_path: Path) -> Non
 
     assert is_mach_o(binary)
     assert not is_mach_o(link)
+
+
+def test_packaged_lifecycle_helper_is_directly_invokable() -> None:
+    helper = Path(__file__).with_name("verify_packaged_installation.py")
+    result = subprocess.run(
+        [sys.executable, str(helper), "--help"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "Verify a packaged Privacy Guardian install lifecycle" in result.stdout
 
 
 def test_minimum_version_reads_build_and_legacy_load_commands(
@@ -45,6 +58,24 @@ def test_version_components_are_normalized_for_comparison() -> None:
     from tests.packaging.audit_macos_minimum_version import version_tuple
 
     assert version_tuple("13.0") == version_tuple("13.0.0")
+
+
+def test_default_accepts_exact_macos_13_minimum(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    app = tmp_path / "PrivacyGuardian.app"
+    binary = app / "Contents/MacOS/PrivacyGuardian"
+    binary.parent.mkdir(parents=True)
+    binary.write_bytes(b"\xcf\xfa\xed\xfe")
+    monkeypatch.setattr(
+        "tests.packaging.audit_macos_minimum_version.architectures", lambda _path: ["arm64"]
+    )
+    monkeypatch.setattr(
+        "tests.packaging.audit_macos_minimum_version.minimum_version",
+        lambda _path, _architecture: (13, 0, 0),
+    )
+
+    assert len(audit_bundle(app)) == 1
 
 
 def test_audit_reports_every_incompatible_architecture_slice(
