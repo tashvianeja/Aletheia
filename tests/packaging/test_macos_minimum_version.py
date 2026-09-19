@@ -36,6 +36,19 @@ def test_packaged_lifecycle_helper_is_directly_invokable() -> None:
     assert "Verify a packaged Privacy Guardian install lifecycle" in result.stdout
 
 
+def test_packaged_ocr_binary_discovery_deduplicates_resource_symlink(tmp_path: Path) -> None:
+    from tests.packaging.verify_packaged_installation import unique_named_files
+
+    binary = tmp_path / "Frameworks/tesseract/tesseract"
+    binary.parent.mkdir(parents=True)
+    binary.write_bytes(b"executable")
+    resource = tmp_path / "Resources/tesseract/tesseract"
+    resource.parent.mkdir(parents=True)
+    resource.symlink_to(binary)
+
+    assert unique_named_files(tmp_path, {"tesseract"}) == [binary]
+
+
 def test_minimum_version_reads_build_and_legacy_load_commands(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

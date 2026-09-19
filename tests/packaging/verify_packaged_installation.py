@@ -156,6 +156,13 @@ def native_handshake(executable: Path, environment: dict[str, str]) -> dict[str,
     return response
 
 
+def unique_named_files(root: Path, names: set[str]) -> list[Path]:
+    """Return physical files once when an app exposes them through resource symlinks."""
+    return sorted(
+        {path.resolve() for path in root.rglob("*") if path.is_file() and path.name.lower() in names}
+    )
+
+
 def verify_ocr(
     install_root: Path,
     native_host: Path,
@@ -165,7 +172,7 @@ def verify_ocr(
     from PIL import Image, ImageDraw, ImageFont
 
     names = {"tesseract.exe"} if sys.platform == "win32" else {"tesseract"}
-    binaries = [path for path in install_root.rglob("*") if path.name.lower() in names]
+    binaries = unique_named_files(install_root, names)
     if len(binaries) != 1:
         raise RuntimeError(f"expected one bundled Tesseract executable, found {binaries}")
     traineddata = list(install_root.rglob("eng.traineddata"))
