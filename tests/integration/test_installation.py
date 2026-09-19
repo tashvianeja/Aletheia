@@ -103,6 +103,37 @@ def test_install_writes_least_privilege_browser_manifests(
             assert "allowed_extensions" not in manifest
 
 
+def test_install_skips_browsers_whose_manifest_directory_cannot_be_created(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    locations = isolated_locations(tmp_path / "browser-config")
+    monkeypatch.setattr(installation, "manifest_locations", lambda: locations)
+    registry = isolate_windows_registry(monkeypatch)
+    settings = Settings(data_dir=tmp_path / "data", autostart=False)
+    expected_locations = (
+        isolated_locations(settings.data_dir) if sys.platform == "win32" else locations
+    )
+    # macOS refuses to create a reserved Application Support name such as "Microsoft Edge"
+    # when that browser is absent; an ordinary file stands in for that refusal here.
+    blocked = expected_locations["edge"]
+    blocked.parent.mkdir(parents=True, exist_ok=True)
+    blocked.write_text("", encoding="utf-8")
+
+    installed = installation.install(settings)
+
+    for browser, folder in expected_locations.items():
+        manifest_path = folder / f"{installation.HOST_NAME}.json"
+        if browser == "edge":
+            assert manifest_path not in installed
+        else:
+            assert manifest_path in installed
+            assert manifest_path.is_file()
+    # The remaining browsers and the closing bookkeeping must survive one unusable location.
+    assert (settings.data_dir / "install-manifest.json").is_file()
+    if registry is not None:
+        assert len(registry.values) == 3
+
+
 @pytest.mark.asyncio
 async def test_installed_native_host_performs_real_stdio_to_authenticated_service_handshake(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch

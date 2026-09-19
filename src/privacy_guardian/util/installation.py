@@ -67,7 +67,11 @@ def install(settings: Settings) -> list[Path]:
             folder = manifest_locations()[browser]
         else:
             folder = settings.data_dir / browser
-        folder.mkdir(parents=True, exist_ok=True)
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            # macOS refuses reserved Application Support names for browsers that are absent.
+            continue
         target = folder / f"{HOST_NAME}.json"
         target.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
         secure_path(target)
