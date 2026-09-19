@@ -8,7 +8,7 @@ if (root/'build/tesseract').exists():
     datas += [(str(root/'build/tesseract'),'tesseract')]
 native_imports = ['win32security', 'win32api', 'ntsecuritycon', 'winreg', 'pythoncom', 'pywintypes', 'win32timezone', 'win32com.client']
 hiddenimports = collect_submodules('privacy_guardian') + collect_submodules('en_core_web_sm')
-hiddenimports += collect_submodules('onnxruntime') + native_imports
+hiddenimports += collect_submodules('onnxruntime') + collect_submodules('pyap') + native_imports
 a = Analysis([str(root/'packaging/windows/entry.py')],pathex=[str(root/'src')],datas=datas,hiddenimports=hiddenimports,runtime_hooks=[str(root/'packaging/runtime.py')],excludes=['tkinter','matplotlib','scipy','IPython','pytest'])
 pyz = PYZ(a.pure)
 exe = EXE(pyz,a.scripts,[],exclude_binaries=True,name='PrivacyGuardian',console=False,upx=False)
