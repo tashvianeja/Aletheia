@@ -67,7 +67,9 @@ def test_popup_does_not_take_initial_focus_and_supports_theme_and_keyboard(qtbot
 
     assert popup.testAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
     assert popup.windowFlags() & Qt.WindowType.WindowDoesNotAcceptFocus
+    popup.set_theme("light")
     light = popup.styleSheet()
+    assert "#ffffff" in light
     popup.set_theme("dark")
     assert popup.styleSheet() != light
     assert "#202329" in popup.styleSheet()

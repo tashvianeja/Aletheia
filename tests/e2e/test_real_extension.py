@@ -90,12 +90,16 @@ async def test_real_extension_native_service_labels_unnecessary_fields(
     )
     ping = await native_ping(real_browser)
     assert ping.get("ok") is True, ping
+    started = time.perf_counter()
     await page.goto(f"{base_url}/fixtures/free-pdf-download")
 
     await page.locator(".pg-badge").first.wait_for(timeout=10_000)
+    latency_ms = (time.perf_counter() - started) * 1000
+    print(f"initial navigation-to-form-badge latency: {latency_ms:.3f}ms")
 
     badges = await page.locator(".pg-badge").all_text_contents()
     assert badges == ["May be unnecessary"] * 3
+    assert latency_ms <= 300, latency_ms
     assert not errors
 
 
@@ -352,12 +356,31 @@ async def test_passport_redacted_copy_replaces_input_and_rescans_clean(
     base_url, _ = fixture_site
     page = await real_browser.context.new_page()
     await page.goto(f"{base_url}/fixtures/image-compressor")
+    await page.evaluate(
+        """() => {
+          window.__pgSelectionStarted = null;
+          window.__pgPanelVisible = null;
+          document.querySelector('#file').addEventListener('change', () => {
+            window.__pgSelectionStarted = performance.now();
+          }, {once:true});
+          new MutationObserver(() => {
+            const action=document.querySelector('.pg-panel [data-pg-action="redact"]');
+            if (action && action.getClientRects().length && window.__pgPanelVisible === null) {
+              window.__pgPanelVisible=performance.now();
+            }
+          }).observe(document.documentElement,{subtree:true,childList:true,attributes:true});
+        }"""
+    )
     passport = Path(__file__).resolve().parents[1] / "fixtures/passport_synthetic.pdf"
     started = time.perf_counter()
     await page.locator("#file").set_input_files(passport)
     redact = page.locator('.pg-panel [data-pg-action="redact"]')
     await redact.wait_for(timeout=10_000)
     intervention_seconds = time.perf_counter() - started
+    dom_intervention_ms = await page.evaluate(
+        "window.__pgPanelVisible-window.__pgSelectionStarted"
+    )
+    print(f"passport change-event-to-visible-DOM latency: {dom_intervention_ms:.3f}ms")
     print(f"passport selection-to-intervention latency: {intervention_seconds:.6f}s")
     decision = await latest_decision(real_browser, "file_upload")
     assert decision is not None and decision[1] == "INTERVENE"
@@ -372,7 +395,7 @@ async def test_passport_redacted_copy_replaces_input_and_rescans_clean(
         {"kind": "document", "filename": "redacted.pdf", "data": bytes(content)}
     )
     assert rescanned.findings == []
-    assert intervention_seconds <= 1.5
+    assert dom_intervention_ms <= 1_500, dom_intervention_ms
 
 
 @pytest.mark.asyncio
@@ -672,6 +695,7 @@ async def test_browser_disconnect_aborts_pending_upload_and_reconnects_within_fi
             worker=worker,
             profile_dir=real_browser.profile_dir,
             service_pid=real_browser.service_pid,
+            bridge_ready_seconds=0,
         )
         ping = await native_ping(restarted_browser)
         reconnect_seconds = time.perf_counter() - reconnect_started

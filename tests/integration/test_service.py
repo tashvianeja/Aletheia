@@ -8,7 +8,13 @@ from typing import Any
 import pytest
 
 from privacy_guardian.config import Settings
-from privacy_guardian.core.events import FormField, FormObservedEvent, Requester
+from privacy_guardian.core.events import (
+    DataCategory,
+    FileUploadEvent,
+    FormField,
+    FormObservedEvent,
+    Requester,
+)
 from privacy_guardian.core.service import Service
 from privacy_guardian.storage import Store
 
@@ -345,6 +351,34 @@ async def test_upload_analysis_preparation_is_idempotent_for_live_worker(service
     service.prepare_upload_analysis()
     await asyncio.sleep(0)
     assert pool.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_partial_upload_never_silently_ignores_unchecked_content(service: Service) -> None:
+    partial = FileUploadEvent(
+        requester=Requester(origin="https://partial.example", purpose="file_converter"),
+        partial=True,
+        size_bytes=60 * 1024**2,
+    )
+    partial_decision = await service.process_event(partial)
+    assert partial_decision.outcome.value == "INFORM"
+    assert any(
+        "partial" in rationale.lower() or "omitted" in rationale.lower()
+        for rationale in partial_decision.rationale
+    )
+
+    high_impact = FileUploadEvent(
+        requester=Requester(origin="https://compress.example", purpose="file_converter"),
+        partial=True,
+        size_bytes=60 * 1024**2,
+        data_categories=[DataCategory.GOVERNMENT_ID_PASSPORT],
+    )
+    high_impact_decision = await service.process_event(high_impact)
+    assert high_impact_decision.outcome.value == "INTERVENE"
+    assert any(
+        "partial" in rationale.lower() or "omitted" in rationale.lower()
+        for rationale in high_impact_decision.rationale
+    )
 
 
 @pytest.mark.asyncio

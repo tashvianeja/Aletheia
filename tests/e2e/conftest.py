@@ -6,6 +6,7 @@ import os
 import sqlite3
 import sys
 import tempfile
+import time
 from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,6 +33,7 @@ class RealBrowser:
     worker: Worker
     profile_dir: Path
     service_pid: int
+    bridge_ready_seconds: float
 
 
 async def stop_subprocess(process: asyncio.subprocess.Process, timeout: float = 5) -> None:
@@ -47,11 +49,23 @@ async def stop_subprocess(process: asyncio.subprocess.Process, timeout: float = 
 
 
 def kill_profile_processes(profile_dir: Path) -> None:
-    owned: list[psutil.Process] = []
+    matching: list[psutil.Process] = []
     for process in psutil.Process().children(recursive=True):
         with contextlib.suppress(psutil.NoSuchProcess, psutil.AccessDenied):
             if str(profile_dir) in " ".join(process.cmdline()):
-                owned.append(process)
+                matching.append(process)
+    matching_pids = {process.pid for process in matching}
+    roots: list[psutil.Process] = []
+    for process in matching:
+        with contextlib.suppress(psutil.NoSuchProcess, psutil.AccessDenied):
+            if process.ppid() not in matching_pids:
+                roots.append(process)
+    owned_by_pid: dict[int, psutil.Process] = {process.pid: process for process in roots}
+    for root in roots:
+        with contextlib.suppress(psutil.NoSuchProcess, psutil.AccessDenied):
+            for descendant in root.children(recursive=True):
+                owned_by_pid[descendant.pid] = descendant
+    owned = list(owned_by_pid.values())
     for process in reversed(owned):
         with contextlib.suppress(psutil.NoSuchProcess, psutil.AccessDenied):
             process.kill()
@@ -92,7 +106,7 @@ def installed_native_host(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> It
         onboarding_complete=True,
         analysis_timeout_seconds=20,
     )
-    registry_backup: dict[str, str | None] = {}
+    registry_backup: dict[str, list[tuple[str, object, int]] | None] = {}
     if sys.platform == "win32":
         import winreg
 
@@ -106,7 +120,15 @@ def installed_native_host(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> It
             key_path = rf"Software\{vendor}\NativeMessagingHosts\{installation.HOST_NAME}"
             try:
                 with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path) as key:
-                    registry_backup[key_path] = str(winreg.QueryValueEx(key, "")[0])
+                    values: list[tuple[str, object, int]] = []
+                    index = 0
+                    while True:
+                        try:
+                            values.append(winreg.EnumValue(key, index))
+                            index += 1
+                        except OSError:
+                            break
+                    registry_backup[key_path] = values
             except FileNotFoundError:
                 registry_backup[key_path] = None
     try:
@@ -116,12 +138,13 @@ def installed_native_host(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> It
         if sys.platform == "win32":
             import winreg
 
-            for key_path, previous in registry_backup.items():
+            for key_path, previous_values in registry_backup.items():
                 with contextlib.suppress(FileNotFoundError):
                     winreg.DeleteKey(winreg.HKEY_CURRENT_USER, key_path)
-                if previous is not None:
+                if previous_values is not None:
                     with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path) as key:
-                        winreg.SetValueEx(key, "", 0, winreg.REG_SZ, previous)
+                        for name, value, value_type in previous_values:
+                            winreg.SetValueEx(key, name, 0, value_type, value)
         database = settings.data_dir / "guardian.sqlite3"
         if database.exists():
             with sqlite3.connect(database) as connection:
@@ -179,6 +202,7 @@ async def real_browser(
         else:
             raise RuntimeError("service did not bind its control socket")
 
+        bridge_started = time.perf_counter()
         playwright = await async_playwright().start()
         extension = ROOT / "extension"
         context = await playwright.chromium.launch_persistent_context(
@@ -199,6 +223,14 @@ async def real_browser(
         )
         extension_id = worker.url.split("/")[2]
         assert extension_id == installation.CHROME_ID
+        native_ready = await worker.evaluate(
+            "() => native('ping',{browser:'chromium-e2e-ready'},5000)"
+        )
+        assert native_ready.get("status") == "ready", native_ready
+        assert native_ready.get("protocol") == 1, native_ready
+        bridge_ready_seconds = time.perf_counter() - bridge_started
+        print(f"cold Chromium native-bridge readiness: {bridge_ready_seconds:.6f}s")
+        assert bridge_ready_seconds <= 5
         yield RealBrowser(
             context=context,
             data_dir=settings.data_dir,
@@ -206,6 +238,7 @@ async def real_browser(
             worker=worker,
             profile_dir=profile_dir,
             service_pid=service.pid,
+            bridge_ready_seconds=bridge_ready_seconds,
         )
     finally:
         if context is not None:
