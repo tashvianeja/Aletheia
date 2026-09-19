@@ -29,8 +29,8 @@ def test_path_monitor_routes_relevant_changes_only(tmp_path: Path, monkeypatch) 
     monitor = PathMonitor([tmp_path], lambda: callbacks.append("changed"))
     monitor.start()
     handler = captured[0]
-    handler.on_any_event(SimpleNamespace(event_type="opened"))
-    handler.on_any_event(SimpleNamespace(event_type="modified"))
+    handler.on_any_event(SimpleNamespace(event_type="opened", src_path=str(tmp_path / "x")))
+    handler.on_any_event(SimpleNamespace(event_type="modified", src_path=str(tmp_path / "x")))
     monitor.stop()
 
     assert captured[1:] == [str(tmp_path), True]

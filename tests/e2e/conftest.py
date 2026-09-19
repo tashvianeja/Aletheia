@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import os
+import sqlite3
 import sys
 import tempfile
 from collections.abc import AsyncIterator, Iterator
@@ -28,6 +29,8 @@ class RealBrowser:
     data_dir: Path
     extension_id: str
     worker: Worker
+    profile_dir: Path
+    service_pid: int
 
 
 @pytest_asyncio.fixture
@@ -94,6 +97,22 @@ def installed_native_host(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> It
                 if previous is not None:
                     with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path) as key:
                         winreg.SetValueEx(key, "", 0, winreg.REG_SZ, previous)
+        database = settings.data_dir / "guardian.sqlite3"
+        if database.exists():
+            with sqlite3.connect(database) as connection:
+                prefixes = {
+                    str(row[0])[:8] + "-"
+                    for row in connection.execute(
+                        "SELECT id FROM events WHERE event_type='file_upload'"
+                    )
+                }
+            artifact_folder = Path.home() / "Downloads/PrivacyGuardian"
+            if artifact_folder.is_dir():
+                for artifact in artifact_folder.iterdir():
+                    if artifact.is_file() and any(
+                        artifact.name.startswith(prefix) for prefix in prefixes
+                    ):
+                        artifact.unlink()
         short_root.cleanup()
 
 
@@ -143,6 +162,7 @@ async def real_browser(
         args=[
             f"--disable-extensions-except={extension}",
             f"--load-extension={extension}",
+            "--host-resolver-rules=MAP tracker-one.test 127.0.0.1,MAP ads-two.test 127.0.0.1,MAP metrics-three.test 127.0.0.1",
         ],
         env=environment,
     )
@@ -159,9 +179,12 @@ async def real_browser(
             data_dir=settings.data_dir,
             extension_id=extension_id,
             worker=worker,
+            profile_dir=tmp_path / "chromium-profile",
+            service_pid=service.pid,
         )
     finally:
-        await context.close()
+        with contextlib.suppress(Exception):
+            await context.close()
         await playwright.stop()
         service.terminate()
         await service.wait()

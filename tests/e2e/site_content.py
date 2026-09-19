@@ -105,7 +105,7 @@ TERMS = """
 
 TRACKER_SCRIPT = """
 for (const host of ['tracker-one.test','ads-two.test','metrics-three.test']) {
- const img=document.createElement('img'); img.width=1; img.height=1; img.src='https://'+host+'/pixel.gif?uid=synthetic-id'; document.body.append(img);
+ const img=document.createElement('img'); img.width=1; img.height=1; img.src='http://'+host+':'+location.port+'/tracker-pixel?uid=synthetic-id'; document.body.append(img);
 }
 localStorage.setItem('cross_site_id','00000000-0000-4000-8000-000000000001');
 const canvas=document.createElement('canvas'); canvas.getContext('2d').fillText('synthetic',2,2); canvas.toDataURL();
@@ -147,6 +147,12 @@ PAGES: Mapping[str, str] = {
     "clean-blog": page(
         "Clean Gardening Blog", "<article><p>How to grow synthetic tomatoes.</p></article>"
     ),
+    "tracker-hidden-retention": page(
+        "Tracker Hidden Retention",
+        cmp_body("onetrust", hidden_reject=True)
+        + "<a rel='privacy-policy' href='/privacy-retention'>Privacy policy</a>",
+        CMP_SCRIPT + TRACKER_SCRIPT,
+    ),
     "hidden-reject-cmp": page(
         "Hidden Reject Shop", cmp_body("cookiebot", hidden_reject=True), CMP_SCRIPT
     ),
@@ -180,6 +186,16 @@ PRIVACY_POLICY = page(
     "Synthetic Privacy Policy",
     "<p>We collect precise location for personalised advertising and share it with advertising partners. "
     "Account records may remain in backups after deletion.</p>",
+)
+
+CLEAN_PRIVACY_POLICY = page(
+    "Clean Synthetic Privacy Policy",
+    "<p>We collect no personal data and do not share data with third parties. Records are not retained.</p>",
+)
+
+RETENTION_POLICY = page(
+    "Synthetic Retention Policy",
+    "<p>Backups may retain account data after account deletion.</p>",
 )
 
 TERMS_DOCUMENT = page("Synthetic Terms and Conditions", TERMS)

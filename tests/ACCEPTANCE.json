@@ -18,8 +18,8 @@
     "FR-16": ["unit/storage/test_store.py"],
     "FR-17": ["integration/test_ipc_transport.py", "integration/test_installation.py", "unit/core/test_ipc_protocol.py", "e2e/test_real_extension.py"],
     "FR-18": ["unit/ui/test_onboarding_deepcheck.py"],
-    "FR-19": ["integration/test_installation.py", "packaged installer smoke tests pending"],
-    "FR-20": ["unit/util/test_logging.py", "integration/test_service.py", "browser-termination resilience pending"]
+    "FR-19": ["integration/test_installation.py", "packaging/test_macos_minimum_version.py", "packaging/verify_packaged_installation.py"],
+    "FR-20": ["unit/util/test_logging.py", "integration/test_service.py", "e2e/test_real_extension.py"]
   },
   "end_to_end_scenarios": {
     "1": "real Chromium, native host, service, redaction/rescan/swap and cancel covered; 1.5 s latency currently fails",
@@ -31,14 +31,14 @@
     "7": "real native-service Deep Check reports unnecessary precise location for recipe fixture",
     "8": "real Chromium hidden-reject analysis and desktop action leave only necessary cookie",
     "9": "real Chromium tracker action removes three tracker cookies, preserves unrelated storage, adds persistent DNR rules",
-    "10": "injected macOS grant/revocation and app aggregation covered; scripted real grant remains platform-marked",
+    "10": "injected macOS grant/revocation and app aggregation covered; scripted real OS grant verification remains pending",
     "11": "injected Windows ConsentStore and executable aggregation covered; isolated HKCU platform test present",
     "12": "macOS and Windows startup/access breadth aggregation covered",
     "13": "clipboard writer/reader/allow-list/cloud-sync and persistence redaction covered",
-    "14": "fixture context present; Deep Check integration pending",
+    "14": "real browser composite returns exactly tracking, consent and retention findings; clean blog returns all clean marks",
     "15": "learning and preference round-trip covered",
-    "16": "pending browser termination mid-upload and five-second reconnect test",
+    "16": "graceful close reconnects within five seconds; instrumented abrupt Chromium kill during file_finish persists an aborted event and service survives",
     "17": "native host install/stdio/uninstall integration covered; packaged installer lifecycle pending",
-    "18": "five-minute full desktop measurement passes 25% tolerance: tray 0.588 s, warm RSS 141.47 MiB, CPU 1.245%"
+    "18": "five-minute native Cocoa measurement passes raw targets: tray 2.510 s, warm RSS 131.66 MiB, peak 151.83 MiB, CPU 0.101%"
   }
 }

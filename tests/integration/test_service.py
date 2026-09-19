@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 
 from privacy_guardian.config import Settings
+from privacy_guardian.core.events import FormField, FormObservedEvent, Requester
 from privacy_guardian.core.service import Service
 from privacy_guardian.storage import Store
 
@@ -36,6 +37,34 @@ class GatePool(InlinePool):
             self.started.set()
             await asyncio.wait_for(self.release.wait(), 2)
         return function(*args)
+
+
+class FinishGatePool(InlinePool):
+    def __init__(self) -> None:
+        self.finish_started = asyncio.Event()
+        self.release_finish = asyncio.Event()
+
+    async def run(self, function: Any, *args: Any) -> Any:
+        if function.__name__ == "finish_upload":
+            self.finish_started.set()
+            await asyncio.wait_for(self.release_finish.wait(), 2)
+        return function(*args)
+
+
+class PreparationPool(InlinePool):
+    def __init__(self) -> None:
+        self._pool: object | None = None
+        self.started = asyncio.Event()
+        self.release = asyncio.Event()
+        self.calls = 0
+
+    async def run(self, function: Any, *args: Any) -> Any:
+        assert function.__name__ == "warm_analysis"
+        self.calls += 1
+        self.started.set()
+        await asyncio.wait_for(self.release.wait(), 2)
+        self._pool = object()
+        return {"ner_ready": True}
 
 
 @pytest.fixture
@@ -216,6 +245,106 @@ async def test_policy_and_terms_cache_are_separated_for_identical_text(service: 
     assert "collects" in policy["result"]["policy"]["profile"]
     assert "nothing_unusual" in terms["result"]["terms"]["profile"]
     assert "collects" not in terms["result"]["terms"]["profile"]
+
+
+@pytest.mark.asyncio
+async def test_disconnect_during_file_finish_tombstones_late_analysis(service: Service) -> None:
+    pool = FinishGatePool()
+    service.pool = pool  # type: ignore[assignment]
+    notifications: list[str] = []
+    service.decision_listeners.append(lambda decision: notifications.append(decision.event_id))
+    session = "browser-session-that-closes"
+    content = b"Email: interrupted@example.test"
+    requester = {"origin": "https://compress.example", "display_name": "Compressor"}
+    started = await service.handle_message(
+        request(
+            "start-interrupted",
+            "file_start",
+            {
+                "_session": session,
+                "upload_id": "interrupted",
+                "filename": "interrupted.txt",
+                "size": len(content),
+                "mime": "text/plain",
+                "requester": requester,
+            },
+        )
+    )
+    assert started["ok"] is True
+    chunked = await service.handle_message(
+        request(
+            "chunk-interrupted",
+            "file_chunk",
+            {
+                "_session": session,
+                "upload_id": "interrupted",
+                "sequence": 0,
+                "data": base64.b64encode(content).decode(),
+            },
+        )
+    )
+    assert chunked["ok"] is True
+    finish = asyncio.create_task(
+        service.handle_message(
+            request(
+                "finish-interrupted",
+                "file_finish",
+                {"_session": session, "upload_id": "interrupted"},
+            )
+        )
+    )
+    await asyncio.wait_for(pool.finish_started.wait(), 2)
+    disconnected = await service.handle_message(
+        request("disconnect-interrupted", "disconnect", {"_session": session})
+    )
+    pool.release_finish.set()
+    finished = await finish
+
+    assert disconnected["ok"] is True
+    assert finished["ok"] is True and finished["result"]["aborted"] is True
+    assert service.store.history()[0]["status"] == "aborted"
+    assert notifications == []
+
+
+@pytest.mark.asyncio
+async def test_form_observation_persists_badges_without_desktop_notification(
+    service: Service,
+) -> None:
+    notifications: list[str] = []
+    service.decision_listeners.append(lambda decision: notifications.append(decision.event_id))
+    event = FormObservedEvent(
+        requester=Requester(
+            origin="https://downloads.example/free-guide",
+            display_name="Free Guide",
+            purpose="free_download",
+            purpose_confidence=1,
+        ),
+        fields=[FormField(field_id="phone", autocomplete="tel")],
+    )
+
+    decision = await service.process_event(event)
+
+    assert decision.outcome.value == "INFORM"
+    assert service.store.history()[0]["decision"]["event_id"] == event.id
+    assert notifications == []
+
+
+@pytest.mark.asyncio
+async def test_upload_analysis_preparation_is_idempotent_for_live_worker(service: Service) -> None:
+    pool = PreparationPool()
+    service.pool = pool  # type: ignore[assignment]
+
+    service.prepare_upload_analysis()
+    service.prepare_upload_analysis()
+    await asyncio.wait_for(pool.started.wait(), 2)
+    assert pool.calls == 1
+    pool.release.set()
+    assert service._upload_preparation is not None
+    await service._upload_preparation
+
+    service.prepare_upload_analysis()
+    await asyncio.sleep(0)
+    assert pool.calls == 1
 
 
 @pytest.mark.asyncio

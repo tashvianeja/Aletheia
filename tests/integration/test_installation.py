@@ -162,6 +162,9 @@ async def test_installed_native_host_performs_real_stdio_to_authenticated_servic
 def test_uninstall_removes_only_known_product_files(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    from privacy_guardian.llm import client as llm_client
+
+    monkeypatch.setattr(llm_client, "delete_api_key", lambda: None)
     locations = isolated_locations(tmp_path / "browser-config")
     monkeypatch.setattr(installation, "manifest_locations", lambda: locations)
     registry = isolate_windows_registry(monkeypatch)

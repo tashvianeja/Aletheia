@@ -4,13 +4,20 @@ from dataclasses import dataclass, field
 
 from aiohttp import web
 
-from tests.e2e.site_content import PAGES, PRIVACY_POLICY, TERMS_DOCUMENT
+from tests.e2e.site_content import (
+    CLEAN_PRIVACY_POLICY,
+    PAGES,
+    PRIVACY_POLICY,
+    RETENTION_POLICY,
+    TERMS_DOCUMENT,
+)
 
 
 @dataclass
 class FixtureState:
     submissions: list[dict[str, str]] = field(default_factory=list)
     uploads: list[tuple[str, str, bytes]] = field(default_factory=list)
+    tracker_hits: list[str] = field(default_factory=list)
 
 
 def create_fixture_app(state: FixtureState | None = None) -> web.Application:
@@ -42,19 +49,31 @@ def create_fixture_app(state: FixtureState | None = None) -> web.Application:
     async def state_response(_: web.Request) -> web.Response:
         return web.json_response({"submissions": fixture_state.submissions})
 
-    async def privacy(_: web.Request) -> web.Response:
-        return web.Response(text=PRIVACY_POLICY, content_type="text/html")
+    async def privacy(request: web.Request) -> web.Response:
+        content = CLEAN_PRIVACY_POLICY if request.host.startswith("localhost:") else PRIVACY_POLICY
+        return web.Response(text=content, content_type="text/html")
 
     async def terms(_: web.Request) -> web.Response:
         return web.Response(text=TERMS_DOCUMENT, content_type="text/html")
 
+    async def privacy_retention(_: web.Request) -> web.Response:
+        return web.Response(text=RETENTION_POLICY, content_type="text/html")
+
     async def favicon(_: web.Request) -> web.Response:
         return web.Response(status=204)
+
+    async def tracker_pixel(request: web.Request) -> web.Response:
+        fixture_state.tracker_hits.append(request.host.split(":", 1)[0])
+        response = web.Response(body=b"GIF89a", content_type="image/gif")
+        response.set_cookie("synthetic_uid", "fixture", max_age=86400, samesite="Lax")
+        return response
 
     app.router.add_get("/fixtures/{name}", fixture)
     app.router.add_get("/privacy", privacy)
     app.router.add_get("/terms", terms)
+    app.router.add_get("/privacy-retention", privacy_retention)
     app.router.add_get("/favicon.ico", favicon)
+    app.router.add_get("/tracker-pixel", tracker_pixel)
     app.router.add_post("/received", received)
     app.router.add_get("/_state", state_response)
     return app
