@@ -22,7 +22,7 @@
     "FR-20": ["unit/util/test_logging.py", "integration/test_service.py", "e2e/test_real_extension.py"]
   },
   "end_to_end_scenarios": {
-    "1": "real Chromium, native host, service, redaction/rescan/swap and cancel covered; 1.5 s latency currently fails",
+    "1": "real Chromium, native host, service, redaction/rescan/swap and cancel covered; connected file-change to visible warning is 1.095 s, while the 2.386 s cold-first-action measurement remains a documented target miss",
     "2": "real Chromium government upload is at most INFORM and reaches the fixture server",
     "3": "real Chromium strip-metadata action uploads a GPS-free replacement",
     "4": "real Chromium badges, review highlights, continue, submission and persistence redaction covered",
@@ -34,7 +34,7 @@
     "10": "injected macOS grant/revocation and app aggregation covered; scripted real OS grant verification remains pending",
     "11": "injected Windows ConsentStore and executable aggregation covered; isolated HKCU platform test present",
     "12": "macOS and Windows startup/access breadth aggregation covered",
-    "13": "clipboard writer/reader/allow-list/cloud-sync and persistence redaction covered",
+    "13": "clipboard writer/reader/allow-list/cloud-sync and persistence redaction covered; the native macOS write through the spawned analysis worker is 185.7 ms",
     "14": "real browser composite returns exactly tracking, consent and retention findings; clean blog returns all clean marks",
     "15": "learning and preference round-trip covered",
     "16": "graceful close reconnects within five seconds; instrumented abrupt Chromium kill during file_finish persists an aborted event and service survives",
