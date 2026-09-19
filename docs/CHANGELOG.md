@@ -9,10 +9,11 @@ All notable changes will be documented here. This project has not produced a ver
 - Typed privacy events, category-only findings, decision engine, local SQLite storage contract, and authenticated IPC contracts.
 - Local PII/document, form, consent, policy/terms, purpose, and tracking analysis modules.
 - Optional, disabled-by-default LLM client with a sanitization gate and OS-keychain credentials.
-- macOS and Windows adapter implementations plus Qt UI components, awaiting platform verification.
-- WebExtension source for Chromium-family browsers and Firefox, awaiting native-host and browser E2E verification.
+- macOS and Windows adapter implementations plus Qt UI components, with injected/UI coverage and limited real macOS checks.
+- WebExtension source for Chromium-family browsers and Firefox, with a verified Chromium native-host handshake and form-badge fixture path.
+- macOS packaging scripts and a compatible static Tesseract 5.5.3 / Leptonica 1.87 / libpng 1.6.58 build path targeting macOS 13.
 - Developer, security, platform, detector, LLM, performance, and product documentation grounded in current code/evidence.
 
 ### Verification pending
 
-- Full test suite/coverage gate, Playwright browser flow, real macOS and Windows checks, CI, fresh-clone validation, packaging, installer/uninstaller smoke tests, screenshots, and release artifacts.
+- Full test suite/coverage gate, remaining Playwright scenarios, real TCC/screen and Windows checks, green CI, fresh-clone validation, final rebuild, installer/uninstaller smoke tests, and release artifacts.

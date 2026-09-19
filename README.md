@@ -4,27 +4,37 @@ Privacy Guardian is a local-first background app for macOS and Windows that help
 
 The app can classify sensitive categories in documents and forms, inspect consent and tracking signals, and relate a request to the apparent purpose of a site or application. It presents one of three outcomes: **Ignore**, **Inform**, or **Intervene**, with an explanation and an action where one is available.
 
-This repository is an in-progress initial build. The core and analysis test suites have evidence recorded in `docs/PLAN.md`; a complete release build, browser end-to-end run, real Windows run, and fresh-clone verification are still pending. Treat the installation and packaging sections below as build instructions, not a claim that release artifacts exist today.
+This repository is an in-progress initial build. Core, analysis, UI/platform, IPC, and one real Chromium native-host/browser path have independent evidence recorded in `docs/PLAN.md`; the full acceptance suite, real Windows execution, fresh-clone verification, and final release rebuild are still pending. Treat the installation and packaging sections below as build instructions, not a claim that release artifacts exist today.
 
 ## Feature matrix
 
 | Capability | Browser extension | macOS desktop | Windows desktop | Offline | Optional LLM-assisted |
 |---|---:|---:|---:|---:|---:|
-| Document category detection and redaction | Planned bridge | — | — | Yes | No |
-| Form field semantics | Planned bridge | — | — | Yes | No |
-| Policy and terms clause extraction | Planned bridge | — | — | Yes | Policy refinement only |
-| Consent-banner analysis | Planned bridge | — | — | Yes | No |
-| Tracker and fingerprinting signal analysis | Planned bridge | — | — | Yes | No |
-| Permission, startup, and broad-access observation | — | Implemented adapter; real-run verification pending | Implemented adapter; Windows verification pending | Yes | No |
-| Clipboard and screen-access signals | — | Implemented adapter; verification pending | Implemented adapter; Windows verification pending | Yes | No |
-| Decision engine, preferences, and local history | Service API | Service API | Service API | Yes | Explanation polish only |
-| Deep Check | Service API | UI present; integration verification pending | UI present; integration verification pending | Yes | Narrative only |
+| Document category detection and redaction | Native-host path wired; one Chromium flow verified | — | — | Yes | No |
+| Form field semantics | Native-host path wired; three badges verified on fixture | — | — | Yes | No |
+| Policy and terms clause extraction | Wired; broader browser E2E pending | — | — | Yes | Policy refinement only |
+| Consent-banner analysis | Wired; broader browser E2E pending | — | — | Yes | No |
+| Tracker and fingerprinting signal analysis | Wired; blocking behavior E2E pending | — | — | Yes | No |
+| Permission, startup, and broad-access observation | — | Adapter and UI tests pass; live grant/revocation pending | Adapter test passes; physical/CI verification pending | Yes | No |
+| Clipboard and screen-access signals | — | Foreground-change proxy; see limitations | Foreground-change proxy; see limitations | Yes | No |
+| Decision engine, preferences, and local history | Service API wired | Service/UI wired | Service/UI wired; platform verification pending | Yes | Explanation polish only |
+| Deep Check | Context supplied by extension | UI rendered; integration flow pending | UI rendered; Windows validation pending | Yes | Narrative only |
 
-“Planned bridge” means the extension/service end-to-end path has not yet been independently verified. A dash means that the capability is outside that surface.
+The verified Chromium fixture result is a native-host handshake and three `free-download` form badges. It does not establish all browser actions or scenarios. A dash means that the capability is outside that surface.
 
 ## Screenshots
 
-Screenshot artifacts are not yet generated. When the UI and browser test runs produce them, they will be referenced from `docs/img/`. Until then, see the popup and dashboard source in `src/privacy_guardian/ui/`; no image in this README should be read as evidence of a tested flow.
+These Cocoa-rendered UI snapshots are checked into `docs/img/` and are readable visual evidence of the rendered views. They are not evidence of a live macOS permission grant or an end-to-end browser decision.
+
+| Intervention | Dashboard |
+|---|---|
+| ![Intervention popup](docs/img/intervention-popup.png) | ![Dashboard](docs/img/dashboard.png) |
+
+| Onboarding | Deep Check |
+|---|---|
+| ![Onboarding](docs/img/onboarding.png) | ![Deep Check](docs/img/deep-check.png) |
+
+System Settings is intentionally not screenshot: its application lists expose user-installed app names. The onboarding screen provides the permission guidance instead.
 
 ## Requirements
 
@@ -32,7 +42,7 @@ Supported targets are macOS 13 or later (Apple Silicon or Intel) and Windows 10 
 
 Source work requires Python 3.12 (the project constrains Python to `>=3.12,<3.13`), [uv](https://docs.astral.sh/uv/), and Tesseract for OCR. Browser integration targets Chrome, Edge, Brave, and Firefox through Manifest V3-style native messaging; installation and an end-to-end browser handshake are pending verification.
 
-On macOS, Homebrew, Xcode Command Line Tools, and `create-dmg` are needed for the intended packaging path. On Windows, use winget for prerequisites and install Inno Setup before attempting an installer build. The repository does not currently contain published installers.
+On macOS, Homebrew, Xcode Command Line Tools, and `create-dmg` are needed for the packaging path. A macOS packaging build additionally compiles a macOS-13-compatible static Tesseract bundle, which needs CMake, a compiler, Autotools, libtool, pkg-config, and network access for its source downloads. On Windows, use winget for prerequisites and install Inno Setup before attempting an installer build. The repository does not currently contain published installers.
 
 ## Install from release
 
@@ -47,13 +57,13 @@ macOS monitoring may require Full Disk Access and Accessibility permission. Use 
 
 ## Build from source
 
-These are the repository’s declared commands. They have **not** yet been verified by a fresh-clone worker, and the packaging helper scripts/artifacts are still pending; use the development path first.
+These are the repository’s declared commands. They have **not** yet been verified by a fresh-clone worker. A first macOS app/DMG build passed codesign, packaged smoke, and UDZO image checks, but it is stale and must be rebuilt after current changes; Windows packaging remains pending.
 
 macOS:
 
 ```sh
 xcode-select --install
-brew install uv tesseract create-dmg
+brew install uv tesseract create-dmg cmake autoconf automake libtool pkg-config
 uv sync
 make setup
 make run
@@ -74,7 +84,7 @@ make build-extension
 make build-win
 ```
 
-`make build-mac` and `make build-win` name intended output paths under `dist/`; do not expect them to work until the corresponding packaging scripts are present and CI/platform smoke tests pass. For non-English OCR, install the appropriate Tesseract language data in the host operating system; bundling language data for installers is not yet verified.
+`make build-extension` writes `dist/privacy-guardian-chromium.zip` and `dist/privacy-guardian-firefox.zip`. `make build-mac` builds `dist/PrivacyGuardian.app` and `dist/PrivacyGuardian-<version>.dmg`; it signs ad hoc by default, or uses `CODESIGN_IDENTITY` and optional `NOTARY_PROFILE`. `make build-win` invokes PyInstaller and Inno Setup on Windows. A final rebuild and installer smoke checks remain required before distributing any artifact. For non-English OCR, install the appropriate Tesseract language data in the host operating system; English and OSD data are the currently bundled packaging target.
 
 ## Run in development
 
@@ -84,9 +94,23 @@ Start the desktop process with:
 make run
 ```
 
-The console entry point is `privacy-guardian`; the native host entry point is `privacy-guardian-host`. The intended diagnostic command is `privacy-guardian --diagnose`, but that CLI behavior is not independently verified yet.
+The console entry point is `privacy-guardian`; the native host entry point is `privacy-guardian-host`. Diagnose a profile without starting the UI with:
 
-After `make build-extension`, load the unpacked output in the target browser’s developer-extension page and configure its native-messaging host registration. Those extension package and registration instructions will be added when the bridge files land; no browser/service reconnect claim has been verified. Runtime data defaults to `~/Library/Application Support/PrivacyGuardian` on macOS, `%APPDATA%\\PrivacyGuardian` on Windows, and `$XDG_DATA_HOME/PrivacyGuardian` on other systems. Logs are configured below that data directory.
+```sh
+uv run privacy-guardian --diagnose
+```
+
+The report contains platform/Python information, OCR availability, native-host registrations, detected browsers, local database counts, token presence, and permission status. `--smoke-test` starts an isolated UI smoke path, and `--no-autostart` suppresses autostart for that invocation.
+
+For a development registration, start the desktop service then run:
+
+```sh
+uv run privacy-guardian --install-native-host
+```
+
+Load the matching unpacked extension source in the browser’s developer-extension view. Chromium-family browsers use ID `bfdjphkbgihhbonhnmjbbfhckdddonob`; Firefox uses `privacy-guardian@privacyguardian.local`. The installer writes native-host manifests for Chrome, Edge, Brave, and Firefox. Chromium native-host handshake plus a three-badge fixture path were verified; reconnection and the remaining browser scenarios remain pending.
+
+Runtime data defaults to `~/Library/Application Support/PrivacyGuardian` on macOS, `%APPDATA%\\PrivacyGuardian` on Windows, and `$XDG_DATA_HOME/PrivacyGuardian` on other systems. Logs are configured below that data directory.
 
 ## Testing
 
@@ -100,7 +124,9 @@ make typecheck
 make check
 ```
 
-The known independently reported baseline is 72 analysis/engine tests passing in 2.05 seconds, with strict mypy clean for 27 files and Ruff clean at commit `bb753bf`. The broader reported test state was 107 passing and one failing redaction-context test; that failure is being fixed. `make check`, Playwright browser tests, platform tests, coverage targets, CI, and fresh-clone commands remain unverified. Use `-m macos`, `-m windows`, `-m e2e`, `-m perf`, and `-m llm` only in an environment that supports those markers; real LLM tests require an explicitly configured keychain key.
+Independent evidence includes 115 analysis/engine/LLM/util tests passing; 66 new integration/platform tests passing with one Windows skip; 39 UI tests passing with two platform skips; one real FSEvents test passing; and a Chromium native-host handshake plus three form badges on the free-download fixture. Ruff and strict mypy were clean for 70 macOS source modules; Bandit medium-and-above was clean. These are partial results, not a full `make check` claim.
+
+The current combined coverage report was 48% overall and 70.9% for the scoped core/detector/engine/storage set before later UI/platform additions, below the final 70% overall/85% scoped gates. Use `-m macos`, `-m windows`, `-m e2e`, `-m perf`, and `-m llm` only in an environment that supports those markers. Current outstanding checks include full coverage, remaining 18 browser scenarios, real Windows CI, final macOS rebuild/install/uninstall smoke, and fresh-clone verification. CI run [35443041292](https://github.com/tashvianeja/Privacy-Guardian/actions/runs/35443041292) has failures under repair and is not green evidence.
 
 ## Configuration
 
@@ -117,10 +143,10 @@ Settings are loaded from `settings.toml` in the data directory, then overridden 
 | `hotkey` | `PRIVACY_GUARDIAN_HOTKEY` | `"Ctrl+Shift+P"` | Configured hotkey text. |
 | `log_level` | `PRIVACY_GUARDIAN_LOG_LEVEL` | `"INFO"` | Application logging level. |
 | `reject_optional_cookies` | `PRIVACY_GUARDIAN_REJECT_OPTIONAL_COOKIES` | `true` | Preference for optional-cookie handling. |
-| `allowed_extension_ids` | `PRIVACY_GUARDIAN_ALLOWED_EXTENSION_IDS` | `["privacy-guardian@privacyguardian.local"]` | Native-host caller allowlist. |
+| `allowed_extension_ids` | `PRIVACY_GUARDIAN_ALLOWED_EXTENSION_IDS` | `["privacy-guardian@privacyguardian.local", "bfdjphkbgihhbonhnmjbbfhckdddonob"]` | Native-host caller allowlist. |
 | `clipboard_allowlist` | `PRIVACY_GUARDIAN_CLIPBOARD_ALLOWLIST` | `[]` | Requester keys permitted to read clipboard without an intervention. |
 | `llm.enabled` | `PRIVACY_GUARDIAN_LLM__ENABLED` | `false` | Enables optional cloud assistance. |
-| `llm.model` | `PRIVACY_GUARDIAN_LLM__MODEL` | `"gpt-6-astra"` | Model identifier currently supplied by the code. Availability has not been independently verified. |
+| `llm.model` | `PRIVACY_GUARDIAN_LLM__MODEL` | `"gpt-6-astra"` | Model identifier currently supplied by the code and checked against current OpenAI model documentation; no live API call was made. |
 | `llm.policy_refinement` | `PRIVACY_GUARDIAN_LLM__POLICY_REFINEMENT` | `true` | Allows optional public-policy refinement. |
 | `llm.purpose_refinement` | `PRIVACY_GUARDIAN_LLM__PURPOSE_REFINEMENT` | `true` | Allows optional purpose refinement. |
 | `llm.explanation_polishing` | `PRIVACY_GUARDIAN_LLM__EXPLANATION_POLISHING` | `true` | Allows optional category-level explanation polish. |
@@ -149,29 +175,29 @@ The service routes typed `PrivacyEvent` objects from platform or browser sensors
 
 ## Privacy statement
 
-The implemented analysis worker returns opaque payload handles plus category findings. Raw file/form values are intended to remain in worker memory, while the transport may carry bytes only for the active upload and discards them after use. The storage contract excludes raw payload references, field labels/names, file names, URL query strings, and raw extracted text.
+The implemented analysis worker returns opaque payload handles plus category findings. Raw file/form values remain in worker memory, while the transport may carry bytes only for the active upload and discards them after use. The storage contract excludes raw payload references, field labels/names, file names, URL query strings, and raw extracted text.
 
-Privacy Guardian has no telemetry in its declared design. Network use is limited to optional OpenAI API calls when enabled and a user-initiated policy fetch path when browser text is unavailable. Cloud assistance is disabled by default, sanitizes every outbound string, replaces detected values with category tokens, and rejects validated identifiers that survive sanitization. See [LLM usage](docs/LLM_USAGE.md) and [Threat model](docs/THREAT_MODEL.md).
+Privacy Guardian has no telemetry in its declared design. Network use is limited to optional OpenAI API calls when enabled, a policy/terms fetch requested by a page context when inline text is unavailable, and a GitHub Releases API request only after the user selects **Check for updates**. Cloud assistance is disabled by default, sanitizes every outbound string, replaces detected values with category tokens, and rejects validated identifiers that survive sanitization. See [LLM usage](docs/LLM_USAGE.md) and [Threat model](docs/THREAT_MODEL.md).
 
 ## Platform limitations
 
-Read [Platform limitations](docs/PLATFORM_LIMITATIONS.md) before relying on a signal for security or compliance decisions. Real macOS adapter verification, real Windows execution, browser extension/service end-to-end tests, installer smoke tests, and CI are pending. The tool gives privacy guidance; it cannot guarantee interception of every application, browser, permission change, or network transfer.
+Read [Platform limitations](docs/PLATFORM_LIMITATIONS.md) before relying on a signal for security or compliance decisions. Real TCC grant/screen-capture verification, real Windows execution, most browser scenarios, final installer smoke tests, and CI are pending. The tool gives privacy guidance; it cannot guarantee interception of every application, browser, permission change, or network transfer.
 
 ## Troubleshooting
 
-If OCR is unavailable, run `tesseract --version`, install Tesseract with the platform command above, and restart the app. If native messaging cannot find the host, rebuild the extension, confirm the browser-specific host registration and allowed extension ID, then inspect the data-directory logs. Those integration steps are not yet independently verified.
+If OCR is unavailable, run `tesseract --version`, install Tesseract with the platform command above, and restart the app. For a packaged macOS app, rebuild if the bundled OCR binary is absent. If native messaging cannot find the host, run `uv run privacy-guardian --install-native-host`, confirm the browser-specific host registration and allowed extension ID, then inspect the data-directory logs.
 
 If macOS events are missing, grant the requested Full Disk Access or Accessibility permission through System Settings, then restart the monitor. If an extension disconnects, restart the browser and the app; reconnect behavior is a pending resilience test. If `uv sync` fails on the spaCy model dependency, ensure GitHub access is available because the current package declaration uses the model wheel’s direct GitHub URL.
 
 ## Uninstall
 
-Uninstallers and native-host deregistration are not yet built or smoke-tested. The declared macOS target is:
+The native-host deregistration/uninstall path is implemented but final packaged-app smoke verification is pending. The declared macOS target is:
 
 ```sh
 make uninstall-mac
 ```
 
-Do not manually delete a data directory if you need its local preferences or event history. Once verified installers are available, use the operating-system uninstaller first; final removal paths and registration cleanup evidence are tracked in `docs/PLAN.md`.
+For development profiles, the equivalent command is `uv run privacy-guardian --uninstall`. Both paths remove known Privacy Guardian files, browser-host registrations, and autostart entries while avoiding recursive deletion of an arbitrary configured data directory. Do not manually delete a data directory if you need its local preferences or event history. Once verified installers are available, use the operating-system uninstaller first.
 
 ### License
 

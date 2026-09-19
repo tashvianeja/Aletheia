@@ -4,7 +4,7 @@
 
 Cloud assistance is disabled by default (`llm.enabled = false`). The current code default model is `gpt-6-astra`. The model identifier was checked against the [OpenAI models documentation](https://developers.openai.com/api/docs/models/gpt-6-astra); no live API request was made as part of this build.
 
-When explicitly enabled, four independently configurable uses exist: policy refinement, purpose refinement, explanation polishing, and Deep Check narrative. Every local feature must retain an offline fallback. A disabled toggle or unavailable credential/API returns the fallback with a reason instead of failing the local assessment.
+When explicitly enabled, four independently configurable uses exist: policy refinement, purpose refinement, explanation polishing, and Deep Check narrative. Every local feature retains an offline fallback. A disabled toggle or unavailable credential/API returns the fallback with a reason instead of failing the local assessment. No live API key or live provider request was used for this build’s verification.
 
 ## What may be sent
 
@@ -19,9 +19,9 @@ Before any request, `sanitize_outbound()` normalizes text, decodes URL encoding,
 
 ## Credential, request, and logging behavior
 
-The key is read from the OS keychain service `PrivacyGuardian`, account `openai_api_key`; environment API keys and configurable base URLs are intentionally not read by this client. Requests use the OpenAI Responses API with typed structured output, `store: false`, a fixed OpenAI API base URL, a 20-second timeout, zero SDK retries, and a stable prompt-cache key. The implementation records only purpose, token count, latency, and fallback reason in its audit log, not request content.
+The key is read from the OS keychain service `PrivacyGuardian`, account `openai_api_key`; environment API keys and configurable base URLs are intentionally not read by this client. Requests run in a lazy, separate one-worker process and use the OpenAI Responses API with typed structured output, `store: false`, a fixed OpenAI API base URL, a 20-second timeout, zero SDK retries, and a stable prompt-cache key. The implementation records only purpose, token count, latency, and fallback reason in its audit log, not request content.
 
-The system prompt treats supplied documents as untrusted data, requires a schema-only response, preserves uncertainty/negation, and cannot lower deterministic risk or replace the recommended action. It handles refusal, incomplete results, timeout, connection, status, rate-limit, keychain, and validation failures by falling back locally. The use of structured output follows [OpenAI’s structured-output guide](https://developers.openai.com/api/docs/guides/structured-outputs).
+The single outbound guard runs inside that optional process. It treats supplied documents as untrusted data, requires a schema-only response, preserves uncertainty/negation, and cannot lower deterministic risk or replace the recommended action. It handles refusal, incomplete results, timeout, connection, status, rate-limit, keychain, and validation failures by falling back locally. The use of structured output follows [OpenAI’s structured-output guide](https://developers.openai.com/api/docs/guides/structured-outputs).
 
 ## Operational limitations
 

@@ -11,10 +11,12 @@ The extension does not run the decision engine. The Python service performs loca
 | Chromium / Chrome / Edge / Brave | `manifest.json` | `bfdjphkbgihhbonhnmjbbfhckdddonob` |
 | Firefox | `manifest.firefox.json` | `privacy-guardian@privacyguardian.local` |
 
-## Development status
+## Development and verification status
 
-Run `make build-extension` from the repository root to generate the declared build output. Loading an unpacked extension, native-host manifest registration, service startup, upload handoff, and browser E2E tests are all pending verification. Do not publish this source directory to a browser store or rely on it for protection until those checks and review are complete.
+Run `make build-extension` from the repository root to generate `dist/privacy-guardian-chromium.zip` and `dist/privacy-guardian-firefox.zip`. For development, start the service and run `uv run privacy-guardian --install-native-host`, then load the unpacked extension source in the matching browser. A real Chromium native-host handshake and three free-download form badges are verified. Upload intervention, tracker blocking, consent actions, reconnect behavior, Firefox, and the remainder of the browser scenarios are still pending.
+
+The extension uses MAIN-world wrappers as a best-effort observation layer. Known uploads fail open after a four-second initial-analysis wait; an actual intervention waits for the service’s safe 60-second decision timeout. This is intentionally narrow: synchronous file XHR can be aborted, while ordinary XHR and beacons are allowed to proceed. Firefox CNAME/DNS tracking signals are cached best effort.
 
 ## Permissions
 
-The manifests request native messaging, storage, cookies, web requests, declarative net request, scripting, active tab, tabs, and `<all_urls>` host access. These are broad permissions because the extension needs to observe relevant page events and perform an explicit local action. See [`../docs/PLATFORM_LIMITATIONS.md`](../docs/PLATFORM_LIMITATIONS.md) and [`../docs/THREAT_MODEL.md`](../docs/THREAT_MODEL.md) for constraints and remaining risks.
+The manifests request native messaging, storage, cookies, web requests, declarative net request, scripting, active tab, tabs, and `<all_urls>` host access. These are broad permissions because the extension needs to observe relevant page events and perform an explicit local action. Tracker refresh/network activity occurs only in response to relevant page context and an explicit user block action; update checking belongs to the desktop app and is user-clicked. See [`../docs/PLATFORM_LIMITATIONS.md`](../docs/PLATFORM_LIMITATIONS.md) and [`../docs/THREAT_MODEL.md`](../docs/THREAT_MODEL.md) for constraints and remaining risks.

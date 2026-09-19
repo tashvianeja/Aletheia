@@ -1,6 +1,6 @@
 # Acceptance map
 
-`tests/ACCEPTANCE.json` is the machine-readable source of the acceptance map. It covers all 20 functional requirements and all 18 end-to-end scenarios; this page makes its current status readable without changing the test contract.
+`tests/ACCEPTANCE.json` is the machine-readable source of the acceptance map. It covers all 20 functional requirements and all 18 end-to-end scenarios; this page makes its current status readable without changing the test contract. Current independent partial evidence is 115 analysis/engine/LLM/util tests passing, 66 integration/platform tests passing with one Windows skip, and 39 UI tests passing with two platform skips.
 
 ## Functional requirements
 
@@ -22,7 +22,7 @@
 | FR-14 Deep Check | Pending integration test | Pending |
 | FR-15 Preferences | preferences and store tests | Unit evidence present |
 | FR-16 Event history | store test | Unit evidence present |
-| FR-17 Native messaging | IPC transport/protocol tests; real extension pending | Partial |
+| FR-17 Native messaging | IPC transport/protocol tests; Chromium native-host handshake verified | Partial |
 | FR-18 Onboarding | Pending UI onboarding test | Pending |
 | FR-19 Packaging | Pending package smoke tests | Pending |
 | FR-20 Logging/resilience | logging test; resilience pending | Partial |
@@ -31,8 +31,8 @@
 
 | Scenario | Current status from `tests/ACCEPTANCE.json` |
 |---:|---|
-| 1–3 | Fixtures/document or redaction coverage present; real extension/service flow pending. |
-| 4–5 | Form semantics and fixtures present; browser path pending. |
+| 1–3 | Fixtures/document or redaction coverage present; upload E2E remains pending. |
+| 4–5 | Form semantics and fixtures present; three free-download badges are verified through the Chromium native-host path; remaining browser action coverage is pending. |
 | 6–9 | Terms/policy/CMP/tracker fixtures exist; browser interception/action pending. |
 | 10 | Real macOS adapter test pending. |
 | 11 | Injected Windows adapter and Windows CI pending. |

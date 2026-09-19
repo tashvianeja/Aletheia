@@ -18,7 +18,9 @@ Form semantics use field ID/name, labels, input type, autocomplete, required mar
 
 Consent analysis receives structured button/toggle/snapshot data and identifies optional purposes and dark-pattern indications. Policy and terms analysis segments text, applies YAML clause patterns with positive/negative scope rules, sanitizes citations before caching, and extracts clauses, collection categories, purposes, sharing, retention, rights, and policy warnings. It recognizes public policy text only; a missing or partial policy remains a warning, not a clean result.
 
-Tracking analysis uses observed request hosts, cookies, URL-derived signals held transiently by the extension, known tracker data, fingerprinting signals, and persistent identifiers. A tracking finding is evidence of observable signals, not proof of every form of cross-site tracking.
+Tracking analysis uses observed request hosts, cookies, URL-derived signals held transiently by the extension, known tracker data, fingerprinting signals, and persistent identifiers. Firefox CNAME/DNS observations are cached best effort. A tracking finding is evidence of observable signals, not proof of every form of cross-site tracking.
+
+Browser MAIN-world wrappers are also best effort. For known upload paths, initial analysis may wait up to four seconds before failing open; after an `INTERVENE`, the service keeps a safe 60-second decision timeout. Synchronous file XHR may be aborted, while ordinary XHR and beacons pass through. These limits prevent a delayed local helper from becoming a broad browsing outage.
 
 ## Measured corpus evidence
 
