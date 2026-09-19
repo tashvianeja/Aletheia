@@ -445,7 +445,8 @@ async def test_tracking_revealed_in_waves_sharpens_one_card(service: Service) ->
     assert sharpened["event_id"] == opening["event_id"]
     assert [event.event_type for event in service.events.values()].count("tracking") == 1
     assert sharpened["outcome"] == "INFORM"
-    assert "1 other website" in " ".join(row["label"] for row in opening["findings"])
+    assert "1 other company" in " ".join(row["label"] for row in opening["findings"])
     later_rows = " ".join(row["label"] for row in sharpened["findings"]).lower()
-    assert "3 other websites" in later_rows
-    assert "fingerprint" in later_rows
+    # Three hostnames, two companies: cm.g.doubleclick.net is doubleclick.net.
+    assert "2 other companies" in later_rows
+    assert "clear cookies" in later_rows

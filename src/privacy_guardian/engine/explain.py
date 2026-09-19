@@ -18,7 +18,13 @@ from privacy_guardian.core.events import (
     TrackingEvent,
 )
 from privacy_guardian.engine.context import SiteOrAppProfile
-from privacy_guardian.engine.labels import LABELS, category_label, lowered, purpose_label
+from privacy_guardian.engine.labels import (
+    LABELS,
+    category_label,
+    lowered,
+    plural_label,
+    purpose_label,
+)
 from privacy_guardian.engine.labels import article as _article
 from privacy_guardian.engine.necessity import Necessity, NecessityAssessment
 
@@ -198,33 +204,19 @@ def _headline(
             if unnecessary
             else f"{who} is asking for your details."
         )
-        body = (
-            f"The fields below are not needed to {task}."
-            if task and unnecessary
-            else f"The fields below are not needed to complete {_article(purpose)} {purpose}."
-            if certain and unnecessary
-            else "The fields below do not appear necessary for what you are doing."
-            if unnecessary
-            else f"Nothing here looks unusual for {who}."
-        )
+        body = "" if unnecessary else f"Nothing here looks unusual for {who}."
         return headline, body
 
     if isinstance(event, ConsentBannerEvent):
-        headline = f"{who} wants to do more than store necessary cookies."
-        body = (
-            "Rejecting is hidden behind extra screens. Privacy Guardian can reject the "
-            "optional cookies for you."
-            if event.dark_patterns
-            else "Privacy Guardian can reject the optional cookies for you."
-        )
+        headline = f"{who} wants more than the cookies it needs."
+        # "Privacy Guardian can reject the optional cookies for you" is what the
+        # Reject optional button says; the body only speaks when it knows something
+        # the headline, the rows and the buttons do not.
+        body = "Rejecting is hidden behind extra screens." if event.dark_patterns else ""
         return headline, body
 
     if isinstance(event, TrackingEvent):
-        headline = f"{who} is building an advertising profile."
-        body = (
-            "Identifiers on this page can link what you do here to what you do on other websites."
-        )
-        return headline, body
+        return f"{who} is building an advertising profile.", ""
 
     if isinstance(event, PolicyDocumentEvent):
         kind = "terms" if event.kind == "terms" else "privacy policy"
@@ -327,12 +319,13 @@ def _necessity_notes(event: PrivacyEvent, assessments: list[NecessityAssessment]
     named = purpose_label(event.requester.purpose)
     notes: list[str] = []
     for verdict, (singular, plural) in _VERDICT_WORDING.items():
-        labels = [
-            category_label(item.category.value) for item in assessments if item.verdict == verdict
-        ]
-        if not labels:
+        matching = [item for item in assessments if item.verdict == verdict]
+        if not matching:
             continue
-        verb = singular if len(labels) == 1 else plural
+        labels = [category_label(item.category.value) for item in matching]
+        # One plural label still takes the plural verb: "Persistent device identifiers
+        # does not appear necessary" was the sentence this produced.
+        verb = plural if len(labels) > 1 or plural_label(matching[0].category.value) else singular
         named_list = _sentence_list([labels[0], *(lowered(label) for label in labels[1:])])
         notes.append(f"{named_list} {verb} for {_article(named)} {named}.")
     return notes
@@ -401,10 +394,19 @@ def explain(
     found: list[Finding] | None = None,
 ) -> tuple[str, str, list[DecisionFinding], list[str]]:
     """Return the widget's headline, body, finding rows and 'why am I seeing this' detail."""
+    from privacy_guardian.engine.presentation import tracking_mechanisms
+
     headline, body = (informational and _informational(event, assessments)) or _headline(
         event, assessments, profile
     )
-    if event.requester.purpose == "unknown" or event.requester.purpose_confidence < 0.35:
+    # Whether a request was necessary is the question a form or an upload is judged on.
+    # A page that is tracking you, a cookie banner and a policy are not judged on it,
+    # and the caveat only made those cards longer without answering anything they ask.
+    judged_on_necessity = not isinstance(
+        event, TrackingEvent | ConsentBannerEvent | PolicyDocumentEvent
+    )
+    uncertain = event.requester.purpose == "unknown" or event.requester.purpose_confidence < 0.35
+    if uncertain and judged_on_necessity:
         # Say plainly that necessity could not be judged rather than implying it was.
         body = UNCERTAIN_PURPOSE if not body or informational else body + " " + UNCERTAIN_PURPOSE
     rows = _rows(
@@ -414,6 +416,14 @@ def explain(
     )
     effects = _consequences(profile)
     rationale = _necessity_notes(event, assessments)
+    if uncertain and not judged_on_necessity:
+        rationale.append(UNCERTAIN_PURPOSE)
+    # The mechanism-by-mechanism detail the card no longer carries: still here, one
+    # click away, for anyone who wants to know how it is being done.
+    if isinstance(event, TrackingEvent):
+        rationale.extend(tracking_mechanisms(event))
+    if isinstance(event, ConsentBannerEvent):
+        rationale.extend(consent_meanings(event))
     rationale.extend(notes or [])
     if effects:
         rationale.append("The policy says " + "; ".join(effects) + ".")
@@ -425,42 +435,74 @@ def summarize(headline: str, body: str) -> str:
     return f"{headline} {body}".strip()
 
 
+# What each optional purpose is for, in the reader's terms.
+CONSENT_PURPOSES = {
+    "analytics": "analytics",
+    "advertising": "advertising",
+    "personalisation": "personalisation",
+    "social": "social media",
+    "functional": "remembering preferences",
+}
+# The full sentence for each, kept for the reasoning panel.
+CONSENT_MEANING = {
+    "analytics": "Analytics cookies track what you do on this site.",
+    "advertising": "Advertising cookies build a profile about you.",
+    "personalisation": "Personalisation cookies remember choices to change what you see.",
+    "social": "Social cookies share your activity with social networks.",
+    "functional": "Functional cookies remember your preferences for this site.",
+}
+
+
 def consent_findings(event: ConsentBannerEvent) -> list[DecisionFinding]:
-    """Cookie purposes, read back as what they actually do."""
-    rows = [DecisionFinding(label="Store necessary cookies", severity="ok")]
-    wording = {
-        "analytics": "Track your activity for analytics",
-        "advertising": "Build an advertising profile about you",
-        "personalisation": "Remember choices to personalise what you see",
-        "social": "Share your activity with social networks",
-        "functional": "Remember preferences for this site",
-    }
-    for purpose in event.purposes:
-        if purpose == "necessary":
-            continue
+    """One row for what the banner wants, one for who else gets it.
+
+    Four purposes were four rows, and the row saying necessary cookies are stored was
+    a fifth telling the reader about the part nobody objects to. It is one choice —
+    accept or reject the optional ones — so it reads as one line.
+    """
+    optional = [
+        CONSENT_PURPOSES.get(purpose, purpose.replace("_", " "))
+        for purpose in dict.fromkeys(event.purposes)
+        if purpose != "necessary"
+    ]
+    rows: list[DecisionFinding] = []
+    if optional:
+        named = (
+            [*optional[:3], f"{len(optional) - 3} more"] if len(optional) > 3 else list(optional)
+        )
         rows.append(
-            DecisionFinding(
-                label=wording.get(purpose, purpose.replace("_", " ").capitalize()), severity="warn"
-            )
+            DecisionFinding(label=f"Wants cookies for {_sentence_list(named)}", severity="warn")
         )
     if event.vendor_count:
-        rows.insert(
-            1,
+        rows.append(
             DecisionFinding(
-                label=f"Share identifiers with {event.vendor_count} advertising partners",
+                label=f"Shares what it learns with {event.vendor_count} other companies",
                 severity="warn",
-            ),
+            )
         )
-    return [row for row in rows if row.severity == "warn"] + [
-        row for row in rows if row.severity == "ok"
+    return rows
+
+
+def consent_meanings(event: ConsentBannerEvent) -> list[str]:
+    """What each optional purpose actually does, for the reasoning panel."""
+    return [
+        CONSENT_MEANING[purpose]
+        for purpose in dict.fromkeys(event.purposes)
+        if purpose in CONSENT_MEANING
     ]
 
 
 def form_findings(
     event: FormObservedEvent, unnecessary: set[DataCategory]
 ) -> list[DecisionFinding]:
-    """One row per field the form asks for, named the way the form names it."""
-    rows: list[DecisionFinding] = []
+    """The fields worth looking at, named the way the form names them.
+
+    Where something needs looking at, the fields that are fine are not what the person
+    is being asked about, and listing them doubled the height of the card. They are
+    only listed when they are the whole answer: nothing here needs looking at.
+    """
+    warnings: list[DecisionFinding] = []
+    fine: list[DecisionFinding] = []
     seen: set[str] = set()
     for field in event.fields:
         if field.category is None:
@@ -470,9 +512,14 @@ def form_findings(
             continue
         seen.add(label)
         if field.category in unnecessary:
-            rows.append(DecisionFinding(label=label, severity="warn"))
+            warnings.append(DecisionFinding(label=label, severity="warn"))
         else:
-            rows.append(DecisionFinding(label=f"{label} — needed for this", severity="ok"))
-    return [row for row in rows if row.severity == "warn"] + [
-        row for row in rows if row.severity == "ok"
-    ]
+            fine.append(DecisionFinding(label=f"{label} — needed for this", severity="ok"))
+    if not warnings:
+        return fine
+    if len(warnings) > 4:
+        return [
+            *warnings[:4],
+            DecisionFinding(label=f"and {len(warnings) - 4} more", severity="warn"),
+        ]
+    return warnings

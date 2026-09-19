@@ -33,6 +33,7 @@
 .pg-rationale{margin:0 0 8px!important;padding:0 0 0 14px!important;font-size:12px!important;color:#4b5563!important}
 .pg-rationale li{margin:0 0 3px!important}
 .pg-remember{display:flex!important;align-items:center!important;gap:8px!important;font-size:12px!important;color:#4b5563!important;margin:0 0 8px!important}
+.pg-panel [hidden]{display:none!important}
 .pg-panel button:focus-visible{outline:2px solid #3b5bdb!important;outline-offset:2px!important}
 .pg-badge{display:inline-block!important;margin:3px 6px!important;padding:2px 6px!important;border-radius:5px!important;background:#fef3c7!important;color:#92400e!important;font:12px/1.4 -apple-system,system-ui,sans-serif!important;vertical-align:middle!important}
 .pg-review{outline:2px solid #d97706!important;outline-offset:2px!important;border-radius:4px!important}

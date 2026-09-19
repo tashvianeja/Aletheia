@@ -55,6 +55,34 @@ All notable changes will be documented here. This project has not produced a ver
   polished wording from an optional cloud call was pushed at the desktop for browser events the
   page was already showing, and page-level analysis ran once per frame, so a page with three
   iframes reported itself four times.
+- Nothing was ever announced again. A warning was raised once and then quieted on every later
+  look as "the same request was already shown within the last day" — whether or not the person had
+  seen it, let alone dealt with it. Reloading a page or opening the next one produced silence, and
+  the only way to find out what a site was doing was to run the thorough check by hand. Being
+  shown is no longer taken for being answered: a warning is raised again until the person picks an
+  action or closes the card, and closing it is now reported, which is also what makes "Don't ask
+  again for this site" on an informational card do anything. That tick had no effect at all, and a
+  stylesheet rule was showing it on every card whether or not it had been opened.
+- The "May be unnecessary" marker never appeared beside an optional field. It is meant to appear
+  once the person puts something in a box nobody made them fill in, but the page's inventory
+  deliberately ignored whether a box was filled, and typing changes no attribute for the observer
+  to notice, so the moment it waited for never arrived. Whether a box has something in it now
+  counts as a change, half a second after the typing stops. The boolean is compared; the value is
+  not, and still never leaves the page.
+- Cards said the same thing three times over and named mechanisms instead of consequences. An
+  advertising card carried a headline, a paragraph repeating the headline, a row repeating the
+  paragraph, and then a row for each mechanism — invisible images, tagged links, a stored
+  identifier — which are all ways of doing the one thing the row above them already said. It now
+  says what the page does to the person: who it hands the visit to, that it can recognise the
+  device after cookies are cleared, and whether it can attach an email address to both. The
+  mechanisms, the reasoning and the full clause list moved under "Why am I seeing this?", which
+  informational cards have now too. A cookie banner's purposes are one row rather than four, a
+  form lists the fields worth looking at rather than every field it has, and a policy card names
+  four clauses with the rest one click away.
+- Eleven advertising "websites" were four companies. Tracker hostnames are counted and blocked by
+  the company behind them, so `cm.g.doubleclick.net`, `ad.doubleclick.net` and a hashed
+  `safeframe.googlesyndication.com` subdomain no longer read as three separate sites following
+  you.
 - A site could still stack up two or three "building an advertising profile" cards, one a moment
   after the other, each listing a little more than the last. The mechanisms behind that one
   statement arrive in waves — the tracker requests as the page loads, the fingerprint when that

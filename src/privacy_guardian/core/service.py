@@ -476,6 +476,8 @@ class Service:
         from privacy_guardian.engine.necessity import Necessity, necessity_for
 
         observation = Observation(
+            event_id=event.id,
+            answered=event.id in self.actions,
             categories=event.data_categories,
             event_class=event.event_type,
             signals=list(
@@ -495,6 +497,11 @@ class Service:
             ],
         )
         if event.event_type != "form_observed":
+            # One record per notice: a page reporting itself every few hundred
+            # milliseconds was writing a fresh observation each time.
+            profile.recent_observations = [
+                item for item in profile.recent_observations if item.event_id != event.id
+            ]
             profile.recent_observations.append(observation)
         self.store.put_profile(
             "site" if event.requester.kind == "website" else "app",
@@ -739,10 +746,26 @@ class Service:
                 await self.pool.run(release_payload, event.payload_ref)
             event.payload_ref = None
         self.actions[event.id] = result
+        self._mark_answered(event)
         self.pending_since.pop(event.id, None)
         for callback in self.action_listeners:
             callback(event.id, response.action)
         return result
+
+    def _mark_answered(self, event: PrivacyEvent) -> None:
+        """Record that this warning was dealt with, so it can go quiet from now on."""
+        profile = self._profile(event.requester)
+        marked = False
+        for observation in profile.recent_observations:
+            if observation.event_id == event.id and not observation.answered:
+                observation.answered = True
+                marked = True
+        if marked:
+            self.store.put_profile(
+                "site" if event.requester.kind == "website" else "app",
+                event.requester.key,
+                profile.model_dump(mode="json"),
+            )
 
     async def handle_message(self, message: dict[str, Any]) -> dict[str, Any]:
         request_id = str(message.get("id", ""))[:128]

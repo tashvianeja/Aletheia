@@ -35,7 +35,7 @@ ACTION_LABELS: dict[str, dict[str, str]] = {
         "view_details": "View details",
         "reject_optional": "Reject optional",
     },
-    "tracking": {"learn_more": "Learn more", "block": "Block if possible"},
+    "tracking": {"learn_more": "Learn more", "block": "Block if possible", "continue": "Not now"},
     "policy_document": {
         "cancel": "Don't accept",
         "continue": "Continue",
@@ -167,7 +167,9 @@ def findings_for(
 
 
 # What each tracking mechanism does, in place of the detector's own name for it.
-# "Cross origin storage identifier" tells the reader nothing they can act on.
+# "Cross origin storage identifier" tells the reader nothing they can act on. These
+# belong under "Why am I seeing this?": on the card itself they were five rows that
+# all say some version of "they can follow you", which is the row above them.
 SIGNAL_WORDING = {
     "persistent_third_party_cookies": "Stores third-party cookies that outlast this visit",
     "url_decoration": "Tags the links you follow with an identifier for you",
@@ -179,8 +181,23 @@ SIGNAL_WORDING = {
     "cross_site_identifier": "Reuses one identifier across separate websites",
     "url_identifier": "Carries an identifier for you in page addresses",
 }
-# Already said by the rows above: the tracker list and the fingerprinting row.
+# Already said by the rows: the tracker list and the fingerprinting row.
 COVERED_SIGNALS = frozenset({"known_tracker_requests", "fingerprinting"})
+# Every one of these is a way of doing the same thing — handing this visit to other
+# companies — so they are one row, not one row each.
+FOLLOWING_SIGNALS = frozenset(
+    {
+        "known_tracker_requests",
+        "tracking_pixels",
+        "url_decoration",
+        "url_identifier",
+        "cross_origin_storage_identifier",
+        "cross_site_identifier",
+        "cname_cloaking",
+        "persistent_third_party_cookies",
+        "persistent_cookie",
+    }
+)
 
 
 def named_hosts(hosts: list[str], limit: int = 3) -> str:
@@ -190,39 +207,61 @@ def named_hosts(hosts: list[str], limit: int = 3) -> str:
 
 
 def tracking_rows(event: TrackingEvent) -> list[DecisionFinding]:
-    """Turn tracking mechanisms into what they mean for the person reading."""
+    """The three things tracking actually does to the person, not the nine ways it does them.
+
+    A page carries pixels, tagged links, a stored identifier and a cloaked subdomain;
+    naming each one filled the card with mechanisms and left the reader to work out
+    that they add up to one sentence. They are folded into that sentence here, and the
+    mechanisms are listed under "Why am I seeing this?" for anyone who wants them.
+    """
     rows: list[DecisionFinding] = []
-    domains = sorted(set(event.tracker_domains))
-    if domains:
+    companies = sorted(set(event.tracker_domains))
+    signals = set(event.signals)
+    if companies:
         rows.append(
             DecisionFinding(
-                label=f"Links this visit to activity on {len(domains)} other website"
-                f"{'s' if len(domains) != 1 else ''}",
+                label=f"Shares what you do here with {len(companies)} other "
+                f"{'company' if len(companies) == 1 else 'companies'}",
                 severity="warn",
-                detail=named_hosts(domains),
+                detail=named_hosts(companies),
+            )
+        )
+    elif signals & FOLLOWING_SIGNALS:
+        rows.append(
+            DecisionFinding(
+                label="Carries an identifier that follows you to other websites",
+                severity="warn",
             )
         )
     if event.fingerprinting:
         rows.append(
             DecisionFinding(
-                label="Creates a fingerprint of this device",
-                severity="warn",
-                detail="Recognises this browser again even after you clear cookies",
+                label="Recognises this device even after you clear cookies", severity="warn"
             )
         )
+    if "identity_linking" in signals:
+        rows.append(
+            DecisionFinding(label="Can match this browsing to your email address", severity="warn")
+        )
+    return rows
+
+
+def tracking_mechanisms(event: TrackingEvent) -> list[str]:
+    """The mechanism-by-mechanism detail, for the reasoning panel rather than the card."""
+    lines: list[str] = []
     for signal in event.signals:
-        text = str(signal)
-        if text in COVERED_SIGNALS:
+        name = str(signal)
+        if name in COVERED_SIGNALS or name == "identity_linking":
             continue
-        prefix, _, suffix = text.partition(":")
+        prefix, _, suffix = name.partition(":")
         wording = SIGNAL_WORDING.get(prefix)
-        label = (
+        line = (
             f"{wording} {suffix}"
             if wording and suffix
-            else wording or text.replace("_", " ").capitalize()
+            else wording or name.replace("_", " ").capitalize()
         )
-        rows.append(DecisionFinding(label=label, severity="warn"))
-    return rows[:5]
+        lines.append(line if line.endswith(".") else line + ".")
+    return lines
 
 
 def policy_rows(clauses: list[object], nothing_unusual: list[str]) -> list[DecisionFinding]:
@@ -255,6 +294,16 @@ def policy_rows(clauses: list[object], nothing_unusual: list[str]) -> list[Decis
         DecisionFinding(label=str(item).replace("_", " ").capitalize(), severity="ok")
         for item in nothing_unusual
     )
+    # Four clauses is already a lot to take in standing at a checkout; the complete
+    # list is one line down under "Why am I seeing this?".
+    warnings = [row for row in rows if row.severity == "warn"]
+    if len(warnings) > 4:
+        return [
+            *warnings[:4],
+            DecisionFinding(
+                label=f"{len(warnings) - 4} more worth reading before you agree", severity="warn"
+            ),
+        ]
     return rows
 
 

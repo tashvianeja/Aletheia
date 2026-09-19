@@ -92,6 +92,45 @@ def is_tracker(host: str, tracker_path: str = "") -> bool:
     return any(".".join(labels[index:]) in domains for index in range(len(labels)))
 
 
+# Where a two-label domain would cut into the public suffix rather than the name.
+COMPOUND_SUFFIXES = frozenset(
+    {
+        "co.uk",
+        "org.uk",
+        "co.jp",
+        "co.kr",
+        "co.nz",
+        "co.za",
+        "co.in",
+        "com.au",
+        "net.au",
+        "com.br",
+        "com.mx",
+        "com.sg",
+        "com.tr",
+    }
+)
+
+
+def tracker_domain(host: str, tracker_path: str = "") -> str:
+    """Name the company behind a host: doubleclick.net for cm.g.doubleclick.net.
+
+    One advertising company reaches a page under a handful of hostnames, some of
+    them a hash with a domain after it. Counted as hostnames they read as eleven
+    separate websites following you, which is both alarming and wrong; counted as
+    companies they read as the four it actually is.
+    """
+    labels = host.lower().strip(".").split(".")
+    domains = tracker_hosts(tracker_path)
+    for index in range(len(labels)):
+        candidate = ".".join(labels[index:])
+        if candidate in domains:
+            return candidate
+    if len(labels) > 2 and ".".join(labels[-2:]) in COMPOUND_SUFFIXES:
+        return ".".join(labels[-3:])
+    return ".".join(labels[-2:]) if len(labels) > 2 else ".".join(labels)
+
+
 def analyze_tracking(
     snapshot: TrackingSnapshot | dict[str, object], tracker_path: str = ""
 ) -> TrackingAnalysis:
@@ -170,7 +209,9 @@ def analyze_tracking(
         for url in snapshot.urls
     ):
         result.signals.append("identity_linking")
-    result.tracker_domains = sorted(trackers)
+    # By company, not by hostname: the card counts who follows you, not how many
+    # subdomains they arrived on, and a block rule for the domain covers them all.
+    result.tracker_domains = sorted({tracker_domain(host, tracker_path) for host in trackers})
     result.detected = bool(result.signals)
     result.confidence = (
         min(0.99, 0.35 + len(result.signals) * 0.12 + min(len(trackers), 4) * 0.05)

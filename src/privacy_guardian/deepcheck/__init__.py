@@ -149,7 +149,12 @@ async def run_deep_check(
                     "INFORM",
                     "Advertising profile",
                     "Your activity may be used for personalised advertising"
-                    + (f", linked across {others} other sites." if others else "."),
+                    + (
+                        f", linked across {others} other "
+                        f"{'company' if others == 1 else 'companies'}."
+                        if others
+                        else "."
+                    ),
                 )
             )
         elif name == "consent" and profile.get("dark_patterns"):

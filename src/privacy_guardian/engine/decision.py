@@ -41,7 +41,9 @@ _ACTIONS: dict[str, tuple[list[str], str]] = {
     "form_submit": (["cancel", "continue", "review_fields"], "cancel"),
     "form_observed": (["review_fields", "continue"], "review_fields"),
     "consent_banner": (["reject_optional", "continue", "view_details"], "reject_optional"),
-    "tracking": (["block", "learn_more"], "block"),
+    # "continue" is how a card gets put down: without it, closing the advertising
+    # card could not be recorded, and an unanswered warning is raised again.
+    "tracking": (["block", "learn_more", "continue"], "block"),
     # "continue" is the way to put a desktop notice down without doing anything about
     # it. Without one, closing the card would either act or leave it outstanding forever.
     "permission_request": (["open_settings", "mark_expected", "continue"], "open_settings"),
@@ -241,6 +243,11 @@ def decide(
     for observation in profile.recent_observations:
         if observation.event_class and observation.event_class != event.event_type:
             continue
+        # Being shown once is not being answered once. Reloading the page, or opening
+        # the next one, used to arrive at a warning that had quietly turned itself off
+        # for the rest of the day, so nothing was ever announced again.
+        if not observation.answered:
+            continue
         if isinstance(event, ConsentBannerEvent) and set(event.dark_patterns) - set(
             observation.signals
         ):
@@ -309,14 +316,10 @@ def decide(
         rows = policy_rows(list(profile.clauses), [])
         if rows:
             findings_rows = rows
-        clause_count = len(rows)
-        if clause_count:
             headline = "Before you accept"
-            body = (
-                f"{clause_count} clause{'s' if clause_count != 1 else ''} in these "
-                f"{'terms' if event.kind == 'terms' else 'policies'} affect your privacy. "
-                "Everything else looks standard."
-            )
+            # The clauses are listed immediately below; counting them here said the
+            # same thing a second time in a card there is no time to read twice.
+            body = "Everything else in them looks standard."
     if partial_upload:
         # A caveat belongs after what was found, not in front of it.
         body = f"{body} Part of this file could not be read, so it was not fully checked."

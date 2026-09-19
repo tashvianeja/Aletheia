@@ -85,7 +85,9 @@ class InterventionPopup(QWidget):
             card.add_header(right=self._origin())
             card.closed.connect(self.dismiss)
             self.headline = self._status_row()
-            self.explanation = card.add_body(decision.detail or decision.explanation)
+            # Falling back to the explanation printed the headline a second time on
+            # any card whose rows already say what the body used to say in prose.
+            self.explanation = card.add_body(decision.detail) if decision.detail else self.headline
             self._add_rationale()
             self.remember = QCheckBox(tr("remember"))
             self.remember.hide()

@@ -280,22 +280,52 @@ def test_a_single_page_document_is_not_labelled_page_one() -> None:
     assert evidence([Finding(category=DataCategory.EMAIL, page=1)]) == {}
 
 
-def test_tracking_rows_name_the_trackers_and_read_as_english() -> None:
+def test_tracking_rows_group_the_mechanisms_into_what_they_do() -> None:
+    from privacy_guardian.core.events import TrackingEvent
+    from privacy_guardian.engine.presentation import tracking_mechanisms, tracking_rows
+
+    event = TrackingEvent(
+        requester=Requester(kind="website", origin="https://news.test"),
+        tracker_domains=["criteo.com", "doubleclick.net"],
+        fingerprinting=True,
+        signals=[
+            "known_tracker_requests",
+            "cross_origin_storage_identifier",
+            "tracking_pixels",
+            "url_decoration",
+            "fingerprinting",
+        ],
+    )
+    rows = tracking_rows(event)
+
+    # Five mechanisms, two things they do to the person.
+    assert [row.label for row in rows] == [
+        "Shares what you do here with 2 other companies",
+        "Recognises this device even after you clear cookies",
+    ]
+    assert rows[0].detail == "criteo.com, doubleclick.net"
+    # The detector's own name for a mechanism is not an explanation of it, and the
+    # explanations belong under "Why am I seeing this?", not on the card.
+    assert tracking_mechanisms(event) == [
+        "Reuses one stored identifier across separate websites.",
+        "Loads invisible images that report which pages you open.",
+        "Tags the links you follow with an identifier for you.",
+    ]
+
+
+def test_an_email_match_is_its_own_row_because_it_is_not_just_a_browser() -> None:
     from privacy_guardian.core.events import TrackingEvent
     from privacy_guardian.engine.presentation import tracking_rows
 
     event = TrackingEvent(
         requester=Requester(kind="website", origin="https://news.test"),
-        tracker_domains=["criteo.com", "doubleclick.net"],
-        signals=["known_tracker_requests", "cross_origin_storage_identifier"],
+        tracker_domains=["criteo.com"],
+        signals=["known_tracker_requests", "identity_linking"],
     )
-    rows = tracking_rows(event)
 
-    assert rows[0].label == "Links this visit to activity on 2 other websites"
-    assert rows[0].detail == "criteo.com, doubleclick.net"
-    # The detector's own name for a mechanism is not an explanation of it.
-    assert [row.label for row in rows[1:]] == [
-        "Reuses one stored identifier across separate websites"
+    assert [row.label for row in tracking_rows(event)] == [
+        "Shares what you do here with 1 other company",
+        "Can match this browsing to your email address",
     ]
 
 
@@ -305,3 +335,67 @@ def test_page_context_warnings_name_the_site() -> None:
     prepared = prepare_context({"origin": "https://news.example", "signals": {}})
 
     assert prepared["requester"]["display_name"] == "news.example"
+
+
+def test_a_cookie_banner_is_one_choice_so_it_reads_as_one_row() -> None:
+    from privacy_guardian.core.events import ConsentBannerEvent
+    from privacy_guardian.engine.explain import consent_findings, consent_meanings
+
+    event = ConsentBannerEvent(
+        requester=Requester(kind="website", origin="https://news.test"),
+        cmp="onetrust",
+        purposes=["necessary", "analytics", "advertising", "personalisation", "social"],
+        vendor_count=812,
+        dark_patterns=["hidden_reject"],
+    )
+    rows = consent_findings(event)
+
+    assert [row.label for row in rows] == [
+        "Wants cookies for analytics, advertising, personalisation and 1 more",
+        "Shares what it learns with 812 other companies",
+    ]
+    # Nobody objects to the necessary ones, so they are not a row of their own.
+    assert not any("necessary" in row.label.lower() for row in rows)
+    assert len(consent_meanings(event)) == 4
+
+
+def test_a_form_card_lists_what_needs_looking_at_not_what_is_fine() -> None:
+    from privacy_guardian.core.events import FormField, FormObservedEvent
+    from privacy_guardian.engine.explain import form_findings
+
+    fields = [
+        FormField(field_id="e", category=DataCategory.EMAIL),
+        FormField(field_id="p", category=DataCategory.PHONE),
+        FormField(field_id="d", category=DataCategory.DOB),
+    ]
+    event = FormObservedEvent(requester=Requester(kind="website"), fields=fields)
+
+    flagged = form_findings(event, {DataCategory.PHONE, DataCategory.DOB})
+    assert [row.label for row in flagged] == ["Phone number", "Date of birth"]
+
+    # With nothing to flag, what is fine is the whole answer.
+    clean = form_findings(event, set())
+    assert all(row.severity == "ok" for row in clean) and len(clean) == 3
+
+
+def test_the_card_does_not_say_in_prose_what_the_rows_already_say() -> None:
+    from privacy_guardian.core.events import ConsentBannerEvent, TrackingEvent
+
+    site = Requester(kind="website", origin="https://news.test", display_name="news.test")
+    tracking = decide(
+        TrackingEvent(
+            requester=site,
+            tracker_domains=["criteo.com"],
+            signals=["known_tracker_requests"],
+            confidence=0.6,
+        )
+    )
+    banner = decide(
+        ConsentBannerEvent(requester=site, cmp="onetrust", purposes=["necessary", "advertising"])
+    )
+
+    assert tracking.headline == "news.test is building an advertising profile."
+    assert tracking.body == ""
+    assert banner.body == ""
+    for decision in (tracking, banner):
+        assert len(decision.findings) <= 3

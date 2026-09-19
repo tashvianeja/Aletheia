@@ -536,20 +536,72 @@ async def test_tracking_found_in_waves_sharpens_one_card_instead_of_stacking(
     panels = page.locator(".pg-panel")
     await panels.first.wait_for(timeout=10_000)
     assert "advertising profile" in (await panels.first.inner_text()).lower()
-    assert "fingerprint" not in (await panels.first.inner_text()).lower()
+    assert "clear cookies" not in (await panels.first.inner_text()).lower()
 
     # The fingerprinting this page only gets round to once something else runs.
     await page.evaluate(
         """() => {const canvas=document.createElement('canvas');
           canvas.getContext('2d').fillText('synthetic',2,2);canvas.toDataURL();}"""
     )
-    await page.locator(".pg-panel", has_text="fingerprint").wait_for(timeout=10_000)
+    await page.locator(".pg-panel", has_text="clear cookies").wait_for(timeout=10_000)
 
     assert await panels.count() == 1
     assert decision_count(real_browser, "tracking") == 1
     sharpened = (await panels.first.inner_text()).lower()
-    assert "2 other websites" in sharpened
-    assert "creates a fingerprint of this device" in sharpened
+    assert "2 other companies" in sharpened
+    assert "recognises this device even after you clear cookies" in sharpened
+
+
+def answered(browser: RealBrowser) -> int:
+    with contextlib.closing(sqlite3.connect(browser.data_dir / "guardian.sqlite3")) as connection:
+        return int(connection.execute("SELECT COUNT(*) FROM user_responses").fetchone()[0])
+
+
+@pytest.mark.asyncio
+async def test_a_card_nobody_answered_is_raised_again_until_it_is_put_down(
+    real_browser: RealBrowser, fixture_site: tuple[str, object]
+) -> None:
+    """The user's report: after the first card, reloading announced nothing ever again."""
+    base_url, _ = fixture_site
+    page = await real_browser.context.new_page()
+    await page.goto(f"{base_url}/fixtures/tracker-late-fingerprint")
+    await page.locator(".pg-panel").first.wait_for(timeout=10_000)
+
+    await page.reload()
+    await page.locator(".pg-panel").first.wait_for(timeout=10_000)
+
+    # Closing it is an answer, and the answer holds from the next page on.
+    await page.locator(".pg-panel .pg-close").first.click()
+    await page.locator(".pg-panel").first.wait_for(state="detached", timeout=5_000)
+    for _attempt in range(100):
+        if answered(real_browser):
+            break
+        await asyncio.sleep(0.05)
+    assert answered(real_browser) == 1
+
+    await page.reload()
+    await page.wait_for_timeout(3_000)
+    assert await page.locator(".pg-panel").count() == 0
+
+
+@pytest.mark.asyncio
+async def test_the_advertising_card_fits_what_a_person_will_actually_read(
+    real_browser: RealBrowser, fixture_site: tuple[str, object]
+) -> None:
+    base_url, _ = fixture_site
+    page = await real_browser.context.new_page()
+    await page.goto(f"{base_url}/fixtures/tracker-late-fingerprint")
+    panel = page.locator(".pg-panel").first
+    await panel.wait_for(timeout=10_000)
+
+    rows = panel.locator(".pg-rows li")
+    assert await rows.count() <= 3
+    # The detail is a click away, not on the face of the card.
+    assert not await panel.locator(".pg-remember:visible").count()
+    assert not await panel.locator(".pg-rationale:visible").count()
+    await panel.locator(".pg-why").click()
+    assert await panel.locator(".pg-remember:visible").count() == 1
+    assert await panel.locator(".pg-rationale li").count() >= 1
 
 
 @pytest.mark.asyncio

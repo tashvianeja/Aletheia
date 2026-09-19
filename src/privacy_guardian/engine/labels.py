@@ -57,6 +57,18 @@ LABELS = {
     "free_text_pii": "Personal details in free text",
 }
 
+# Labels that are grammatically plural, so a sentence about one of them still reads:
+# "Persistent device identifiers do not appear necessary", never "does". Matched
+# exactly, because "Financial details" is plural where "Card number" is not.
+PLURAL_LABELS = frozenset(
+    {"device_identifiers", "contacts", "credentials", "financial", "free_text_pii"}
+)
+
+
+def plural_label(category: str) -> bool:
+    return category in PLURAL_LABELS
+
+
 # Every purpose in the necessity matrix needs a name that reads in a sentence:
 # these appear as "does not appear necessary for a <name>", where the bare matrix
 # key gave "a banking" and "a ecommerce".

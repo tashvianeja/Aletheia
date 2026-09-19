@@ -456,8 +456,8 @@ async def test_a_new_tracking_mechanism_sharpens_the_notice_already_up(service: 
     assert fingerprinting.event_id == first.event_id
     assert len(service.decisions) == 1
     assert fingerprinting.outcome != Outcome.IGNORE
-    assert not any("fingerprint" in row.label.lower() for row in first.findings)
-    assert any("fingerprint" in row.label.lower() for row in fingerprinting.findings)
+    assert not any("clear cookies" in row.label.lower() for row in first.findings)
+    assert any("clear cookies" in row.label.lower() for row in fingerprinting.findings)
 
 
 @pytest.mark.asyncio
@@ -517,3 +517,57 @@ async def test_a_second_clipboard_read_is_a_second_exposure(service: Service) ->
     again = await service.process_event(read.model_copy(update={"id": "second-read"}))
 
     assert again.event_id != first.event_id
+
+
+@pytest.mark.asyncio
+async def test_a_warning_nobody_answered_is_raised_again_on_the_next_visit(
+    service: Service,
+) -> None:
+    """The user's report: reload a page, visit another, and nothing is ever announced.
+
+    A warning was shown once, and from then on every later look at the site was
+    quieted as "already shown within the last day" — whether or not the person had
+    ever seen it, let alone dealt with it.
+    """
+
+    def age_out() -> None:
+        # What the retention sweep leaves behind an hour later: no decision in
+        # memory, but a profile observation that lives for a day.
+        service.decisions.clear()
+        service.events.clear()
+        service.notices.clear()
+
+    first = await service.process_event(_tracking(["known_tracker_requests"], ["a.test"]))
+    age_out()
+    revisit = await service.process_event(_tracking(["known_tracker_requests"], ["a.test"]))
+    age_out()
+    third = await service.process_event(_tracking(["known_tracker_requests"], ["a.test"]))
+
+    assert first.outcome == Outcome.INFORM
+    assert revisit.outcome == Outcome.INFORM
+    assert third.outcome == Outcome.INFORM
+
+
+@pytest.mark.asyncio
+async def test_a_warning_the_person_put_down_stays_down(service: Service) -> None:
+    shown = await service.process_event(_tracking(["known_tracker_requests"], ["a.test"]))
+    await service.respond(UserResponse(event_id=shown.event_id, action="continue"))
+    service.decisions.clear()
+    service.events.clear()
+    service.notices.clear()
+
+    revisit = await service.process_event(_tracking(["known_tracker_requests"], ["a.test"]))
+
+    assert revisit.outcome == Outcome.IGNORE
+    assert any("last day" in note for note in revisit.rationale)
+
+
+@pytest.mark.asyncio
+async def test_a_page_reporting_itself_leaves_one_observation_not_twenty(
+    service: Service,
+) -> None:
+    for domains in (["a.test"], ["a.test", "b.test"], ["a.test", "b.test", "c.test"]):
+        await service.process_event(_tracking(["known_tracker_requests"], domains))
+
+    profile = service._profile(Requester(origin="https://news.test", display_name="news.test"))
+    assert len(profile.recent_observations) == 1

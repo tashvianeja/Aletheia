@@ -15,6 +15,12 @@ class Observation(BaseModel):
     ts: datetime
     red_flags: list[DataCategory] = Field(default_factory=list)
     confidence: float = 0.0
+    # Which notice this came from, so the person's answer can be recorded against it.
+    event_id: str = ""
+    # Whether they ever did anything with it. A warning that was raised is not a
+    # warning that was read: quieting one nobody answered is how a site that tracks
+    # you goes silent for a day after a single card the person may never have seen.
+    answered: bool = False
 
 
 class SiteOrAppProfile(BaseModel):

@@ -5,6 +5,7 @@ from privacy_guardian.analysis.tracking import (
     TrackingSnapshot,
     analyze_tracking,
     is_tracker,
+    tracker_domain,
 )
 
 
@@ -96,3 +97,34 @@ def test_short_lived_or_first_party_cookie_does_not_create_tracking_signal() -> 
     ):
         analysis = analyze_tracking(TrackingSnapshot(cookies=[cookie]))
         assert not analysis.detected
+
+
+def test_one_company_on_six_hostnames_is_counted_once() -> None:
+    """Subdomains are how four advertising companies read as eleven websites."""
+    hosts = [
+        "ad.doubleclick.net",
+        "cm.g.doubleclick.net",
+        "securepubads.g.doubleclick.net",
+        "b09567f6f3a32c6bbeb28c75e41cac69.safeframe.googlesyndication.com",
+        "pagead2.googlesyndication.com",
+        "www.google-analytics.com",
+    ]
+    analysis = analyze_tracking(
+        TrackingSnapshot(
+            origin="https://news.test",
+            request_hosts=hosts,
+            urls=[f"https://{host}/pixel?uid=synthetic" for host in hosts],
+        )
+    )
+
+    assert analysis.tracker_domains == [
+        "doubleclick.net",
+        "google-analytics.com",
+        "googlesyndication.com",
+    ]
+
+
+def test_a_host_outside_the_tracker_list_keeps_its_registrable_domain() -> None:
+    assert tracker_domain("pixel.metrics-three.test") == "metrics-three.test"
+    assert tracker_domain("beacon.stats.example.co.uk") == "example.co.uk"
+    assert tracker_domain("criteo.com") == "criteo.com"

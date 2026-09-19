@@ -116,11 +116,14 @@
     }
     const foot=element('div','pg-foot');
     foot.append(icon('shield'),element('span',null,'Analysed on this device'));
-    if(!informational){
-      const why=element('button','pg-why','Why am I seeing this?');why.type='button';
-      why.addEventListener('click',()=>{const showing=rationale.hidden;rationale.hidden=!showing||!(decision.rationale||[]).length;remember.hidden=!showing;});
-      foot.append(why);
-    }
+    // Everything the card does not say out loud lives behind this: how it is being
+    // done, the reasoning, and the way to stop being told about this site. An
+    // informational card needs it most, being the one with no buttons at all.
+    const why=element('button','pg-why','Why am I seeing this?');why.type='button';
+    // Keyed off the checkbox, which is always there: the reasoning list is not, and
+    // a card without one used to open and never close again.
+    why.addEventListener('click',()=>{const showing=remember.hidden;rationale.hidden=!showing||!(decision.rationale||[]).length;remember.hidden=!showing;});
+    foot.append(why);
     panel.append(foot);
     return {panel,body,rationale,remember,check};
   }
@@ -136,7 +139,15 @@
     const close=()=>{state.view.panel.remove();PG.panels.delete(decision.event_id);};
     state.apply=async result=>{if(state.resolved||state.processing)return;state.processing=true;try{await state.onAction?.(result);state.selected=result;state.resolved=true;close();state.resolve(result);}catch(_){state.view.body.textContent='That action could not be completed. Your submission remains held.';}finally{state.processing=false;}};
     // Dismissing an intervention is the same as letting it time out: the safe default stands.
-    state.dismiss=()=>{if(state.decision.outcome==='INTERVENE'){state.apply({action:state.decision.default_action||'cancel'});}else{state.resolved=true;close();state.resolve({action:'continue'});}};
+    // Closing anything else is an answer too, and saying so is what stops it coming
+    // back on the next page — and what makes "Don't ask again for this site" mean
+    // something. A card nobody ever answers is one the person may never have seen.
+    state.dismiss=()=>{
+      if(state.decision.outcome==='INTERVENE'){state.apply({action:state.decision.default_action||'cancel'});return;}
+      state.resolved=true;
+      if((state.decision.actions||[]).includes('continue'))PG.request('action',{event_id:decision.event_id,action:'continue',remember:state.view.check.checked}).catch(()=>{});
+      close();state.resolve({action:'continue'});
+    };
     // The answer can also be given on the desktop widget, so the page watches for one
     // the whole time it is asking.
     state.watch=()=>{

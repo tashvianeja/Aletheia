@@ -300,7 +300,7 @@ INTENT_PHRASES: dict[FormIntent, str] = {
     FormIntent.CHECKOUT_PAYMENT: "pay for an order",
     FormIntent.SHIPPING_ADDRESS: "deliver an order",
     FormIntent.NEWSLETTER: "join a mailing list",
-    FormIntent.LEAD_CAPTURE: "receive this",
+    FormIntent.LEAD_CAPTURE: "get this",
     FormIntent.CONTACT_SUPPORT: "send a message",
     FormIntent.PROFILE_EDIT: "update a profile",
     FormIntent.IDENTITY_VERIFICATION: "verify identity",

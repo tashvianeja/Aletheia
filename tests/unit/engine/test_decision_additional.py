@@ -192,21 +192,23 @@ def test_recent_equivalent_tracking_is_rate_limited_unless_confidence_jumps() ->
         signals=["canvas"],
         data_categories=[DataCategory.DEVICE_IDENTIFIERS],
     )
-    profile = SiteOrAppProfile(
-        recent_observations=[
-            Observation(
-                event_class="tracking",
-                categories=[DataCategory.DEVICE_IDENTIFIERS],
-                signals=["canvas"],
-                confidence=0.5,
-                ts=now - timedelta(minutes=5),
-            )
-        ]
+    seen = Observation(
+        event_class="tracking",
+        categories=[DataCategory.DEVICE_IDENTIFIERS],
+        signals=["canvas"],
+        confidence=0.5,
+        ts=now - timedelta(minutes=5),
+        answered=True,
     )
+    profile = SiteOrAppProfile(recent_observations=[seen])
     repeated = decide(event, profile=profile)
     confidence_jump = decide(event.model_copy(update={"confidence": 0.8}), profile=profile)
     new_mechanism = decide(
         event.model_copy(update={"signals": ["canvas", "cname_cloaking"]}), profile=profile
+    )
+    unanswered = decide(
+        event,
+        profile=SiteOrAppProfile(recent_observations=[seen.model_copy(update={"answered": False})]),
     )
 
     assert repeated.outcome == Outcome.IGNORE
@@ -214,6 +216,9 @@ def test_recent_equivalent_tracking_is_rate_limited_unless_confidence_jumps() ->
     assert confidence_jump.outcome == Outcome.INFORM
     # A mechanism that was not there last time is news, however recently the rest was shown.
     assert new_mechanism.outcome == Outcome.INFORM
+    # Raised once and never answered is not "already dealt with": the person may
+    # never have seen it, and silence for the rest of the day is not the answer.
+    assert unanswered.outcome == Outcome.INFORM
 
 
 def test_location_upload_offers_metadata_stripping_and_engine_delegates() -> None:

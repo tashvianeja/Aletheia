@@ -1,5 +1,5 @@
 (() => {
-  let nextId=0, timer=null, lastFingerprint='', assessments=[];
+  let nextId=0, timer=null, typingTimer=null, lastFingerprint='', assessments=[];
   const ids=new WeakMap();
   function fields(form=null){return PG.queryAll('input,select,textarea,[contenteditable=true]').filter(element=>PG.visible(element)&&(!form||element.form===form||form.contains(element))&&!['file','hidden','submit','button','reset','image'].includes(element.type)).map(element=>{
     if(!ids.has(element))ids.set(element,`pg-field-${++nextId}`);const field_id=ids.get(element);element.dataset.pgFieldId=field_id;
@@ -45,11 +45,19 @@
     for(const [form,count] of counts)if(count>most){best=form;most=count;}
     return best;
   }
-  async function inventory(){const items=fields();const fingerprint=JSON.stringify(items.map(field=>({...field,filled:false})));if(fingerprint===lastFingerprint)return;lastFingerprint=fingerprint;
+  // Whether a box has something in it is part of the inventory: an optional box is
+  // only worth naming once the person has actually put something in it, and a
+  // fingerprint that pretended every box was empty meant that moment never arrived.
+  // What is compared is the boolean, never the value, which is never sent anywhere.
+  async function inventory(){const items=fields();const fingerprint=JSON.stringify(items);if(fingerprint===lastFingerprint)return;lastFingerprint=fingerprint;
     try{const result=await PG.request('context',{forms:{fields:items,context:context(dominantForm())}});if(fingerprint!==lastFingerprint)return;assessments=result.forms?.fields||[];PG.queryAll('.pg-badge').forEach(node=>node.remove());
       for(const assessment of assessments){if(!assessment.badge)continue;const element=PG.queryAll('[data-pg-field-id]').find(node=>node.dataset.pgFieldId===assessment.field.field_id);if(!element)continue;const badge=document.createElement('span');badge.className='pg-badge';badge.textContent='May be unnecessary';badge.title=assessment.necessity?.rationale||'';badge.setAttribute('role','note');element.insertAdjacentElement('afterend',badge);}
     }catch(_){lastFingerprint='';}}
   const schedule=()=>{clearTimeout(timer);timer=setTimeout(inventory,10);};
+  // Typing moves no element and changes no attribute, so nothing else here notices it.
+  // Waiting for a pause keeps this to one pass per field rather than one per keystroke.
+  const scheduleTyped=()=>{clearTimeout(typingTimer);typingTimer=setTimeout(inventory,500);};
+  for(const name of ['input','change'])document.addEventListener(name,scheduleTyped,true);
   const observedRoots=new WeakSet();
   function observeRoots(){for(const root of PG.roots()){if(observedRoots.has(root))continue;observedRoots.add(root);new MutationObserver(records=>{if(records.some(record=>!record.target.closest?.('.pg-panel,.pg-badge'))){observeRoots();schedule();}}).observe(root===document?document.documentElement:root,{subtree:true,childList:true,attributes:true,attributeFilter:['required','aria-required','name','type','style','class']});}}
   function observe(){observeRoots();schedule();}
