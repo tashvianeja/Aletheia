@@ -142,10 +142,13 @@
     // Closing anything else is an answer too, and saying so is what stops it coming
     // back on the next page — and what makes "Don't ask again for this site" mean
     // something. A card nobody ever answers is one the person may never have seen.
-    state.dismiss=()=>{
+    // Making room for another surface is not the person answering: that path passes
+    // answered=false, so anything the card was holding still takes its safe default
+    // but the question itself stays open and is put to them again.
+    state.dismiss=(answered=true)=>{
       if(state.decision.outcome==='INTERVENE'){state.apply({action:state.decision.default_action||'cancel'});return;}
       state.resolved=true;
-      if((state.decision.actions||[]).includes('continue'))PG.request('action',{event_id:decision.event_id,action:'continue',remember:state.view.check.checked}).catch(()=>{});
+      if(answered&&(state.decision.actions||[]).includes('continue'))PG.request('action',{event_id:decision.event_id,action:'continue',remember:state.view.check.checked}).catch(()=>{});
       close();state.resolve({action:'continue'});
     };
     // The answer can also be given on the desktop widget, so the page watches for one
@@ -198,6 +201,15 @@
     setTimeout(()=>panel.remove(),8000);
     return panel;
   };
+  // Take every card down at once, each the way its own close control would: the
+  // safe answer stands for anything a card was holding. The desktop asks for this
+  // when the thorough check goes up in the same corner.
+  PG.dismissAll = ()=>{
+    // The check card needs this corner; the person has not said anything about what
+    // was in it. An informational card is owed to them again on the next page.
+    for(const state of PG.decisionStates.values())if(!state.resolved)state.dismiss(false);
+    document.querySelectorAll('.pg-panel[data-pg-confirm]').forEach(panel=>panel.remove());
+  };
   // "Show me where": find the quoted clause on the page and take the reader to it.
   PG.showClauses = citations=>{
     const wanted=(citations||[]).map(text=>String(text).replace(/\s+/g,' ').trim().slice(0,120)).filter(Boolean);
@@ -229,6 +241,7 @@
   };
   api.runtime.onMessage.addListener((message,_sender,sendResponse)=>{
     if(message.pg==='refresh_context'){PG.collectContext(message.request_id).then(result=>sendResponse({ok:true,result})).catch(()=>sendResponse({ok:false}));return true;}
+    if(message.pg==='dismiss_panels'){PG.dismissAll();sendResponse({ok:true});}
     if(message.pg==='tracking_identifier_confirmed'){window.postMessage({pgBridge:'mark_tracking_identifier',hash:message.hash},location.origin);sendResponse({ok:true});}
     if(message.pg==='block_local_tracking'){window.postMessage({pgBridge:'clear_tracking_identifiers'},location.origin);PG.rejectConsent?.();sendResponse({ok:true});}
   });

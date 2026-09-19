@@ -396,8 +396,13 @@ def main() -> int:
 
         def deep_check(self) -> None:
             foreground = self.core.adapter.foreground_requester() if self.core.adapter else None
+            # The person asked for this one, and it reports on everything the cards in
+            # the corner were about, so it takes the corner: what is up gives way, and
+            # what has not been shown yet waits until the check card has gone.
+            self.clear_corner()
             if self.deepcheck_window is None:
                 self.deepcheck_window = DeepCheckWindow(self)
+                self.deepcheck_window.dismissed.connect(self.popups.release)
             else:
                 self.deepcheck_window._show_running()
             self.deepcheck_window.show()
@@ -406,10 +411,22 @@ def main() -> int:
             async def run_check() -> None:
                 from privacy_guardian.deepcheck import run_deep_check
 
+                self.core.dismiss_page_panels()
                 report = await run_deep_check(self.core, foreground_requester=foreground)
                 self.bridge.report_ready.emit(report)
 
             self.submit(run_check())
+
+        def clear_corner(self) -> None:
+            """Take down the desktop cards, as their own close controls would."""
+            self.popups.hold()
+            self.popups.dismiss_current()
+            if self.confirmation is not None:
+                # The bar deletes itself once it has finished; by then there is
+                # nothing left to dismiss.
+                with contextlib.suppress(RuntimeError):
+                    self.confirmation.dismiss()
+                self.confirmation = None
 
         def show_progress(self, update: Any) -> None:
             if self.deepcheck_window:

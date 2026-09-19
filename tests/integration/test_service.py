@@ -450,3 +450,21 @@ async def test_tracking_revealed_in_waves_sharpens_one_card(service: Service) ->
     # Three hostnames, two companies: cm.g.doubleclick.net is doubleclick.net.
     assert "2 other companies" in later_rows
     assert "clear cookies" in later_rows
+
+
+@pytest.mark.asyncio
+async def test_dismissing_page_panels_reaches_only_a_connected_browser(service: Service) -> None:
+    """The desktop's thorough check asks the page to take its cards down; the ask rides
+    the next ping, and there is nothing to ask when no browser is listening."""
+    service.dismiss_page_panels()
+    assert service.browser_commands == []
+
+    first = await service.handle_message(request("hello", "ping", {"browser": "chromium"}))
+    assert first["ok"] is True and first["result"]["commands"] == []
+
+    service.dismiss_page_panels()
+    second = await service.handle_message(request("again", "ping", {"browser": "chromium"}))
+    assert [command["type"] for command in second["result"]["commands"]] == ["dismiss_panels"]
+
+    third = await service.handle_message(request("later", "ping", {"browser": "chromium"}))
+    assert third["result"]["commands"] == [], "an ask is delivered once"
