@@ -75,9 +75,37 @@ def main() -> int:
     session = str(uuid4())
 
     async def relay() -> None:
-        slots = asyncio.Semaphore(8)
+        slots = asyncio.Semaphore(6)
         output_lock = asyncio.Lock()
         tasks: set[asyncio.Task[None]] = set()
+
+        async def heartbeat() -> None:
+            # This control request never waits for a data-dispatch slot. A long upload
+            # cannot make a healthy host appear dead to the service's session lease.
+            browser = (
+                "chromium"
+                if any(arg.startswith("chrome-extension://") for arg in sys.argv)
+                else "firefox"
+            )
+            while True:
+                with contextlib.suppress(OSError, TimeoutError, ValueError):
+                    await send_request(
+                        settings.data_dir,
+                        {
+                            "v": 1,
+                            "id": "host-heartbeat",
+                            "type": "ping",
+                            "payload": {
+                                "_session": session,
+                                "browser": browser,
+                                "heartbeat_only": True,
+                            },
+                        },
+                        timeout=2,
+                    )
+                await asyncio.sleep(1)
+
+        heartbeat_task = asyncio.create_task(heartbeat())
 
         async def dispatch(message: dict[str, Any]) -> None:
             try:
@@ -103,6 +131,8 @@ def main() -> int:
                 tasks.add(task)
                 task.add_done_callback(tasks.discard)
         finally:
+            heartbeat_task.cancel()
+            await asyncio.gather(heartbeat_task, return_exceptions=True)
             if tasks:
                 done, pending = await asyncio.wait(tasks, timeout=2)
                 for task in pending:

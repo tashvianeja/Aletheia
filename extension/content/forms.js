@@ -11,7 +11,7 @@
     try{const result=await PG.request('context',{forms:{fields:items}});if(fingerprint!==lastFingerprint)return;assessments=result.forms?.fields||[];PG.queryAll('.pg-badge').forEach(node=>node.remove());
       for(const assessment of assessments){if(!assessment.badge)continue;const element=PG.queryAll('[data-pg-field-id]').find(node=>node.dataset.pgFieldId===assessment.field.field_id);if(!element)continue;const badge=document.createElement('span');badge.className='pg-badge';badge.textContent='May be unnecessary';badge.title=assessment.necessity?.rationale||'';badge.setAttribute('role','note');element.insertAdjacentElement('afterend',badge);}
     }catch(_){lastFingerprint='';}}
-  const schedule=()=>{clearTimeout(timer);timer=setTimeout(inventory,35);};
+  const schedule=()=>{clearTimeout(timer);timer=setTimeout(inventory,10);};
   const observedRoots=new WeakSet();
   function observeRoots(){for(const root of PG.roots()){if(observedRoots.has(root))continue;observedRoots.add(root);new MutationObserver(records=>{if(records.some(record=>!record.target.closest?.('.pg-panel,.pg-badge'))){observeRoots();schedule();}}).observe(root===document?document.documentElement:root,{subtree:true,childList:true,attributes:true,attributeFilter:['required','aria-required','name','type','style','class']});}}
   function observe(){observeRoots();schedule();}

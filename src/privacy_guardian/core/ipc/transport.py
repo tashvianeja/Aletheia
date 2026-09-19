@@ -65,7 +65,7 @@ class ControlServer:
         self.listener: Any = None
         self._closed = threading.Event()
         self._pipe_thread: threading.Thread | None = None
-        self._pipe_slots = threading.BoundedSemaphore(8)
+        self._pipe_slots = threading.BoundedSemaphore(32)
         self._tasks: set[asyncio.Task[None]] = set()
 
     async def start(self) -> None:

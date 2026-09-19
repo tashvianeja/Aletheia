@@ -188,7 +188,11 @@ class WindowsClipboard:
         return self._requester(int(win32gui.GetForegroundWindow()))
 
     def clipboard_owner(self) -> Requester | None:
-        owner = int(importlib.import_module("ctypes").windll.user32.GetClipboardOwner())
+        ctypes = importlib.import_module("ctypes")
+        get_owner = ctypes.windll.user32.GetClipboardOwner
+        get_owner.argtypes = []
+        get_owner.restype = ctypes.c_void_p
+        owner = int(get_owner() or 0)
         return self._requester(owner) if owner else None
 
     def clipboard(self) -> tuple[int, str]:
@@ -281,7 +285,9 @@ class WindowsAdapter(PlatformAdapter):
         self._latest: list[PrivacyEvent] = []
         self._access: dict[str, set[DataCategory]] = {}
         self._process_thread: threading.Thread | None = None
-        self._foreground: Requester | None = None
+        self._recent_processes: dict[str, tuple[float, Requester]] = {}
+        self._process_lock = threading.Lock()
+        self._startup_requesters: dict[str, Requester] = {}
         self._injected = registry is not None
         self._path_monitor: Any = None
         self._extension_monitor: Any = None
@@ -296,10 +302,101 @@ class WindowsAdapter(PlatformAdapter):
             (match.group(1) or match.group(2)) if match else command.strip().strip('"')
         )
 
+    def correlate_process(self, requester: Requester) -> Requester:
+        """Use a recent exact executable match, never infer the foreground from a launch."""
+        with self._process_lock:
+            match = self._recent_processes.get(ntpath.normcase(requester.exe_path))
+        if match and time.monotonic() - match[0] < 60:
+            signal = match[1]
+            return enrich_requester(
+                requester.model_copy(update={"display_name": signal.display_name})
+            )
+        return enrich_requester(requester)
+
+    def startup_requester(self, path: Path) -> Requester:
+        target = str(path)
+        if path.suffix.lower() == ".lnk" and sys.platform == "win32":
+            import pythoncom
+            import win32com.client
+
+            pythoncom.CoInitialize()
+            try:
+                shortcut = win32com.client.Dispatch("WScript.Shell").CreateShortcut(str(path))
+                target = str(shortcut.TargetPath) or target
+            finally:
+                pythoncom.CoUninitialize()
+        return self.correlate_process(
+            Requester(
+                kind="application",
+                display_name=path.stem,
+                exe_path=ntpath.normcase(os.path.expandvars(target)),
+            )
+        )
+
+    def poll_startup_files(self) -> list[PrivacyEvent]:
+        events: list[PrivacyEvent] = []
+        current: dict[str, int] = {}
+        categories = {DataCategory.STARTUP, DataCategory.BACKGROUND_EXECUTION}
+        for root in self.watch_paths:
+            if not root.exists():
+                continue
+            for path in root.iterdir():
+                if not path.is_file():
+                    continue
+                key = str(path)
+                current[key] = path.stat().st_mtime_ns
+                if self._files.get(key) == current[key]:
+                    continue
+                requester = self.startup_requester(path)
+                previous_requester = self._startup_requesters.get(key)
+                self._startup_requesters[key] = requester
+                if previous_requester and previous_requester.key != requester.key:
+                    self._drop_startup_if_unused(previous_requester)
+                self._access.setdefault(requester.key, set()).update(categories)
+                events.append(
+                    StartupRegistrationEvent(
+                        source="os",
+                        platform="windows",
+                        requester=requester,
+                        data_categories=sorted(categories, key=str),
+                        mechanism="startup_folder",
+                        modified=key in self._files,
+                    )
+                )
+                events.append(self._breadth(requester))
+        for removed in self._files.keys() - current.keys():
+            removed_requester = self._startup_requesters.pop(removed, None)
+            if removed_requester:
+                self._drop_startup_if_unused(removed_requester)
+        self._files = current
+        return events
+
+    def _drop_startup_if_unused(
+        self, requester: Requester, registry: dict[str, dict[str, Any]] | None = None
+    ) -> None:
+        registered = (
+            any(item.key == requester.key for item in self._startup_requesters.values())
+            or any(
+                self.command_executable(str(command)) == requester.key
+                for key, values in (self._state if registry is None else registry).items()
+                if key.rsplit("\\", 1)[-1] in {"Run", "RunOnce"}
+                for command in values.values()
+            )
+            or any(
+                self._task_requester(name, definition).key == requester.key
+                for name, definition in self._tasks.items()
+            )
+        )
+        if not registered:
+            self._access.setdefault(requester.key, set()).difference_update(
+                {DataCategory.STARTUP, DataCategory.BACKGROUND_EXECUTION}
+            )
+
     def diff_registry(
         self, previous: dict[str, dict[str, Any]], current: dict[str, dict[str, Any]]
     ) -> list[PrivacyEvent]:
         events: list[PrivacyEvent] = []
+        revoked_startup: set[str] = set()
         for removed_path in previous.keys() - current.keys():
             parts = removed_path.split("\\")
             if "ConsentStore" in parts:
@@ -319,9 +416,7 @@ class WindowsAdapter(PlatformAdapter):
             elif parts[-1] in {"Run", "RunOnce"}:
                 for command in previous[removed_path].values():
                     identity = self.command_executable(str(command))
-                    self._access.setdefault(identity, set()).difference_update(
-                        {DataCategory.STARTUP, DataCategory.BACKGROUND_EXECUTION}
-                    )
+                    revoked_startup.add(identity)
         for path, values in current.items():
             old = previous.get(path, {})
             if old == values:
@@ -337,7 +432,7 @@ class WindowsAdapter(PlatformAdapter):
                     continue
                 app = "\\".join(parts[index + 2 :])
                 exe = app.removeprefix("NonPackaged\\").replace("#", "\\")
-                requester = enrich_requester(
+                requester = self.correlate_process(
                     Requester(
                         kind="application",
                         exe_path=ntpath.normcase(exe) if app.startswith("NonPackaged") else "",
@@ -404,12 +499,12 @@ class WindowsAdapter(PlatformAdapter):
             elif parts[-1] in {"Run", "RunOnce"}:
                 for removed_name in old.keys() - values.keys():
                     identity = self.command_executable(str(old[removed_name]))
-                    self._access.setdefault(identity, set()).difference_update(
-                        {DataCategory.STARTUP, DataCategory.BACKGROUND_EXECUTION}
-                    )
+                    revoked_startup.add(identity)
                 for name, command in values.items():
                     if old.get(name) == command:
                         continue
+                    if name in old:
+                        revoked_startup.add(self.command_executable(str(old[name])))
                     requester = enrich_requester(
                         Requester(
                             kind="application",
@@ -434,6 +529,8 @@ class WindowsAdapter(PlatformAdapter):
                         )
                     )
                     events.append(self._breadth(requester))
+        for identity in revoked_startup:
+            self._drop_startup_if_unused(Requester(kind="application", exe_path=identity), current)
         return events
 
     def _breadth(self, requester: Requester) -> SystemAccessEvent:
@@ -481,10 +578,11 @@ class WindowsAdapter(PlatformAdapter):
         current = self.scheduler.snapshot()
         events: list[PrivacyEvent] = []
         startup = {DataCategory.STARTUP, DataCategory.BACKGROUND_EXECUTION}
+        removed_requesters: list[Requester] = []
         for name, old in self._tasks.items():
             if current.get(name) != old:
                 requester = self._task_requester(name, old)
-                self._access.setdefault(requester.key, set()).difference_update(startup)
+                removed_requesters.append(requester)
         for name, definition in current.items():
             requester = self._task_requester(name, definition)
             self._access.setdefault(requester.key, set()).update(startup)
@@ -502,6 +600,8 @@ class WindowsAdapter(PlatformAdapter):
             )
             events.append(self._breadth(requester))
         self._tasks = current
+        for requester in removed_requesters:
+            self._drop_startup_if_unused(requester)
         return events
 
     def _process_starts(self) -> None:
@@ -515,9 +615,26 @@ class WindowsAdapter(PlatformAdapter):
             while not self._stop.is_set():
                 try:
                     event = events.NextEvent(1000)
-                    self._foreground = Requester(
-                        kind="application", display_name=str(event.ProcessName)
+                    import psutil
+
+                    process = psutil.Process(int(event.ProcessID))
+                    requester = enrich_requester(
+                        Requester(
+                            kind="application",
+                            display_name=str(event.ProcessName),
+                            exe_path=ntpath.normcase(process.exe()),
+                        )
                     )
+                    now = time.monotonic()
+                    with self._process_lock:
+                        self._recent_processes = {
+                            key: value
+                            for key, value in self._recent_processes.items()
+                            if now - value[0] < 60
+                        }
+                        if len(self._recent_processes) >= 256:
+                            self._recent_processes.pop(next(iter(self._recent_processes)))
+                        self._recent_processes[requester.key] = (now, requester)
                 except Exception:
                     continue
             pythoncom.CoUninitialize()
@@ -528,6 +645,7 @@ class WindowsAdapter(PlatformAdapter):
         last_tasks = 0.0
         last_extensions = 0.0
         last_registry = 0.0
+        last_startup = time.monotonic()
         while not self._stop.is_set():
             try:
                 if hasattr(self.registry, "wait_for_change"):
@@ -560,32 +678,10 @@ class WindowsAdapter(PlatformAdapter):
                         if self._extensions.get(extension.requester.key) != signature:
                             self._extensions[extension.requester.key] = signature
                             events.append(extension)
-                for root in self.watch_paths:
-                    if not root.exists():
-                        continue
-                    for path in root.iterdir():
-                        mtime = path.stat().st_mtime_ns
-                        if self._files.get(str(path)) != mtime:
-                            events.append(
-                                StartupRegistrationEvent(
-                                    source="os",
-                                    platform="windows",
-                                    requester=enrich_requester(
-                                        Requester(
-                                            kind="application",
-                                            display_name=path.stem,
-                                            exe_path=str(path),
-                                        )
-                                    ),
-                                    data_categories=[
-                                        DataCategory.STARTUP,
-                                        DataCategory.BACKGROUND_EXECUTION,
-                                    ],
-                                    mechanism="startup_folder",
-                                    modified=str(path) in self._files,
-                                )
-                            )
-                            self._files[str(path)] = mtime
+                if self._fs_changed.is_set() or time.monotonic() - last_startup >= 30:
+                    self._fs_changed.clear()
+                    last_startup = time.monotonic()
+                    events.extend(self.poll_startup_files())
                 self._latest = events or self._latest
                 for event in events:
                     self._emit(event)
@@ -596,6 +692,7 @@ class WindowsAdapter(PlatformAdapter):
         self._emit = emit
         self._state = self.registry.snapshot()
         self.diff_registry({}, self._state)
+        self.poll_startup_files()
         from privacy_guardian.sensors.filesystem import PathMonitor
 
         self._path_monitor = PathMonitor(self.watch_paths, self._fs_changed.set)

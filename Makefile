@@ -5,7 +5,8 @@ setup:
 run:
 	uv run privacy-guardian
 test:
-	uv run pytest --cov=privacy_guardian --cov-report=term-missing --cov-report=xml --cov-report=json --cov-fail-under=0
+	uv run pytest tests/unit tests/integration tests/platform tests/packaging --cov=privacy_guardian --cov-report=term-missing --cov-report=xml --cov-report=json --cov-fail-under=0
+	uv run pytest tests/e2e tests/perf
 	uv run python tests/check_coverage.py coverage.json
 lint:
 	uv run ruff check .

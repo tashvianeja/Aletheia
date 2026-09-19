@@ -45,6 +45,7 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+faulthandler_timeout = 60
 markers = ["macos: requires a real macOS desktop", "windows: requires Windows", "llm: opt-in real LLM API", "e2e: browser end-to-end", "perf: performance measurement", "platform: requires interactive platform access"]
 
 [tool.coverage.run]

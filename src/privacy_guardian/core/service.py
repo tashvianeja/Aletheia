@@ -78,6 +78,7 @@ class Service:
         self.response_locks: dict[str, asyncio.Lock] = {}
         self.cloud_keys: set[str] = set()
         self.uploads: dict[str, dict[str, Any]] = {}
+        self.inflight_uploads: dict[str, dict[str, Any]] = {}
         self.contexts: dict[str, dict[str, Any]] = {}
         self.browser_commands: list[dict[str, Any]] = []
         self.context_updated = asyncio.Event()
@@ -85,6 +86,7 @@ class Service:
         self.focused_origin = ""
         self.connected_browsers: dict[str, float] = {}
         self.browser_sessions: dict[str, str] = {}
+        self.session_last_seen: dict[str, float] = {}
         self.closed_sessions: dict[str, float] = {}
         self.paused_until: datetime | None = None
         self.adapter: Any = None
@@ -92,6 +94,39 @@ class Service:
         self.cloud_last_used = time.monotonic()
         self.background_tasks: set[asyncio.Task[None]] = set()
         self._sweeper: asyncio.Task[None] | None = None
+        self._upload_preparation: asyncio.Task[None] | None = None
+        self._worker_preparation: asyncio.Task[None] | None = None
+        self._ner_generation = -1
+
+    def prepare_browser_worker(self) -> None:
+        if self.pool._pool is not None or (
+            self._worker_preparation and not self._worker_preparation.done()
+        ):
+            return
+
+        async def prepare() -> None:
+            from privacy_guardian.core.worker_dispatch import prepare_worker
+
+            with contextlib.suppress(RuntimeError, OSError):
+                await self.pool.run(prepare_worker)
+
+        self._worker_preparation = asyncio.create_task(prepare())
+
+    def prepare_upload_analysis(self) -> None:
+        """Prepare lazily when a page exposes an upload control, once per live worker."""
+        if (self.pool._pool is not None and self._ner_generation == self.pool.generation) or (
+            self._upload_preparation is not None and not self._upload_preparation.done()
+        ):
+            return
+
+        async def prepare() -> None:
+            from privacy_guardian.core.worker_dispatch import prepare_upload_model
+
+            with contextlib.suppress(RuntimeError, OSError):
+                await self.pool.run(prepare_upload_model)
+                self._ner_generation = self.pool.generation
+
+        self._upload_preparation = asyncio.create_task(prepare())
 
     @property
     def llm_executor(self) -> ProcessPoolExecutor:
@@ -138,6 +173,12 @@ class Service:
         self._sweeper = asyncio.create_task(self._maintenance())
 
     async def stop(self) -> None:
+        if self._worker_preparation:
+            self._worker_preparation.cancel()
+            await asyncio.gather(self._worker_preparation, return_exceptions=True)
+        if self._upload_preparation:
+            self._upload_preparation.cancel()
+            await asyncio.gather(self._upload_preparation, return_exceptions=True)
         if self._sweeper:
             self._sweeper.cancel()
             await asyncio.gather(self._sweeper, return_exceptions=True)
@@ -162,6 +203,16 @@ class Service:
             try:
                 await self.control.ensure_running()
                 now = time.monotonic()
+                for browser_session, last_seen in list(self.session_last_seen.items()):
+                    if now - last_seen > 5:
+                        await self._route(
+                            Request(
+                                v=1,
+                                id="expired-session",
+                                type="disconnect",
+                                payload={"_session": browser_session},
+                            )
+                        )
                 if not self.settings.llm.enabled:
                     for task in tuple(self.background_tasks):
                         task.cancel()
@@ -550,12 +601,18 @@ class Service:
         session = str(payload.pop("_session", ""))[:128]
         if session and session in self.closed_sessions and request.type != "disconnect":
             raise ValueError("Browser session has closed")
+        if session:
+            self.session_last_seen[session] = time.monotonic()
         if request.type == "ping":
             browser = str(payload.get("browser", "browser"))[:40]
             self.connected_browsers[browser] = time.monotonic()
             if session:
+                if session not in self.browser_sessions:
+                    self.prepare_browser_worker()
                 self.browser_sessions[session] = browser
-            commands, self.browser_commands = self.browser_commands, []
+            commands: list[dict[str, Any]] = []
+            if not payload.get("heartbeat_only"):
+                commands, self.browser_commands = self.browser_commands, []
             from privacy_guardian import __version__
 
             return {"version": __version__, "protocol": 1, "status": "ready", "commands": commands}
@@ -583,25 +640,47 @@ class Service:
             return {"decision": decision.model_dump(mode="json")}
         if request.type == "file_start":
             upload_id = str(payload["upload_id"])
+            from privacy_guardian.core.worker_dispatch import MAX_SIZE, MAX_UPLOADS
             from privacy_guardian.sensors.browser_bridge import enrich_browser_requester
 
+            if (
+                not upload_id
+                or len(upload_id) > 128
+                or upload_id in self.uploads
+                or upload_id in self.inflight_uploads
+                or len(self.uploads) + len(self.inflight_uploads) >= MAX_UPLOADS
+                or not 0 <= int(payload["size"]) <= MAX_SIZE
+            ):
+                raise ValueError("Invalid or duplicate upload")
             requester = enrich_browser_requester(
                 Requester.model_validate(payload.get("requester", {})), payload.get("signals", {})
             )
-            await self.pool.run(
-                start_upload,
-                upload_id,
-                str(payload["filename"]),
-                int(payload["size"]),
-                str(payload.get("mime", "")),
-            )
+            initial_event = FileUploadEvent(requester=requester, size_bytes=int(payload["size"]))
+            self.store.save_event(initial_event)
             self.uploads[upload_id] = {
                 "requester": requester,
                 "touched": time.monotonic(),
                 "size": int(payload["size"]),
                 "generation": self.pool.generation,
                 "session": session,
+                "event_id": initial_event.id,
             }
+            try:
+                await self.pool.run(
+                    start_upload,
+                    upload_id,
+                    str(payload["filename"]),
+                    int(payload["size"]),
+                    str(payload.get("mime", "")),
+                )
+                if session in self.closed_sessions:
+                    self.store.mark_aborted(initial_event.id)
+                    raise ValueError("Browser session has closed")
+                self.uploads[upload_id]["generation"] = self.pool.generation
+            except BaseException:
+                self.store.mark_aborted(initial_event.id)
+                self.uploads.pop(upload_id, None)
+                raise
             return {"upload_id": upload_id}
         if request.type == "file_chunk":
             upload_id = str(payload["upload_id"])
@@ -618,10 +697,18 @@ class Service:
             if meta["session"] != session or meta["generation"] != self.pool.generation:
                 raise ValueError("Upload session is no longer valid")
             self.uploads.pop(upload_id)
-            analysis = await self.pool.run(
-                finish_upload, upload_id, self.settings.analysis_timeout_seconds
-            )
+            self.inflight_uploads[upload_id] = meta
+            try:
+                analysis = await self.pool.run(
+                    finish_upload, upload_id, self.settings.analysis_timeout_seconds
+                )
+            except BaseException:
+                self.store.mark_aborted(meta["event_id"])
+                raise
+            finally:
+                self.inflight_uploads.pop(upload_id, None)
             event = FileUploadEvent(
+                id=meta["event_id"],
                 requester=meta["requester"],
                 payload_ref=analysis.payload_ref,
                 document_type=analysis.document_type,
@@ -685,12 +772,14 @@ class Service:
             from privacy_guardian.sensors.browser_bridge import prepare_context
 
             payload = prepare_context(payload)
+            if payload.get("uploads_available") is True:
+                self.prepare_upload_analysis()
             origin = safe_origin(str(payload.get("origin", "")))
             # Content-bearing context is analysed immediately in the worker.
             from privacy_guardian.analysis.worker import analyze_payload
 
             result: dict[str, Any] = {}
-            for kind in ("policy", "terms", "forms", "consent", "tracking"):
+            for kind in ("forms", "consent", "tracking", "policy", "terms"):
                 incoming = payload.get(kind)
                 if incoming is None:
                     continue
@@ -872,8 +961,13 @@ class Service:
                     )
                 return {"disconnected": True, "event_id": requested_event}
             self.closed_sessions[session] = time.monotonic()
+            self.session_last_seen.pop(session, None)
+            for metadata in self.inflight_uploads.values():
+                if metadata["session"] == session:
+                    self.store.mark_aborted(metadata["event_id"])
             for upload_id, metadata in list(self.uploads.items()):
                 if metadata["session"] == session:
+                    self.store.mark_aborted(metadata["event_id"])
                     with contextlib.suppress(RuntimeError, KeyError):
                         await self.pool.run(abort_upload, upload_id)
                     self.uploads.pop(upload_id, None)

@@ -26,6 +26,19 @@ class Upload:
 _UPLOADS: dict[str, Upload] = {}
 
 
+def prepare_worker() -> bool:
+    """Import local analyzers without loading the optional NER model."""
+    from privacy_guardian.analysis.worker import AnalysisResult
+
+    return bool(AnalysisResult)
+
+
+def prepare_upload_model() -> bool:
+    from privacy_guardian.analysis.pii.detector import _ner
+
+    return _ner() is not None
+
+
 def _expire() -> None:
     for key in list(_UPLOADS):
         if time.monotonic() - _UPLOADS[key].touched > UPLOAD_TTL:

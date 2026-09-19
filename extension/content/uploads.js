@@ -1,4 +1,8 @@
 (() => {
+  let preparationSent=false;
+  function prepare(){if(preparationSent||!PG.queryAll('input[type=file]').length)return;preparationSent=true;PG.request('context',{uploads_available:true}).catch(()=>{preparationSent=false;});}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',prepare,{once:true});else prepare();
+  if(document.documentElement)new MutationObserver(prepare).observe(document.documentElement,{childList:true,subtree:true});
   const records=new WeakMap(),scanQueue=[];let activeScans=0;
   function enqueue(operation){return new Promise((resolve,reject)=>{scanQueue.push({operation,resolve,reject});pump();});}
   function pump(){while(activeScans<2&&scanQueue.length){const job=scanQueue.shift();activeScans++;job.operation().then(job.resolve,job.reject).finally(()=>{activeScans--;pump();});}}
@@ -49,5 +53,5 @@
     const files=event.data.files.filter(file=>file instanceof File||file instanceof Blob);const checked=await Promise.all(files.map(file=>permit(file instanceof File?file:new File([file],'upload.bin',{type:file.type}),()=>window.postMessage({pgBridge:'upload_hold',id:event.data.id},location.origin))));
     window.postMessage({pgBridge:'upload_result',id:event.data.id,allowed:checked.every(result=>result.allowed),files:checked.map(result=>result.file)},location.origin);
   });
-  PG.collectors.push(async()=>({uploads_in_progress:PG.queryAll('input[type=file]').reduce((count,input)=>count+(input.files?.length||0),0)}));
+  PG.collectors.push(async()=>({uploads_available:!!PG.queryAll('input[type=file]').length,uploads_in_progress:PG.queryAll('input[type=file]').reduce((count,input)=>count+(input.files?.length||0),0)}));
 })();

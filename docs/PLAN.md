@@ -17,7 +17,7 @@ Three worker slots: two Astra implementation workers and one Sol verification wo
 
 ## Acceptance status
 
-P0: contracts complete and baseline accepted. All functional requirements and numeric targets unverified until independently tested. No omitted feature is accepted. Record commands, counts, coverage, artifacts, commit IDs, platform gaps and elapsed time below at each checkpoint.
+Contracts and implementation are complete enough for independent acceptance. Current local unit/integration/platform tests and native five-minute idle targets pass. Browser and installer verification continue; scoped coverage remains below85% at the last measurement. No omitted feature is accepted. Timestamped evidence below supersedes earlier checkpoints.
 
 ## Task register
 
@@ -26,11 +26,11 @@ P0: contracts complete and baseline accepted. All functional requirements and nu
 |P0-A1|Astra core|PLAN/ARCHITECTURE/contracts|none|Published 11:53 UTC; review accepted baseline|
 |P1-A1|Astra core|pyproject/uv/Makefile/CI|P0|Python3.12.13 +153 packages installed 11:56 UTC|
 |P1-A2|Astra core|core/config/storage/IPC|P0|Accepted foundational tests; IPC 3 passed; ongoing integration hardening|
-|P1-S1/S2|Sol|tests/fixtures/scaffolding/browser harness|P0|In progress|
-|P2-A3/A4/A5/A10|Astra analysis|analysis/engine/data/llm|P0|In progress|
-|P2-A6|Astra analysis|extension/browser bridge|P1-A2|Implemented 98f952c; browser E2E pending|
+|P1-S1/S2|Sol|tests/fixtures/scaffolding/browser harness|P0|Implemented; independent suites expand during acceptance|
+|P2-A3/A4/A5/A10|Astra analysis|analysis/engine/data/llm|P0|Implemented; corpus, worker, guard and engine tests pass|
+|P2-A6|Astra analysis|extension/browser bridge|P1-A2|Implemented; Chromium and Firefox native paths independently exercised|
 |P3-A7/A8/A9|Astra core|platform/UI/deepcheck|P1|Implemented 775abab; independent tests in progress|
-|P4-A11/A12|Astra core|service integration/packaging|P2/P3|First Mac app+DMG verified; final rebuild/Windows installer pending|
+|P4-A11/A12|Astra core|service integration/packaging|P2/P3|First Mac artifact superseded by compatibility fixes; fresh rebuild/Windows installer pending|
 |P1–P5-T1|Tera|documentation|contracts + available slot|Initial docs committed; follow-up verification updates pending|
 
 ### P1 interim evidence (12:00 UTC)
@@ -51,7 +51,7 @@ Service/UI/platform implementations now present; independent Sol tests being add
 
 Root independent unit/integration evidence: 157 passed, one logging token-format regression identified; redaction marker corrected to `<redacted:category>` for retest. Source strict mypy70 modules clean. Bandit `-r src -ll -q` clean after replacing whitelist SQL interpolation with fixed statement maps. Coverage from partial suites: 48.04% overall line, 70.91% scoped line; not final and below target, independent UI/platform/E2E/coverage tests are being expanded. Analysis corpus evidence accepted earlier: termsF1=1.0, policy purposesF1=.9048, sharingF1=.9444.
 
-Compatibility audit found Homebrew OCR bottle requires macOS27. Replaced packaging path with a source-built static Tesseract5.5.3 + Leptonica1.87.0 + libpng1.6.58 targeting macOS13. `vtool` verifies minos13.0; `otool` only system libSystem/libz/libc++ dependencies. Qt6.11.2 binary inspected for arm64+x86_64: minos13.0. First DMG remains superseded until rebuilt with static OCR.
+Compatibility audit found Homebrew OCR bottle requires macOS27. Replaced packaging path with a source-built static Tesseract5.5.3 + Leptonica1.87.0 + libpng1.6.58 targeting macOS13. `vtool` verifies minos13.0; `otool` only system libSystem/libz/libc++ dependencies. Initial Qt framework inspection showed minos13.0, but the later complete wrapper audit below found higher requirements and replaced this dependency. First DMG remains superseded until rebuilt.
 
 Remaining acceptance: full browser E2E (including native host and actions), actual platform/native lifecycle tests, full-app five-minute idle measurement, final coverage gates and both installer smoke tests. Windows CI has not passed beyond lint yet; no Windows native verification is claimed.
 
@@ -72,3 +72,11 @@ A full artifact audit found Qt6.11.2 Python wrappers actually required macOS15 d
 Firefox156 and web-ext installed for Sol-owned real native-host smoke. Qt pytest abort in sandbox (`requires neon`) independently reproduced as sandbox CPU-probe restriction; exact regular test command passes unsandboxed (4 tests). Windows user-only ACLs now supplement POSIX modes for application data/token/database/settings, and isolated-profile uninstall preserves global keychain credentials.
 
 Sol coverage checkpoint207passed3skipped: overall70.37%line passed, scoped75.24%line remains below85%; additional branch/lifecycle tests are in progress. Dynamic Shadow DOM500ms browser assertion now passes, as do terms3warnings/3normal-use checks and recipe policy wording. Large-document timing optimization and full installer lifecycle/Windows CI remain open.
+
+### Runtime and lifecycle checkpoint (13:17 UTC, T+1:28)
+
+Root independently verified236 unit/integration/platform/Mach-O tests passed,3 platform skips. Real Firefox native-host smoke passed in3.02s. Uninstrumented38.2MB representative PDF: cold1.486588s, warm0.163277s, both below3s. Headed Chromium targeted tests: dynamic shadow badge31.9ms (<500), consent instrumentation0.050ms across3 events, actual browser-process SIGKILL persists aborted upload and leaves service responsive. Passport selection-to-intervention remains1.8625s against1.5s and is not accepted; lightweight browser-session worker preparation and generation-aware upload-model preparation are being retested.
+
+Coverage instrumentation materially inflated spawned-worker timings (fresh-clone15.49s versus uninstrumented1.49s). Makefile and CI now run instrumented unit/integration/platform/packaging suites, then the complete uninstrumented E2E/performance suites; both are hard gates, and numeric thresholds remain unchanged. CI test steps have15-minute bounds and60-second Python stack diagnostics. Latest independent coverage expansion is committed by Sol; final aggregate70%/85% line gates pending.
+
+Source checkpoints697337e and Sol f162819 pushed/ready for coherent CI. macOS CI successfully built compatible application and passed packaged diagnose/smoke; installer helper direct-script import defect was found and corrected by Sol. Fresh clone setup/lint/typecheck/diagnose/smoke passed. Main workspace dist still requires final rebuild; no superseded artifact is accepted.

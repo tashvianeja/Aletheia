@@ -51,10 +51,16 @@ jobs:
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run mypy --strict src/
-      - name: Test all acceptance paths
+      - name: Test instrumented core and platform paths
+        timeout-minutes: 15
         id: test_gate
         continue-on-error: true
-        run: uv run pytest --cov=privacy_guardian --cov-report=xml --cov-report=json --cov-report=term-missing --cov-fail-under=0
+        run: uv run pytest tests/unit tests/integration tests/platform tests/packaging --cov=privacy_guardian --cov-report=xml --cov-report=json --cov-report=term-missing --cov-fail-under=0
+      - name: Test real browsers and latency without instrumentation
+        timeout-minutes: 15
+        id: runtime_gate
+        continue-on-error: true
+        run: uv run pytest tests/e2e tests/perf
       - name: Check line coverage
         id: coverage_gate
         continue-on-error: true
@@ -96,5 +102,5 @@ jobs:
             artifacts/
 
       - name: Enforce test and coverage outcomes
-        if: always() && (steps.coverage_gate.outcome == 'failure' || steps.test_gate.outcome == 'failure')
+        if: always() && (steps.coverage_gate.outcome == 'failure' || steps.test_gate.outcome == 'failure' || steps.runtime_gate.outcome == 'failure')
         run: exit 1
