@@ -14,6 +14,7 @@ from playwright.async_api import async_playwright
 from privacy_guardian.analysis.worker import analyze_payload
 from privacy_guardian.core.ipc.transport import send_request
 from tests.e2e.conftest import PERFORMANCE_TOLERANCE, RealBrowser
+from tests.perf.test_latency_budgets import synthetic_mixed_pdf
 
 pytestmark = pytest.mark.e2e
 
@@ -742,9 +743,12 @@ async def test_browser_disconnect_aborts_pending_upload_and_reconnects_within_fi
 
 @pytest.mark.asyncio
 async def test_abrupt_browser_kill_during_worker_analysis_persists_aborted_event(
-    real_browser: RealBrowser, fixture_site: tuple[str, object]
+    real_browser: RealBrowser, fixture_site: tuple[str, object], tmp_path: Path
 ) -> None:
     base_url, _ = fixture_site
+    document = tmp_path / "synthetic-mixed-invoices.pdf"
+    synthetic_mixed_pdf(document)
+    assert 25 * 1024**2 <= document.stat().st_size <= 40 * 1024**2
     page = await real_browser.context.new_page()
     await page.goto(f"{base_url}/fixtures/image-compressor")
     warm = await send_request(
@@ -785,11 +789,10 @@ async def test_abrupt_browser_kill_during_worker_analysis_persists_aborted_event
         }"""
     )
     assert instrumented is True
-    passport = Path(__file__).resolve().parents[1] / "fixtures/passport_synthetic.pdf"
-    await page.locator("#file").set_input_files(passport)
+    await page.locator("#file").set_input_files(document)
 
     analysis_observed = False
-    deadline = time.monotonic() + 5
+    deadline = time.monotonic() + 20
     while time.monotonic() < deadline:
         finish_state = await real_browser.worker.evaluate(
             "({started:globalThis.__pgFinishStarted,settled:globalThis.__pgFinishSettled})"
@@ -800,7 +803,7 @@ async def test_abrupt_browser_kill_during_worker_analysis_persists_aborted_event
                 command = " ".join(child.cmdline())
             if (
                 "spawn_main" in command
-                and cpu - baseline_cpu.get(child.pid, cpu) >= 0.1
+                and cpu - baseline_cpu.get(child.pid, 0.0) >= 0.1
                 and finish_state == {"started": True, "settled": False}
             ):
                 analysis_observed = True

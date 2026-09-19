@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+import psutil
 import pytest
 
 from privacy_guardian.config import Settings
@@ -180,6 +181,39 @@ def test_preferences_apply_public_origin_overrides(service: Service) -> None:
     assert preferences.expected_permissions[requester.key] == [DataCategory.CAMERA]
 
 
+def test_native_host_process_identity_detects_exit_and_pid_reuse(
+    service: Service, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class Process:
+        def __init__(self, pid: int) -> None:
+            if pid == 303:
+                raise psutil.NoSuchProcess(pid)
+            self.pid = pid
+
+        def is_running(self) -> bool:
+            return True
+
+        def status(self) -> str:
+            return psutil.STATUS_RUNNING
+
+        def create_time(self) -> float:
+            return {101: 10.0, 202: 99.0}[self.pid]
+
+    monkeypatch.setattr("privacy_guardian.core.service.psutil.Process", Process)
+    service.session_processes.update(
+        {
+            "live": (101, 10.0),
+            "reused": (202, 20.0),
+            "exited": (303, 30.0),
+        }
+    )
+
+    assert service._session_process_alive("live") is True
+    assert service._session_process_alive("reused") is False
+    assert service._session_process_alive("exited") is False
+    assert service._session_process_alive("direct-local-client") is True
+
+
 @pytest.mark.asyncio
 async def test_response_persists_mark_expected_remember_and_is_idempotent(
     service: Service,
@@ -307,10 +341,12 @@ async def test_disconnect_validates_owner_and_cleans_session_state(service: Serv
     }
     service.contexts["https://site.example"] = {"session": "whole"}
     service.browser_sessions["whole"] = "chrome"
+    service.session_processes["whole"] = (123, 1.0)
     service.connected_browsers["chrome"] = 1
     complete = await service.handle_message(request("whole", {"_session": "whole"}))
     assert complete["result"] == {"disconnected": True}
     assert service.uploads == {}
     assert service.contexts == {}
     assert service.browser_sessions == {}
+    assert service.session_processes == {}
     assert service.connected_browsers == {}

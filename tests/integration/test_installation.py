@@ -7,7 +7,7 @@ import struct
 import subprocess
 import sys
 import tempfile
-from contextlib import AbstractContextManager
+from contextlib import AbstractContextManager, suppress
 from pathlib import Path
 
 import pytest
@@ -104,19 +104,27 @@ def test_install_writes_least_privilege_browser_manifests(
 
 
 @pytest.mark.asyncio
-@pytest.mark.skipif(
-    os.name == "nt", reason="POSIX host wrapper; packaged Windows host has its own smoke test"
-)
 async def test_installed_native_host_performs_real_stdio_to_authenticated_service_handshake(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     locations = isolated_locations(tmp_path / "browser-config")
     monkeypatch.setattr(installation, "manifest_locations", lambda: locations)
+    registry = isolate_windows_registry(monkeypatch)
     short_root = tempfile.TemporaryDirectory(
         prefix="pg-host-", dir="/tmp" if sys.platform != "win32" else None
     )
     settings = Settings(data_dir=Path(short_root.name), autostart=False)
     installation.install(settings)
+
+    if sys.platform == "win32":
+        assert registry is not None and registry.values
+        manifest_path = Path(next(iter(registry.values.values())))
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        host = Path(manifest["path"])
+        assert host == Path(sys.executable).parent / "privacy-guardian-host.exe"
+    else:
+        host = settings.data_dir / "privacy-guardian-host"
+    assert host.is_file()
 
     async def handler(message: dict[str, object]) -> dict[str, object]:
         return {
@@ -132,7 +140,7 @@ async def test_installed_native_host_performs_real_stdio_to_authenticated_servic
     environment = os.environ.copy()
     environment["PRIVACY_GUARDIAN_DATA_DIR"] = str(settings.data_dir)
     process = await asyncio.create_subprocess_exec(
-        str(settings.data_dir / "privacy-guardian-host"),
+        str(host),
         f"chrome-extension://{installation.CHROME_ID}/",
         stdin=asyncio.subprocess.PIPE,
         stdout=asyncio.subprocess.PIPE,
@@ -153,7 +161,13 @@ async def test_installed_native_host_performs_real_stdio_to_authenticated_servic
         assert response["result"] == {"transport": "native-stdio-control-socket"}
     finally:
         process.stdin.close()
-        await process.wait()
+        with suppress(ConnectionError):
+            await process.stdin.wait_closed()
+        try:
+            await asyncio.wait_for(process.wait(), 5)
+        except TimeoutError:
+            process.kill()
+            await asyncio.wait_for(process.wait(), 3)
         await server.stop()
         short_root.cleanup()
     assert process.returncode == 0
