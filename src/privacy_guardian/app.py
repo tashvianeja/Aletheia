@@ -194,6 +194,7 @@ def main() -> int:
 
     from privacy_guardian.core.events import Decision, UserResponse
     from privacy_guardian.core.service import Service
+    from privacy_guardian.ui.card import bring_to_front
     from privacy_guardian.ui.dashboard import Dashboard
     from privacy_guardian.ui.deepcheck import DeepCheckWindow
     from privacy_guardian.ui.onboarding import Onboarding
@@ -444,9 +445,7 @@ def main() -> int:
                 self.dashboard = Dashboard(self)
             self.dashboard.select(tab)
             self.dashboard.refresh()
-            self.dashboard.show()
-            self.dashboard.raise_()
-            self.dashboard.activateWindow()
+            bring_to_front(self.dashboard)
 
         def permissions_status(self) -> dict[str, bool]:
             return (
@@ -473,18 +472,43 @@ def main() -> int:
             )
 
         def show_onboarding(self) -> None:
-            self.onboarding = Onboarding(self)
-            self.onboarding.show()
+            if self.onboarding is None:
+                self.onboarding = Onboarding(self)
+            self.onboarding.present()
 
         def open_settings(self, permission: str) -> None:
             if self.core.adapter:
                 self.core.adapter.open_settings(permission)
 
+        def extension_folder(self) -> Path:
+            return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2])) / "extension"
+
         def open_extension_folder(self) -> None:
-            folder = (
-                Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2])) / "extension"
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.extension_folder())))
+
+        def connected_browsers(self) -> list[str]:
+            return sorted(self.core.connected_browsers)
+
+        def register_bridge(self) -> tuple[bool, str]:
+            """Write the native-messaging manifests so the extension has something to reach.
+
+            Setup does this before asking anyone to load the extension; leaving it until
+            the end meant the extension could never connect while setup was still open.
+            """
+            from privacy_guardian.util.installation import HOST_NAME, install, manifest_locations
+
+            try:
+                install(settings, configure_autostart=False)
+            except OSError:
+                return False, tr("bridge_failed")
+            registered = sorted(
+                browser
+                for browser, folder in manifest_locations().items()
+                if (folder / f"{HOST_NAME}.json").exists()
             )
-            QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
+            if not registered:
+                return False, tr("bridge_none")
+            return True, tr("bridge_ready", browsers=", ".join(registered))
 
         def update_trackers(self) -> None:
             async def update() -> None:

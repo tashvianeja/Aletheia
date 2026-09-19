@@ -35,6 +35,15 @@ All notable changes will be documented here. This project has not produced a ver
 
 ### Fixed
 
+- Setup did not set anything up. Every page of the walkthrough could be clicked straight
+  through in four clicks with nothing configured, and the native messaging bridge was only
+  registered at Finish, *after* the page that asks you to load the extension, so the
+  extension could never connect while setup was open. The bridge is now registered on
+  entering that page, the page shows the extension's path with copy and reveal buttons and
+  per-browser instructions, and Next stays disabled until a browser has genuinely
+  connected. Continuing without the extension is possible but takes a confirmation, and it
+  leaves setup marked incomplete so it prompts again rather than claiming to be ready.
+  The final page summarises what is and is not working instead of asserting success.
 - Floating widgets were placed partly off the bottom of the screen and behind the Dock.
   Three causes, all now fixed: the window was measured before its word-wrapped labels had
   been laid out, so its height was underestimated; it was anchored to the primary screen

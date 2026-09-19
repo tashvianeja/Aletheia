@@ -29,7 +29,7 @@ def manifest_locations(platform: str | None = None, home: Path | None = None) ->
     return {}
 
 
-def install(settings: Settings) -> list[Path]:
+def install(settings: Settings, configure_autostart: bool = True) -> list[Path]:
     settings.data_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     secure_path(settings.data_dir)
     installed: list[Path] = []
@@ -93,7 +93,8 @@ def install(settings: Settings) -> list[Path]:
     )
     settings.allowed_extension_ids = [CHROME_ID, FIREFOX_ID]
     settings.save()
-    if settings.autostart:
+    # Setup registers the bridge early, before the person has chosen autostart.
+    if configure_autostart and settings.autostart:
         from privacy_guardian.sensors.platform import create_adapter
 
         create_adapter().set_autostart(True)

@@ -333,6 +333,31 @@ def keep_above_dock(widget: QWidget) -> None:
         logging.getLogger(__name__).debug("window level unchanged")
 
 
+def bring_to_front(widget: QWidget) -> None:
+    """Show a window and actually put it in front.
+
+    Privacy Guardian is an agent app (LSUIElement) with no Dock icon, so macOS never
+    makes it the active application on its own. raise_() alone leaves a newly opened
+    window behind whatever the person was looking at, which reads as the menu bar item
+    doing nothing at all.
+    """
+    widget.show()
+    widget.raise_()
+    widget.activateWindow()
+    if sys.platform != "darwin":
+        return
+    try:
+        from AppKit import NSApplication
+
+        application = NSApplication.sharedApplication()
+        if hasattr(application, "activate"):
+            application.activate()
+        else:  # pragma: no cover - macOS 13 and earlier
+            application.activateIgnoringOtherApps_(True)
+    except Exception:
+        logging.getLogger(__name__).debug("application activation unchanged")
+
+
 def anchor_bottom_right(widget: QWidget, content: QWidget | None = None) -> None:
     """Pin the window to the bottom-right of the usable screen area.
 

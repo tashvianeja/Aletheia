@@ -51,7 +51,7 @@ cd Privacy-Guardian
 
 The script checks your prerequisites, installs [uv](https://docs.astral.sh/uv/) if it is missing,
 builds `PrivacyGuardian.app`, copies it to `/Applications`, registers the browser bridge for
-Chrome, Edge, Brave and Firefox, starts the app, and prints how to load the extension.
+Chrome, Edge, Brave and Firefox, starts the app, and leaves its setup walkthrough on screen.
 
 | Flag | What it does |
 |---|---|
@@ -62,15 +62,25 @@ Chrome, Edge, Brave and Firefox, starts the app, and prints how to load the exte
 The first build with OCR compiles a static Tesseract from source and takes several minutes. Use
 `--skip-ocr` if you only care about forms, cookies, policies, tracking and desktop permissions.
 
-### Then load the extension
+### Then finish setup
 
-Most of what Privacy Guardian sees comes through the browser, so the extension is not optional.
+Privacy Guardian opens its setup walkthrough the first time it starts, and the script leaves it
+on screen for you.
+
+Most of what Privacy Guardian sees comes through the browser, so the extension is not optional and
+setup will not move past it until a browser has actually connected. That page registers the native
+messaging bridge, shows you where the extension lives with a copy button, and updates itself the
+moment a browser appears:
 
 - **Chrome, Edge, Brave** — extensions page → Developer mode → *Load unpacked* → select `extension/`
 - **Firefox** — `about:debugging#/runtime/this-firefox` → *Load Temporary Add-on* → select
   `extension/manifest.firefox.json`
 
-Packaged zips are written to `dist/` by the same build.
+You can continue without it, but that takes a confirmation and leaves setup marked incomplete, so
+it will ask again next time. Packaged zips are written to `dist/` by the same build.
+
+Desktop monitoring is genuinely optional, and setup says so. Reopen the walkthrough any time from
+the menu bar under **Set up Privacy Guardian**.
 
 ### Optional: desktop monitoring
 
@@ -79,7 +89,8 @@ System Settings → Privacy & Security:
 - **Full Disk Access** lets Privacy Guardian see the permissions other apps have been granted
 - **Accessibility** enables the ⌘⇧P thorough-check shortcut
 
-Everything in the browser works without either.
+Everything in the browser works without either. The setup walkthrough shows their live status and
+links straight to the right pane.
 
 ---
 

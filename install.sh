@@ -154,7 +154,11 @@ $(bold "Privacy Guardian is installed.")
   A padlock now sits in your menu bar with a green dot beside it. It stays quiet
   until something is worth telling you about.
 
-$(bold "1. Load the browser extension")
+$(bold "Finish in the setup window")
+
+  Setup has opened on screen. It walks through the browser extension and the
+  optional desktop permissions, and it will not move past the extension step
+  until a browser has actually connected.
 
   Chrome, Edge or Brave
     Open the extensions page, turn on Developer mode, choose "Load unpacked"
@@ -167,16 +171,9 @@ $(bold "1. Load the browser extension")
       ${ROOT}/extension/manifest.firefox.json
 
   Packaged copies are in ${ROOT}/dist if you would rather install from a zip.
+  Reopen setup any time from the menu bar under "Set up Privacy Guardian".
 
-$(bold "2. Grant desktop monitoring (optional)")
-
-  System Settings > Privacy & Security
-    Full Disk Access     lets Privacy Guardian see permission grants by other apps
-    Accessibility        enables the Cmd+Shift+P thorough-check shortcut
-
-  Everything in the browser works without these.
-
-$(bold "3. Try it")
+$(bold "Then try it")
 
   Click the menu bar padlock and choose "Run thorough check", or drop a document
   containing personal details into any upload box.

@@ -49,6 +49,9 @@ class UiController:
         self.hotkey = FakeHotkey()
         self.bridge = SimpleNamespace(deep_check_requested=SimpleNamespace(emit=lambda: None))
         self.calls: list[tuple[Any, ...]] = []
+        # Setup state the onboarding walkthrough reads back.
+        self.browsers: list[str] = []
+        self.bridge_result: tuple[bool, str] = (True, "Browser bridge registered for chrome.")
 
     def diagnostics(self) -> dict[str, Any]:
         return {
@@ -95,6 +98,16 @@ class UiController:
 
     def open_extension_folder(self) -> None:
         self.calls.append(("extension_folder",))
+
+    def extension_folder(self) -> Path:
+        return self.settings.data_dir / "extension"
+
+    def connected_browsers(self) -> list[str]:
+        return list(self.browsers)
+
+    def register_bridge(self) -> tuple[bool, str]:
+        self.calls.append(("register_bridge",))
+        return self.bridge_result
 
 
 @pytest.fixture

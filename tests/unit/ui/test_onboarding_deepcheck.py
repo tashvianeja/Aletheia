@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from PySide6.QtWidgets import QMessageBox, QPushButton
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QLabel, QMessageBox, QPushButton
 
 from privacy_guardian.ui.deepcheck import DeepCheckWindow
 from privacy_guardian.ui.onboarding import Onboarding
@@ -22,8 +23,11 @@ def test_onboarding_has_complete_walkthrough_and_live_permission_status(
 
 
 def test_onboarding_finish_persists_cloud_and_autostart(qtbot, ui_controller, monkeypatch) -> None:
+    # Setup only counts as complete once the extension is really connected.
+    ui_controller.browsers = ["chromium"]
     onboarding = Onboarding(ui_controller)
     qtbot.addWidget(onboarding)
+    onboarding.extension_page.registered = True
     installed: list[object] = []
     keys: list[str] = []
     monkeypatch.setattr("privacy_guardian.util.installation.install", installed.append)
@@ -134,3 +138,107 @@ def test_deep_check_without_context_says_so(qtbot, ui_controller) -> None:
         {"summary": "Nothing to review", "findings": [], "groups": [], "context_available": False}
     )
     assert any("context" in label.lower() for label in _labels(window))
+
+
+def advance(wizard, qtbot) -> int:
+    """Click Next the way a person would, and report how far it got."""
+    clicks = 0
+    while wizard.button(wizard.WizardButton.NextButton).isEnabled() and clicks < 10:
+        qtbot.mouseClick(wizard.button(wizard.WizardButton.NextButton), Qt.MouseButton.LeftButton)
+        clicks += 1
+    return clicks
+
+
+def texts(widget) -> list[str]:
+    return [label.text() for label in widget.findChildren(QLabel) if label.text()]
+
+
+def test_setup_stops_until_a_browser_extension_is_actually_connected(qtbot, ui_controller) -> None:
+    onboarding = Onboarding(ui_controller)
+    qtbot.addWidget(onboarding)
+    onboarding.show()
+
+    advance(onboarding, qtbot)
+
+    assert onboarding.currentPage() is onboarding.extension_page
+    assert not onboarding.button(onboarding.WizardButton.NextButton).isEnabled()
+    assert not onboarding.button(onboarding.WizardButton.FinishButton).isEnabled()
+    assert any("waiting" in text.lower() for text in texts(onboarding.extension_page.connection))
+
+
+def test_setup_registers_the_bridge_before_asking_for_the_extension(qtbot, ui_controller) -> None:
+    """The extension cannot connect to a bridge that has not been written yet."""
+    onboarding = Onboarding(ui_controller)
+    qtbot.addWidget(onboarding)
+    onboarding.show()
+
+    advance(onboarding, qtbot)
+
+    assert ("register_bridge",) in ui_controller.calls
+    assert onboarding.extension_page.registered is True
+    assert "registered" in onboarding.extension_page.bridge_status.text().lower()
+    assert str(ui_controller.extension_folder()) == onboarding.extension_page.path_field.text()
+
+
+def test_setup_continues_once_a_browser_connects(qtbot, ui_controller) -> None:
+    onboarding = Onboarding(ui_controller)
+    qtbot.addWidget(onboarding)
+    onboarding.show()
+    advance(onboarding, qtbot)
+
+    ui_controller.browsers = ["chromium"]
+    onboarding.extension_page.refresh()
+
+    assert onboarding.button(onboarding.WizardButton.NextButton).isEnabled()
+    assert any("chromium" in text for text in texts(onboarding.extension_page.connection))
+    advance(onboarding, qtbot)
+    assert onboarding.currentId() == onboarding.pageIds()[-1]
+    assert any("chromium" in text for text in texts(onboarding.pages["finish"].summary))
+
+
+def test_a_failed_bridge_registration_is_explained_and_blocks(qtbot, ui_controller) -> None:
+    ui_controller.bridge_result = (False, "No supported browser profile was found.")
+    onboarding = Onboarding(ui_controller)
+    qtbot.addWidget(onboarding)
+    onboarding.show()
+
+    advance(onboarding, qtbot)
+
+    assert onboarding.extension_page.registered is False
+    assert "No supported browser" in onboarding.extension_page.bridge_status.text()
+    assert not onboarding.button(onboarding.WizardButton.NextButton).isEnabled()
+
+
+def test_skipping_the_extension_is_deliberate_and_leaves_setup_incomplete(
+    qtbot, ui_controller, monkeypatch
+) -> None:
+    monkeypatch.setattr("privacy_guardian.util.installation.install", lambda _settings: [])
+    monkeypatch.setattr(QMessageBox, "information", lambda *args: None)
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda *args, **kwargs: QMessageBox.StandardButton.Yes
+    )
+    onboarding = Onboarding(ui_controller)
+    qtbot.addWidget(onboarding)
+    onboarding.show()
+    advance(onboarding, qtbot)
+
+    # Cancelling the confirmation leaves the walkthrough exactly where it was.
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda *args, **kwargs: QMessageBox.StandardButton.Cancel
+    )
+    onboarding.extension_page.skip.click()
+    assert not onboarding.button(onboarding.WizardButton.NextButton).isEnabled()
+
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda *args, **kwargs: QMessageBox.StandardButton.Yes
+    )
+    onboarding.extension_page.skip.click()
+
+    assert onboarding.button(onboarding.WizardButton.NextButton).isEnabled()
+    advance(onboarding, qtbot)
+    summary = texts(onboarding.pages["finish"].summary)
+    assert any("No browser extension connected" in line for line in summary)
+    onboarding._finish()
+    assert ui_controller.settings.onboarding_complete is False, (
+        "a skipped setup must keep prompting rather than claim to be ready"
+    )

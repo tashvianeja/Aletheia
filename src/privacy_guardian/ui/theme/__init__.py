@@ -70,10 +70,16 @@ QPushButton {{
 }}
 QPushButton:hover {{ background: {c["canvas"]}; }}
 QPushButton:focus {{ border: 2px solid {c["accent"]}; }}
+QPushButton:disabled {{
+  background: {c["canvas"]}; color: {c["faint"]}; border: 1px solid {c["line"]};
+}}
 QPushButton[tier="primary"] {{
   background: {c["accent"]}; color: #ffffff; border: 1px solid {c["accent"]}; font-weight: 600;
 }}
 QPushButton[tier="primary"]:hover {{ background: {c["accent_hover"]}; }}
+QPushButton[tier="primary"]:disabled {{
+  background: {c["line"]}; color: {c["faint"]}; border: 1px solid {c["line"]};
+}}
 QPushButton[tier="tertiary"] {{
   background: transparent; color: {c["muted"]}; border: none; padding: 7px 10px;
 }}
