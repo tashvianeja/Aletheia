@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import asyncio
+import os
+import sys
+import time
 from typing import Any
 
 import pytest
 
-from privacy_guardian.core.events import ClipboardReadEvent, Requester
+from privacy_guardian.core.events import ClipboardReadEvent, DataCategory, Requester
 from privacy_guardian.sensors.clipboard import ClipboardMonitor
 
 
@@ -79,3 +83,78 @@ async def test_clipboard_sequence_change_replaces_prior_sensitive_categories() -
     await monitor.tick()
 
     assert monitor.categories == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.macos
+@pytest.mark.skipif(sys.platform != "darwin", reason="requires the native macOS pasteboard")
+async def test_real_macos_clipboard_classifies_synthetic_card_within_500ms() -> None:
+    from AppKit import NSPasteboard, NSPasteboardTypeString
+
+    board = NSPasteboard.pasteboardWithUniqueName()
+
+    class NativePasteboardBackend:
+        def clipboard(self) -> tuple[int, str]:
+            return int(board.changeCount()), str(board.stringForType_(NSPasteboardTypeString) or "")
+
+        def foreground(self) -> Requester:
+            return Requester(
+                kind="application", bundle_id="test.synthetic.writer", display_name="Test writer"
+            )
+
+    monitor = ClipboardMonitor(NativePasteboardBackend(), InlinePool(), lambda _event: None)
+    started = time.perf_counter()
+    board.clearContents()
+    assert board.setString_forType_("Test card 4111111111111111", NSPasteboardTypeString)
+    monitor.start()
+    try:
+        while not monitor.categories and time.perf_counter() - started < 0.5:
+            await asyncio.sleep(0.005)
+        elapsed = time.perf_counter() - started
+        print(f"real macOS clipboard classification latency: {elapsed:.6f}s")
+        assert DataCategory.FINANCIAL_CARD_NUMBER in monitor.categories
+        assert elapsed <= 0.5
+    finally:
+        await monitor.stop()
+        board.releaseGlobally()
+
+
+@pytest.mark.asyncio
+@pytest.mark.windows
+@pytest.mark.skipif(
+    sys.platform != "win32" or not os.getenv("CI"),
+    reason="real global Windows clipboard test runs only on an isolated Windows CI desktop",
+)
+async def test_real_windows_clipboard_classifies_synthetic_card_within_500ms() -> None:
+    import win32clipboard
+
+    from privacy_guardian.sensors.platform.windows import WindowsClipboard
+
+    previous = ""
+    win32clipboard.OpenClipboard()
+    try:
+        if win32clipboard.IsClipboardFormatAvailable(win32clipboard.CF_UNICODETEXT):
+            previous = str(win32clipboard.GetClipboardData(win32clipboard.CF_UNICODETEXT))
+        win32clipboard.EmptyClipboard()
+        win32clipboard.SetClipboardText("Test card 4111111111111111")
+    finally:
+        win32clipboard.CloseClipboard()
+    monitor = ClipboardMonitor(WindowsClipboard(), InlinePool(), lambda _event: None)
+    started = time.perf_counter()
+    monitor.start()
+    try:
+        while not monitor.categories and time.perf_counter() - started < 0.5:
+            await asyncio.sleep(0.005)
+        elapsed = time.perf_counter() - started
+        print(f"real Windows clipboard classification latency: {elapsed:.6f}s")
+        assert DataCategory.FINANCIAL_CARD_NUMBER in monitor.categories
+        assert elapsed <= 0.5
+    finally:
+        await monitor.stop()
+        win32clipboard.OpenClipboard()
+        try:
+            win32clipboard.EmptyClipboard()
+            if previous:
+                win32clipboard.SetClipboardText(previous)
+        finally:
+            win32clipboard.CloseClipboard()

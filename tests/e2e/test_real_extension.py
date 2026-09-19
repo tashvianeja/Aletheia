@@ -45,6 +45,15 @@ async def latest_decision(browser: RealBrowser, event_type: str) -> tuple[str, s
     return None
 
 
+def decision_count(browser: RealBrowser, event_type: str) -> int:
+    with sqlite3.connect(browser.data_dir / "guardian.sqlite3") as connection:
+        return int(
+            connection.execute(
+                "SELECT COUNT(*) FROM events WHERE event_type=?", (event_type,)
+            ).fetchone()[0]
+        )
+
+
 async def desktop_action(browser: RealBrowser, event_id: str, action: str) -> dict[str, object]:
     return await send_request(
         browser.data_dir,
@@ -168,6 +177,72 @@ async def test_consent_mutation_main_thread_detection_stays_under_30ms(
     )
     assert consent_events, "CDP trace contained no consent.js execution"
     assert main_thread_ms < 30, main_thread_ms
+
+
+@pytest.mark.asyncio
+async def test_consent_mutation_reaches_verdict_within_400ms(
+    real_browser: RealBrowser, fixture_site: tuple[str, object]
+) -> None:
+    base_url, _ = fixture_site
+    page = await real_browser.context.new_page()
+    await page.goto(f"{base_url}/fixtures/clean-blog")
+    await native_ping(real_browser)
+    await page.evaluate(
+        """() => {
+          window.pgConsentInsertedAt=performance.now();
+          const banner=document.createElement('div');
+          banner.id='onetrust-banner-sdk';banner.className='cmp';banner.role='dialog';
+          banner.innerHTML='<p>We use necessary and analytics cookies.</p><label><input checked type="checkbox">Analytics</label><button id="onetrust-reject-all-handler">Reject all</button><button>Accept all</button>';
+          document.body.append(banner);
+        }"""
+    )
+    await page.locator(".pg-panel").wait_for(timeout=5_000)
+    elapsed_ms = await page.evaluate("performance.now()-window.pgConsentInsertedAt")
+    print(f"consent mutation-to-verdict latency: {elapsed_ms:.3f}ms")
+    assert elapsed_ms <= 400, elapsed_ms
+
+
+@pytest.mark.asyncio
+async def test_five_known_cmps_and_three_heuristic_banners_are_detected(
+    real_browser: RealBrowser, fixture_site: tuple[str, object]
+) -> None:
+    base_url, _ = fixture_site
+    page = await real_browser.context.new_page()
+    fixtures = (
+        "cmp-onetrust",
+        "cmp-cookiebot",
+        "cmp-quantcast",
+        "cmp-trustarc",
+        "cmp-didomi",
+        "heuristic-banner-one",
+        "heuristic-banner-two",
+        "heuristic-banner-three",
+    )
+    for fixture in fixtures:
+        before = decision_count(real_browser, "consent_banner")
+        await page.goto(f"{base_url}/fixtures/{fixture}")
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            if decision_count(real_browser, "consent_banner") > before:
+                break
+            await asyncio.sleep(0.05)
+        assert decision_count(real_browser, "consent_banner") > before, fixture
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fixture", ["cmp-onetrust", "cmp-cookiebot", "cmp-trustarc"])
+async def test_known_cmp_reject_optional_action_actuates_fixture(
+    real_browser: RealBrowser, fixture_site: tuple[str, object], fixture: str
+) -> None:
+    base_url, _ = fixture_site
+    page = await real_browser.context.new_page()
+    await page.goto(f"{base_url}/fixtures/{fixture}")
+    reject = page.locator('.pg-panel [data-pg-action="reject_optional"]')
+    await reject.wait_for(timeout=5_000)
+    await reject.click()
+    await page.locator(".cmp").wait_for(state="detached", timeout=3_000)
+    assert await page.evaluate("window.consentResult") == "rejected"
+    assert {cookie["name"] for cookie in await real_browser.context.cookies()} == {"necessary"}
 
 
 @pytest.mark.asyncio

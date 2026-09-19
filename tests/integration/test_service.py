@@ -59,7 +59,7 @@ class PreparationPool(InlinePool):
         self.calls = 0
 
     async def run(self, function: Any, *args: Any) -> Any:
-        assert function.__name__ == "warm_analysis"
+        assert function.__name__ == "prepare_upload_model"
         self.calls += 1
         self.started.set()
         await asyncio.wait_for(self.release.wait(), 2)
