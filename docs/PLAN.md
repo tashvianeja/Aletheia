@@ -17,7 +17,7 @@ Three worker slots: two Astra implementation workers and one Sol verification wo
 
 ## Acceptance status
 
-Contracts and implementation are complete enough for independent acceptance. Current local unit/integration/platform tests and native five-minute idle targets pass. Browser and installer verification continue; scoped coverage remains below85% at the last measurement. No omitted feature is accepted. Timestamped evidence below supersedes earlier checkpoints.
+Root's final independent headed `make check` passes at `2af6d4a`: 311 tests, with 85.55% scoped and 75.43% overall line coverage. Clean-clone verification before the final liveness fix passes 307 tests. The native five-minute performance tolerance gate passes, but raw RSS exceeds the 200MB target: median 207.33952MB and peak 210.5344MB. The final liveness-enabled macOS artifact passes installed lifecycle, signature and complete macOS13 binary audit. Earlier arm64/Intel CI artifacts also pass installed lifecycles. Repaired Windows runtime/installer verification is in progress on an already-running job; new final-source CI jobs are blocked by GitHub account billing. Timestamped evidence below supersedes earlier checkpoints.
 
 ## Task register
 
@@ -25,12 +25,12 @@ Contracts and implementation are complete enough for independent acceptance. Cur
 |---|---|---|---|---|
 |P0-A1|Astra core|PLAN/ARCHITECTURE/contracts|none|Published 11:53 UTC; review accepted baseline|
 |P1-A1|Astra core|pyproject/uv/Makefile/CI|P0|Python3.12.13 +153 packages installed 11:56 UTC|
-|P1-A2|Astra core|core/config/storage/IPC|P0|Accepted foundational tests; IPC 3 passed; ongoing integration hardening|
+|P1-A2|Astra core|core/config/storage/IPC|P0|Final local gate passes, including native host liveness and actual browser SIGKILL recovery|
 |P1-S1/S2|Sol|tests/fixtures/scaffolding/browser harness|P0|Implemented; independent suites expand during acceptance|
 |P2-A3/A4/A5/A10|Astra analysis|analysis/engine/data/llm|P0|Implemented; corpus, worker, guard and engine tests pass|
 |P2-A6|Astra analysis|extension/browser bridge|P1-A2|Implemented; Chromium and Firefox native paths independently exercised|
-|P3-A7/A8/A9|Astra core|platform/UI/deepcheck|P1|Implemented 775abab; independent tests in progress|
-|P4-A11/A12|Astra core|service integration/packaging|P2/P3|First Mac artifact superseded by compatibility fixes; fresh rebuild/Windows installer pending|
+|P3-A7/A8/A9|Astra core|platform/UI/deepcheck|P1|Implemented; independent UI/native tests pass locally, Windows final CI pending|
+|P4-A11/A12|Astra core|service integration/packaging|P2/P3|Final source2af6d4a Mac artifact/lifecycle verified; repaired Windows installer pending|
 |P1–P5-T1|Tera|documentation|contracts + available slot|Initial docs committed; follow-up verification updates pending|
 
 ### P1 interim evidence (12:00 UTC)
@@ -91,10 +91,48 @@ Lightweight worker retention changed since the earlier accepted idle measurement
 
 ### Final idle and text coverage checkpoint (13:45 UTC, T+1:56)
 
-Root completed the uncontended native Cocoa 300-second measurement with 60 samples: tray readiness 0.823200875s, initial RSS 200.5MiB, warm median 197.734375MiB, peak 200.78125MiB, final 192.78125MiB, whole-process-tree CPU 0.0442277493%. The specified tolerance gate passed; the raw peak exceeds the 200MiB target by 0.78125MiB and is explicitly retained here.
+Root completed the uncontended native Cocoa 300-second measurement with 60 samples: tray readiness 0.823200875s, initial RSS 200.5MiB (210.239488MB), warm median 197.734375MiB (207.33952MB), peak 200.78125MiB (210.5344MB), final 192.78125MiB (202.145792MB), whole-process-tree CPU 0.0442277493%. The specified 25% tolerance gate passed; the raw median and peak exceed the prompt's decimal 200MB target and are explicitly retained here.
 
 Review found ordinary text still used the expanded-document 2M-character cap. Plain-text extraction now scans the complete bounded input through 50MiB; worker text uses the same UTF-8 byte threshold and explicitly marked first/last 5MiB sampling above it. PDF/Office expansion, archive, image, page and time guards remain bounded. Sol tail-only PII regressions and final root `make check` are pending. This extraction-only change requires a refreshed package but does not alter the measured idle lifecycle.
 
 Full-content profiling measured 869ms extraction/classification and 1441ms PII. Replacing literal regular-expression searches with substring checks and normalizing case once reduced extraction to 303ms while preserving all content and NER. Cold full 5MiB diagnostic total is 1.762s: above the raw 1.5s target by 17.5%, inside its 1.875s tolerance gate. Sol's independent retest is required before acceptance.
 
+Sol independent retest at `1725a02`: five full-text correctness tests pass, including an email only at the end of a 5MiB file and worker text beyond 2M characters, with `partial=False`. Exclusive cold full-text timing is 1.822472s, inside 1.875s and above the raw 1.5s target. Native clipboard timing is now excluded from coverage and explicitly included in the uninstrumented runtime suite.
+
 CI `35446163637` macOS arm64 built and passed the installed package lifecycle. Its final enforcement failed because continued test steps contain timing failures (coverage-instrumented clipboard 0.537275s, bridge readiness 5.146072s, passport 1.5148s); step conclusions alone must not be treated as test acceptance. Scoped line coverage is 85.66% (1666/1945). Native timing is moving to the uninstrumented phase and the prompt's allowed 25% performance gate tolerance will be applied consistently while retaining raw target measurements. Windows runtime and Intel package completion remain under review.
+
+### Independent full check and cross-platform corrections (13:56 UTC, T+2:07)
+
+Root's exact `PRIVACY_GUARDIAN_E2E_HEADED=1 QT_QPA_PLATFORM=offscreen make check` passed at `7fb6b07`: Ruff 173 files, strict mypy 73 modules, instrumented 270 passed / 4 skipped / 2 timing tests deselected, uninstrumented headed browsers/performance/native clipboard 34 passed / 1 platform skip. Line gates: scoped 1667/1945 = 85.71%; overall 4107/5448 = 75.39%.
+
+Intel CI uncovered an additional incompatible binary: cryptography 50.0.1 has no Intel wheel, so its source build linked Homebrew OpenSSL and bundled a legacy provider requiring macOS15. The Intel package lifecycle stopped at the binary audit and did not pass. Build now compiles checksum-pinned OpenSSL3.5.8 LTS statically for macOS13 and rebuilds current cryptography, preserving legacy PDF ciphers; actual Intel CI audit remains required. Downgrading to the last universal wheel was rejected because that release has a known certificate-verification vulnerability.
+
+Intel timing also exposed repeated policy paragraph segmentation. Exact per-call paragraph caching preserves every occurrence and heading without retaining raw content globally. Root corpus/performance checks pass (205KB 0.306559s), and Sol's duplicate-heading/cache-bound/isolation tests pass. Latest source/tests/docs `d3390ba` are pushed; clean-clone check is running. Superseded CI runs are cancelled to prioritize the final run, while the older Windows job is preserved for its runtime-timeout diagnostics and installer evidence.
+
+Clean-clone `make check` at `d3390ba` subsequently passed 273 instrumented plus 34 runtime tests (307 total, 5 platform skips), scoped 85.71% and overall 75.42%. Main final app/DMG and both extension archives rebuilt successfully at 14:00 UTC; installed lifecycles are serialized after the clone build. Tera's pending final documentation pass must replace obsolete cold-start/benchmark disclaimers with the measured evidence, preserve decimal-MB target misses, report the passing 205KB policy timing, and document Rust/Cargo plus static OpenSSL build requirements on Intel macOS.
+
+### Native termination and hosted-runner checkpoint (14:19 UTC, T+2:30)
+
+The final main and clone macOS lifecycles both passed with whole-artifact audits of 339 Mach-O slices, maximum minimum OS13.0. Intel CI then passed the corrected static-crypto build and installed lifecycle; its remaining runtime miss was passport decision 2125.7ms against the 1875ms tolerance gate. Windows verification identified missing dynamically imported ACL modules in frozen executables and unbounded Firefox-test process cleanup. Both were repaired and pushed in `4d20bde`; that hosted run remains active.
+
+A stronger real mixed-PDF SIGKILL regression exposed completion before the five-second orphan lease. Source `2af6d4a` binds native sessions to host PID plus creation time, checks exact process liveness before publishing, and disconnects before draining EOF work. Sol's actual browser-tree kill regression passed in14.73s, and root independently passed it in14.78s. Focused live/dead/reused-PID and cleanup tests pass. Root's final headed full check is running; a refreshed macOS artifact remains required for this source change.
+
+Final hosted run [35448338656](https://github.com/tashvianeja/Privacy-Guardian/actions/runs/35448338656) could not start any job. GitHub's annotation states that recent account payments failed or the spending limit must be increased in Billing & plans. This is an external account blocker, not a test result; no final cross-platform green CI claim is made. Existing running jobs are preserved for their remaining Windows/Intel evidence.
+
+### Final independent local gate (14:22 UTC, T+2:33)
+
+Root's exact headed full check at source `2af6d4a` passes: Ruff 176 files, strict mypy 73 modules; 277 instrumented tests pass with 4 platform skips and 2 timing tests deselected (42.54s); 34 real browser/performance/native clipboard tests pass with 1 platform skip (104.11s). Total 311 passed / 5 skipped. Required scoped line coverage is 1687/1972 = 85.55%; overall 4136/5483 = 75.43%. No application tests were authored by Astra. Final main macOS rebuild, signature/audit/lifecycle/checksum are in progress; extension archives have been refreshed.
+
+### Final local artifact (14:27 UTC, T+2:38)
+
+The final source `2af6d4a` main macOS build completed successfully. Root independently verified deep strict code signing and all 339 Mach-O slices/files, with highest minimum macOS13.0. The installed DMG lifecycle completed with exit0, including visible onboarding/tray, native version0.1.0/protocol1 ready response, bundled PNG and native JPEG OCR, uninstall and registration restoration. Durable output is `/private/tmp/pg-main-liveness-lifecycle.log`; build output is `/private/tmp/pg-main-liveness-build.log`.
+
+Final SHA256 digests:
+
+|Artifact|SHA256|
+|---|---|
+|`dist/PrivacyGuardian-0.1.0.dmg`|`31dc9c46582b48b2c7448eb6fe268eeef85ec1c27026c3d04f0502fbcfffeb08`|
+|`dist/privacy-guardian-chromium.zip`|`414f6cedb7221ed3594730c1d0e1f8abf6035d6895d26a9f4a5f30cb0c7ee42f`|
+|`dist/privacy-guardian-firefox.zip`|`bbadfc4e4fcf6348f2465ec2155a2aeafae16de84bfb42632cd1e69d04e875d2`|
+
+The already-running repaired Windows checkpoint `4d20bde` is building its installer. Its arm64 job completed 276 instrumented tests and passed the packaged lifecycle, but final enforcement failed because cold native-bridge setup took6.552899s against the6.25s tolerance gate. This historical hosted result is distinct from the green current-source local suite. Intel's earlier corrected static-crypto artifact passed its full installed lifecycle, while its passport runtime measurement2125.7ms exceeded1875ms. Final-source hosted jobs remain blocked before execution by account billing; cross-platform acceptance is not declared complete.
