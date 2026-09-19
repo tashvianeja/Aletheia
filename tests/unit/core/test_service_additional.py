@@ -10,12 +10,15 @@ import pytest
 
 from privacy_guardian.config import Settings
 from privacy_guardian.core.events import (
+    ClipboardReadEvent,
+    ConsentBannerEvent,
     DataCategory,
     Decision,
     FileUploadEvent,
     Outcome,
     PermissionRequestEvent,
     Requester,
+    TrackingEvent,
     UserResponse,
 )
 from privacy_guardian.core.service import Service
@@ -413,3 +416,94 @@ async def test_a_desktop_notice_is_never_answered_on_the_person_s_behalf(
 
 async def _noop() -> None:
     return None
+
+
+def _tracking(signals: list[str], domains: list[str], confidence: float = 0.6) -> TrackingEvent:
+    return TrackingEvent(
+        requester=Requester(origin="https://news.test", display_name="news.test"),
+        data_categories=[DataCategory.DEVICE_IDENTIFIERS],
+        tracker_domains=domains,
+        signals=signals,
+        confidence=confidence,
+    )
+
+
+@pytest.mark.asyncio
+async def test_repeat_of_the_same_warning_updates_one_notice(service: Service) -> None:
+    first = await service.process_event(_tracking(["known_tracker_requests"], ["a.test"]))
+    later = await service.process_event(
+        _tracking(["known_tracker_requests"], ["a.test", "b.test", "c.test"], confidence=0.9)
+    )
+
+    assert later.event_id == first.event_id
+    assert len(service.decisions) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_new_tracking_mechanism_raises_its_own_notice(service: Service) -> None:
+    first = await service.process_event(_tracking(["known_tracker_requests"], ["a.test"]))
+    fingerprinting = await service.process_event(
+        _tracking(["known_tracker_requests", "fingerprinting"], ["a.test"])
+    )
+
+    assert fingerprinting.event_id != first.event_id
+    assert fingerprinting.outcome != Outcome.IGNORE
+
+
+@pytest.mark.asyncio
+async def test_an_answered_warning_is_not_raised_again(service: Service) -> None:
+    first = await service.process_event(_tracking(["known_tracker_requests"], ["a.test"]))
+    await service.respond(UserResponse(event_id=first.event_id, action="learn_more"))
+
+    again = await service.process_event(_tracking(["known_tracker_requests"], ["a.test"]))
+
+    assert again.event_id == first.event_id
+    assert again.outcome == Outcome.IGNORE
+    assert again.event_id not in service.pending_since
+
+
+@pytest.mark.asyncio
+async def test_a_repeat_never_withdraws_a_question_already_on_screen(service: Service) -> None:
+    banner = ConsentBannerEvent(
+        requester=Requester(origin="https://news.test", display_name="news.test"),
+        purposes=["necessary", "advertising"],
+        dark_patterns=["layered_rejection"],
+        cmp="onetrust",
+    )
+    asked = await service.process_event(banner)
+    assert asked.outcome == Outcome.INTERVENE
+
+    # The banner re-renders and is reported again while the person is still deciding.
+    repeated = await service.process_event(banner.model_copy(update={"id": "second"}))
+
+    assert repeated.outcome == Outcome.INTERVENE
+    assert repeated.actions == asked.actions
+
+
+@pytest.mark.asyncio
+async def test_two_uploads_of_one_file_are_each_asked_about(service: Service) -> None:
+    """An answer to one upload must never be reused as the answer to the next."""
+    upload = FileUploadEvent(
+        requester=Requester(origin="https://shrink.test", display_name="shrink.test"),
+        filename="passport.pdf",
+        size_bytes=2048,
+        data_categories=[DataCategory.GOVERNMENT_ID_PASSPORT],
+    )
+    first = await service.process_event(upload)
+    second = await service.process_event(upload.model_copy(update={"id": "second-upload"}))
+
+    assert second.event_id != first.event_id
+
+
+@pytest.mark.asyncio
+async def test_a_second_clipboard_read_is_a_second_exposure(service: Service) -> None:
+    """A read happened at a moment; it is not a standing property of the app."""
+    read = ClipboardReadEvent(
+        requester=Requester(kind="application", bundle_id="com.synthetic.notes"),
+        writer_key="com.synthetic.editor",
+        data_categories=[DataCategory.FINANCIAL_CARD_NUMBER],
+    )
+    first = await service.process_event(read)
+    again = await service.process_event(read.model_copy(update={"id": "second-read"}))
+
+    assert again.event_id != first.event_id

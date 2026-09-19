@@ -9,26 +9,70 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 SCENARIO_DIR = ROOT / "scenarios"
 
+# "label" is the wording the product is expected to use for the purpose, pinned
+# here so a change to how a site is described has to be made deliberately.
 PURPOSE_CASES: tuple[dict[str, Any], ...] = (
-    {"purpose": "image_tool", "requester": "image-compressor.test", "trust": "unknown"},
-    {"purpose": "government", "requester": "government-visa.test", "trust": "known_trusted"},
-    {"purpose": "recipe", "requester": "weeknight-recipes.test", "trust": "unknown"},
-    {"purpose": "banking", "requester": "community-bank.test", "trust": "known_trusted"},
-    {"purpose": "saas_b2b", "requester": "project-board.test", "trust": "known_trusted"},
-    {"purpose": "social", "requester": "photo-sharing.test", "trust": "unknown"},
-    {"purpose": "wallpaper_utility", "requester": "Simple Wallpaper App", "trust": "unknown"},
-    {"purpose": "backup", "requester": "Backup Tool", "trust": "known_trusted"},
+    {
+        "purpose": "image_tool",
+        "requester": "image-compressor.test",
+        "trust": "unknown",
+        "label": "image tool",
+    },
+    {
+        "purpose": "government",
+        "requester": "government-visa.test",
+        "trust": "known_trusted",
+        "label": "government service",
+    },
+    {
+        "purpose": "recipe",
+        "requester": "weeknight-recipes.test",
+        "trust": "unknown",
+        "label": "recipe site",
+    },
+    {
+        "purpose": "banking",
+        "requester": "community-bank.test",
+        "trust": "known_trusted",
+        "label": "bank",
+    },
+    {
+        "purpose": "saas_b2b",
+        "requester": "project-board.test",
+        "trust": "known_trusted",
+        "label": "business tool",
+    },
+    {
+        "purpose": "social",
+        "requester": "photo-sharing.test",
+        "trust": "unknown",
+        "label": "social network",
+    },
+    {
+        "purpose": "wallpaper_utility",
+        "requester": "Simple Wallpaper App",
+        "trust": "unknown",
+        "label": "wallpaper app",
+    },
+    {
+        "purpose": "backup",
+        "requester": "Backup Tool",
+        "trust": "known_trusted",
+        "label": "backup tool",
+    },
 )
 
+# "label" is the wording the product is expected to use for the category. It is
+# pinned here rather than imported so the scenarios test the copy, not a tautology.
 CATEGORY_CASES: tuple[dict[str, Any], ...] = (
-    {"category": "government_id.passport", "sensitivity": 0.95},
-    {"category": "medical.diagnosis", "sensitivity": 0.9},
-    {"category": "financial.card_number", "sensitivity": 0.9},
-    {"category": "credentials.password", "sensitivity": 1.0},
-    {"category": "biometric_photo", "sensitivity": 0.9},
-    {"category": "location_precise", "sensitivity": 0.5},
-    {"category": "phone", "sensitivity": 0.5},
-    {"category": "email", "sensitivity": 0.3},
+    {"category": "government_id.passport", "sensitivity": 0.95, "label": "passport number"},
+    {"category": "medical.diagnosis", "sensitivity": 0.9, "label": "medical diagnosis"},
+    {"category": "financial.card_number", "sensitivity": 0.9, "label": "card number"},
+    {"category": "credentials.password", "sensitivity": 1.0, "label": "password"},
+    {"category": "biometric_photo", "sensitivity": 0.9, "label": "biometric photo"},
+    {"category": "location_precise", "sensitivity": 0.5, "label": "precise location"},
+    {"category": "phone", "sensitivity": 0.5, "label": "phone number"},
+    {"category": "email", "sensitivity": 0.3, "label": "email"},
 )
 
 
@@ -147,8 +191,8 @@ def build_scenarios() -> list[dict[str, Any]]:
             "red_flag": "unusually sensitive",
         }[verdict]
         keywords = [
-            category["category"].split(".")[-1].replace("_", " "),
-            purpose["purpose"].replace("_", " "),
+            category["label"],
+            purpose["label"],
             necessity_phrase,
         ]
         scenarios.append(

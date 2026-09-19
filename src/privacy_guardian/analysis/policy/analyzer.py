@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 from privacy_guardian.analysis.pii import redact_text
 from privacy_guardian.core.events import DataCategory
-from privacy_guardian.engine.explain import category_label
+from privacy_guardian.engine.labels import category_label
 from privacy_guardian.engine.necessity import necessity_for
 
 

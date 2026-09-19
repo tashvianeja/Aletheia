@@ -20,7 +20,15 @@ Consent analysis receives structured button/toggle/snapshot data and identifies 
 
 Tracking analysis uses observed request hosts, cookies, URL-derived signals held transiently by the extension, known tracker data, fingerprinting signals, and persistent identifiers. Firefox CNAME/DNS observations are cached best effort. A tracking finding is evidence of observable signals, not proof of every form of cross-site tracking.
 
-Browser MAIN-world wrappers are also best effort. For known upload paths, initial analysis may wait up to four seconds before failing open; after an `INTERVENE`, the service keeps a safe 60-second decision timeout. Synchronous file XHR may be aborted, while ordinary XHR and beacons pass through. These limits prevent a delayed local helper from becoming a broad browsing outage.
+Browser MAIN-world wrappers watch for a file the person chose to share: a `File` from a picker,
+drop or paste, or a slice or re-read of one, followed through `Blob.slice`, `FormData.append`,
+`FileReader` and `Request` bodies. A `Blob` the page built itself is a request body, not an upload,
+and is not reported.
+
+For known upload paths, initial analysis may wait up to four seconds before failing open; after an
+`INTERVENE`, the service keeps a safe 60-second decision timeout. Synchronous file XHR may be
+aborted, while ordinary XHR and beacons pass through. These limits prevent a delayed local helper
+from becoming a broad browsing outage.
 
 ## Measured corpus evidence
 

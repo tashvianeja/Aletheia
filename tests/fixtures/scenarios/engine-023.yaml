@@ -26,8 +26,8 @@
   "expected": {
     "outcome": "INFORM",
     "rationale_keywords": [
-      "phone",
-      "recipe",
+      "phone number",
+      "recipe site",
       "does not appear necessary"
     ]
   },

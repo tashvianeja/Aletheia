@@ -26,8 +26,8 @@
   "expected": {
     "outcome": "INFORM",
     "rationale_keywords": [
-      "phone",
-      "government",
+      "phone number",
+      "government service",
       "may reasonably"
     ]
   },

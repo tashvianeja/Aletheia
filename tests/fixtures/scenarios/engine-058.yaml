@@ -26,8 +26,8 @@
   "expected": {
     "outcome": "INTERVENE",
     "rationale_keywords": [
-      "diagnosis",
-      "backup",
+      "medical diagnosis",
+      "backup tool",
       "unusually sensitive"
     ]
   },

@@ -26,8 +26,8 @@
   "expected": {
     "outcome": "INFORM",
     "rationale_keywords": [
-      "location precise",
-      "backup",
+      "precise location",
+      "backup tool",
       "does not appear necessary"
     ]
   },

@@ -26,8 +26,8 @@
   "expected": {
     "outcome": "INFORM",
     "rationale_keywords": [
-      "location precise",
-      "recipe",
+      "precise location",
+      "recipe site",
       "does not appear necessary"
     ]
   },

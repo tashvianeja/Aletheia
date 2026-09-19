@@ -21,6 +21,15 @@ All notable changes will be documented here. This project has not produced a ver
   checklist while it runs, and hands off to the full report in the dashboard.
 - The menu bar icon is a monochrome padlock template with a status dot, and its menu leads with a
   status line and the thorough check.
+- Warnings say more with fewer words. Finding rows carry where a thing was found — the page in a
+  document, or the file's own metadata — and tracking rows name the trackers and say what each
+  mechanism does instead of printing the detector's name for it ("Reuses one stored identifier
+  across separate websites", not "Cross origin storage identifier"). The "Why am I seeing this?"
+  reasoning is grouped by verdict, so four fields no longer produce four near-identical sentences.
+  Warnings raised from page context name the site: they all used to open with the word "Website".
+  Every purpose in the necessity matrix now has a name that reads in a sentence, in place of "a
+  banking" and "a ecommerce", and a consent toggle labelled "Targeted advertising" is folded into
+  the advertising purpose rather than listed as a fifth one.
 
 ### Added
 
@@ -34,6 +43,28 @@ All notable changes will be documented here. This project has not produced a ver
 - `learning_enabled` setting and `Store.outcome_counts()`.
 
 ### Fixed
+
+- The same warning appeared twice. A page reports its context repeatedly — on load, when the
+  consent banner animates in, each time another advertising script runs — and every report minted
+  a fresh event, so the same "building an advertising profile" card was raised again a moment
+  later. Repeats of a warning already on record now share its identity: the card on screen is
+  updated in place, one the person has already answered is not raised again, and a later look can
+  sharpen a warning but never withdraws a question still being asked. Warnings that hold something
+  up (uploads, form submissions, terms) and ones that report a moment rather than a standing state
+  (clipboard reads) are still always asked afresh. Two narrower causes are fixed with it: the
+  polished wording from an optional cloud call was pushed at the desktop for browser events the
+  page was already showing, and page-level analysis ran once per frame, so a page with three
+  iframes reported itself four times.
+- Privacy Guardian announced a file share on sites where nothing had been shared. Any `Blob` or
+  `ArrayBuffer` request body counted as an upload, which covers analytics beacons, JSON payloads
+  and media chunks on a large share of the web; the "file" was then named `upload.bin` and flagged
+  as only partially checked because the bytes could not be parsed. Only something the person chose
+  now counts — a `File` from a picker, drop or paste, or a slice or re-read of one, tracked through
+  `Blob.slice`, `FormData.append` and `Request` bodies so chunked and resumable uploads are still
+  reviewed.
+- A new tracking mechanism on an already-reported page was suppressed as "the same request shown
+  within the last day". Fingerprinting appearing on a page previously flagged only for tracker
+  requests is now raised.
 
 - Setup did not set anything up. Every page of the walkthrough could be clicked straight
   through in four clicks with nothing configured, and the native messaging bridge was only

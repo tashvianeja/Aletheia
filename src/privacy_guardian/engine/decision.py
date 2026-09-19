@@ -97,7 +97,10 @@ def decide(
             else 0.0
         )
         level = max(minimum, 1 if risk else 0)
-        notes.append("Persistent identifiers may link your activity into an advertising profile.")
+        notes.append(
+            "Blocking prevents this page adding to that advertising profile, "
+            "and clears the identifiers it has already set."
+        )
     if isinstance(event, ConsentBannerEvent):
         optional = any(p != "necessary" for p in event.purposes)
         rejects_tracking = (
@@ -222,6 +225,10 @@ def decide(
             observation.signals
         ):
             continue
+        # A tracking mechanism not seen before is news, however often the page has
+        # already been reported for the ones that were.
+        if isinstance(event, TrackingEvent) and set(event.signals) - set(observation.signals):
+            continue
         if set(observation.categories) != categories or not timedelta(
             0
         ) <= event.ts - observation.ts < timedelta(hours=24):
@@ -261,7 +268,12 @@ def decide(
         level = min(level, 1)
         notes.append("You asked Privacy Guardian to do this automatically.")
     headline, body, findings_rows, rationale = explain(
-        event, assessments, profile, notes, informational=_LEVELS[level] == Outcome.INFORM
+        event,
+        assessments,
+        profile,
+        notes,
+        informational=_LEVELS[level] == Outcome.INFORM,
+        found=findings,
     )
     unnecessary = {
         item.category
@@ -282,7 +294,8 @@ def decide(
                 "Everything else looks standard."
             )
     if partial_upload:
-        body = "This file was only partially checked. " + body
+        # A caveat belongs after what was found, not in front of it.
+        body = f"{body} Part of this file could not be read, so it was not fully checked."
     if isinstance(event, PermissionRequestEvent) and event.state in {"denied", "stopped"}:
         level = 0
         headline = "Access was denied or stopped."

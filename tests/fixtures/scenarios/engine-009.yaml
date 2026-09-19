@@ -26,8 +26,8 @@
   "expected": {
     "outcome": "IGNORE",
     "rationale_keywords": [
-      "passport",
-      "government",
+      "passport number",
+      "government service",
       "is needed"
     ]
   },

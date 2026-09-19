@@ -52,6 +52,7 @@ from privacy_guardian.util.privacy import public_identity, safe_origin, sanitize
 # minutes that an answered one needs.
 RESOLVED_RETENTION = 600
 UNANSWERED_RETENTION = 3600
+OUTCOME_LEVEL = {Outcome.IGNORE: 0, Outcome.INFORM: 1, Outcome.INTERVENE: 2}
 
 
 class Service:
@@ -84,6 +85,9 @@ class Service:
         self.actions: dict[str, dict[str, Any]] = {}
         self.pending_since: dict[str, float] = {}
         self.event_owners: dict[str, str] = {}
+        # Signature of every warning currently on record, so a page that reports
+        # itself repeatedly updates the one notice instead of raising another.
+        self.notices: dict[str, str] = {}
         self.response_locks: dict[str, asyncio.Lock] = {}
         self.cloud_keys: set[str] = set()
         self.uploads: dict[str, dict[str, Any]] = {}
@@ -298,6 +302,9 @@ class Service:
                         self.pending_since.pop(event_id, None)
                         self.event_owners.pop(event_id, None)
                         self.response_locks.pop(event_id, None)
+                        for signature, owner in list(self.notices.items()):
+                            if owner == event_id:
+                                self.notices.pop(signature, None)
                 for closed_session, closed_at in list(self.closed_sessions.items()):
                     if now - closed_at > 600:
                         self.closed_sessions.pop(closed_session, None)
@@ -340,8 +347,28 @@ class Service:
             ]
         return preferences
 
+    def _coalesce(self, event: PrivacyEvent, session: str) -> bool:
+        """Fold a repeat of a warning already on record onto that warning.
+
+        Sharing the event id is what stops a second widget: every surface keys the
+        card it is showing by event id, so the existing one is updated in place and
+        one the person has already answered is not raised again.
+        """
+        from privacy_guardian.engine.notice import notice_signature
+
+        signature = notice_signature(event)
+        if not signature:
+            return False
+        signature = session + "\x1e" + signature
+        previous = self.notices.get(signature)
+        if previous and previous != event.id and previous in self.decisions:
+            event.id = previous
+            return True
+        self.notices[signature] = event.id
+        return False
+
     async def process_event(
-        self, event: PrivacyEvent, findings: list[Finding] | None = None
+        self, event: PrivacyEvent, findings: list[Finding] | None = None, session: str = ""
     ) -> Decision:
         from privacy_guardian.analysis.forms import label_field
         from privacy_guardian.analysis.purpose import enrich_requester
@@ -364,6 +391,7 @@ class Service:
             event.data_categories = sorted(
                 set(event.data_categories) | {f.category for f in findings}, key=str
             )
+        repeat = self._coalesce(event, session)
         profile = self._profile(event.requester)
         decision = decide(
             event, findings, profile, self.preferences_for(event.requester), self.learned_rules
@@ -412,10 +440,29 @@ class Service:
                     "auto_action": "",
                 }
             )
+        if repeat:
+            outstanding = self.decisions.get(event.id)
+            if event.id in self.actions:
+                # The person has already answered this exact warning for this
+                # requester. Repeating it is the nagging they would rightly turn
+                # the app off over.
+                decision = decision.model_copy(
+                    update={
+                        "outcome": Outcome.IGNORE,
+                        "rationale": [*decision.rationale, "You already answered this here."],
+                    }
+                )
+            elif outstanding is not None and (
+                OUTCOME_LEVEL[decision.outcome] < OUTCOME_LEVEL[outstanding.outcome]
+            ):
+                # A later look at the same page can sharpen a warning but must never
+                # withdraw a question the person is still being asked.
+                decision = outstanding
         self.events[event.id] = event
-        self.decisions[event.id] = decision
         self.store.save_event(event)
-        self.store.save_decision(decision)
+        if self.decisions.get(event.id) is not decision:
+            self.decisions[event.id] = decision
+            self.store.save_decision(decision)
         profile.recent_observations = [
             o for o in profile.recent_observations if event.ts - o.ts < timedelta(hours=24)
         ]
@@ -425,11 +472,9 @@ class Service:
             categories=event.data_categories,
             event_class=event.event_type,
             signals=list(
-                getattr(
-                    event,
-                    "dark_patterns",
-                    profile.clauses if event.event_type == "policy_document" else [],
-                )
+                getattr(event, "dark_patterns", None)
+                or getattr(event, "signals", None)
+                or (profile.clauses if event.event_type == "policy_document" else [])
             ),
             ts=event.ts,
             confidence=getattr(event, "confidence", 0),
@@ -449,9 +494,12 @@ class Service:
             event.requester.key,
             profile.model_dump(mode="json"),
         )
-        if decision.outcome == Outcome.INTERVENE:
-            self.pending_since[event.id] = time.monotonic()
-        if self._desktop_owns(event) and decision.outcome != Outcome.IGNORE:
+        answered = event.id in self.actions
+        if decision.outcome == Outcome.INTERVENE and not answered:
+            # setdefault, not assignment: a page reporting itself every few hundred
+            # milliseconds must not keep pushing the deadline for answering out.
+            self.pending_since.setdefault(event.id, time.monotonic())
+        if self._desktop_owns(event) and decision.outcome != Outcome.IGNORE and not answered:
             for callback in tuple(self.decision_listeners):
                 try:
                     callback(decision)
@@ -580,7 +628,10 @@ class Service:
                 if isinstance(polished["rationale"], list):
                     decision.rationale = [str(value) for value in polished["rationale"]]
                 self.store.save_decision(decision)
-                if event.id not in self.actions:
+                # Only refresh a card the desktop is actually showing. A page renders
+                # its own widget, and pushing the polished wording at the desktop too
+                # put a second copy of the same warning on screen.
+                if event.id not in self.actions and self._desktop_owns(event):
                     for callback in self.decision_listeners:
                         callback(decision)
         except Exception:
@@ -770,7 +821,7 @@ class Service:
             from privacy_guardian.sensors.browser_bridge import parse_browser_event
 
             event = parse_browser_event(payload)
-            decision = await self.process_event(event)
+            decision = await self.process_event(event, session=session)
             self.event_owners[event.id] = session
             return {"decision": decision.model_dump(mode="json")}
         if request.type == "file_start":
@@ -887,7 +938,7 @@ class Service:
                     with contextlib.suppress(RuntimeError, KeyError):
                         await self.pool.run(release_payload, event.payload_ref)
                 return {"aborted": True, "decision": decision.model_dump(mode="json")}
-            decision = await self.process_event(event, analysis.findings)
+            decision = await self.process_event(event, analysis.findings, session=session)
             self.store.mark_complete(event.id)
             self.event_owners[event.id] = session
             return {
@@ -957,7 +1008,7 @@ class Service:
                 if cached is not None and isinstance(cached.get(kind), dict):
                     analyzed = AnalysisResult(profile=cached[kind])
                     if kind == "policy":
-                        from privacy_guardian.engine.explain import category_label
+                        from privacy_guardian.engine.labels import category_label
                         from privacy_guardian.engine.necessity import necessity_for
 
                         purpose = str(payload.get("purpose", "unknown"))
@@ -1093,7 +1144,7 @@ class Service:
                         missing=detail.get("missing", False),
                     )
                 if context_event:
-                    decision = await self.process_event(context_event)
+                    decision = await self.process_event(context_event, session=session)
                     self.event_owners[context_event.id] = session
                     analyzed_result["decision"] = decision.model_dump(mode="json")
             return result

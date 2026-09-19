@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import urlsplit
 
 from privacy_guardian.analysis.forms import label_field
 from privacy_guardian.analysis.purpose import infer_purpose
@@ -39,9 +40,13 @@ def parse_browser_event(payload: dict[str, Any]) -> PrivacyEvent:
 
 
 def prepare_context(payload: dict[str, Any]) -> dict[str, Any]:
+    origin = str(payload.get("origin", ""))
+    # Name the site. Every warning raised from page context used to open with the
+    # word "Website" because nothing filled this in, which told the reader nothing
+    # about which of their open tabs it was talking about.
     requester = Requester(
-        origin=str(payload.get("origin", "")),
-        display_name=str(payload.get("display_name", "Website")),
+        origin=origin,
+        display_name=str(payload.get("display_name", "") or urlsplit(origin).hostname or "Website"),
     )
     requester = enrich_browser_requester(requester, payload.get("signals", {}))
     result = dict(payload)

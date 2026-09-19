@@ -97,15 +97,22 @@ def analyze_consent(snapshot: ConsentSnapshot | dict[str, object]) -> ConsentAna
             if enabled and purpose_id != "1":
                 result.dark_patterns.append("preticked_optional")
     result.vendor_count = max(result.vendor_count, snapshot.tcf_vendor_count)
-    for name, pattern in {
+    categories = {
         "necessary": "necessary|essential|functional",
         "analytics": "analytics|statistics|measurement",
         "advertising": "advertis|marketing|personaliz|personalis",
         "profiling": "profil|cross.site",
-    }.items():
+    }
+    for name, pattern in categories.items():
         if re.search(pattern, snapshot.text, re.I):
             purposes.add(name)
-    purposes.update(toggle.purpose for toggle in snapshot.toggles)
+    # A toggle labelled "Targeted advertising" is the advertising purpose, not a fifth
+    # one. Carrying both listed the same permission twice in the widget.
+    for toggle in snapshot.toggles:
+        matched = [
+            name for name, pattern in categories.items() if re.search(pattern, toggle.purpose, re.I)
+        ]
+        purposes.update(matched or [toggle.purpose])
     result.purposes = sorted(purposes)
     accepts = [
         button

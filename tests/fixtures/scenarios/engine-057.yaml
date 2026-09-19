@@ -26,8 +26,8 @@
   "expected": {
     "outcome": "INTERVENE",
     "rationale_keywords": [
-      "passport",
-      "backup",
+      "passport number",
+      "backup tool",
       "unusually sensitive"
     ]
   },

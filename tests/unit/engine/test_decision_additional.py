@@ -197,6 +197,7 @@ def test_recent_equivalent_tracking_is_rate_limited_unless_confidence_jumps() ->
             Observation(
                 event_class="tracking",
                 categories=[DataCategory.DEVICE_IDENTIFIERS],
+                signals=["canvas"],
                 confidence=0.5,
                 ts=now - timedelta(minutes=5),
             )
@@ -204,10 +205,15 @@ def test_recent_equivalent_tracking_is_rate_limited_unless_confidence_jumps() ->
     )
     repeated = decide(event, profile=profile)
     confidence_jump = decide(event.model_copy(update={"confidence": 0.8}), profile=profile)
+    new_mechanism = decide(
+        event.model_copy(update={"signals": ["canvas", "cname_cloaking"]}), profile=profile
+    )
 
     assert repeated.outcome == Outcome.IGNORE
     assert any("last day" in note for note in repeated.rationale)
     assert confidence_jump.outcome == Outcome.INFORM
+    # A mechanism that was not there last time is news, however recently the rest was shown.
+    assert new_mechanism.outcome == Outcome.INFORM
 
 
 def test_location_upload_offers_metadata_stripping_and_engine_delegates() -> None:

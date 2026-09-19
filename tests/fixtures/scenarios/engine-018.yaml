@@ -26,8 +26,8 @@
   "expected": {
     "outcome": "INTERVENE",
     "rationale_keywords": [
-      "diagnosis",
-      "recipe",
+      "medical diagnosis",
+      "recipe site",
       "unusually sensitive"
     ]
   },

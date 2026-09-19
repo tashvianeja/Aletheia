@@ -26,8 +26,8 @@
   "expected": {
     "outcome": "INTERVENE",
     "rationale_keywords": [
-      "passport",
-      "social",
+      "passport number",
+      "social network",
       "unusually sensitive"
     ]
   },

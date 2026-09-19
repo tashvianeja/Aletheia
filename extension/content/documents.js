@@ -13,8 +13,11 @@
   async function analyze(kind,trigger=false,discover=false){const text=await getDocument(kind,trigger||discover);const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text)))).map(byte=>byte.toString(16).padStart(2,'0')).join('');const key=`${kind}:${digest}`;
     if(trigger&&!partialDocuments.get(kind)&&(await PG.request('document_acknowledged',{key})).acknowledged)return {document_key:key,acknowledged:true};
     if(!trigger&&analyzed.has(key))return analyzed.get(key);const result=await PG.request('context',{[kind]:{text,partial:!!partialDocuments.get(kind)},trigger_action:trigger});analyzed.set(key,result);if(kind==='policy')cachedPolicy={text,partial:!!partialDocuments.get(kind)};else cachedTerms={text,partial:!!partialDocuments.get(kind),document_key:key};return {...result,document_key:key,partial:!!partialDocuments.get(kind)};}
+  // Discovering and reading the page's policy is a page-level job: doing it per frame
+  // fetched the same document several times and reported it several times.
+  const pageLevel=window.top===window;
   async function firstVisit(){if(PG.queryAll('form,input[type=file],input[type=email],input[type=checkbox]').length||PG.queryAll('[id*=cookie],[class*=consent]').length)await analyze('policy').catch(()=>{});}
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',firstVisit,{once:true});else firstVisit();
+  if(pageLevel){if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',firstVisit,{once:true});else firstVisit();}
   const bypass=new WeakSet();
   document.addEventListener('click',async event=>{
     const target=event.target.closest?.('input[type=checkbox],button,[role=button]');if(!target||target.closest('.pg-panel,.pg-stack')||bypass.has(target)){bypass.delete(target);return;}
@@ -23,5 +26,5 @@
     event.preventDefault();event.stopImmediatePropagation();const intendedChecked=target instanceof HTMLInputElement?target.checked:null;
     try{const result=await PG.safeRace(analyze('terms',true),4000,null);if(!result){if(intendedChecked!==null){target.checked=intendedChecked;target.dispatchEvent(new Event('change',{bubbles:true}));}else{bypass.add(target);target.click();}return;}const decision=result.terms?.decision;const citations=(decision?.findings||[]).map(finding=>finding.detail).filter(Boolean);const selected=await PG.awaitDecision(decision,action=>{if(action.action==='view_details')PG.showClauses(citations);});if(selected.action==='continue'||!decision||decision.outcome!=='INTERVENE'){agreed.add(result.document_key);if(!result.partial)await PG.request('document_acknowledge',{key:result.document_key});if(intendedChecked!==null){target.checked=intendedChecked;target.dispatchEvent(new Event('change',{bubbles:true}));}else{bypass.add(target);target.click();}}else if(selected.action==='view_details'){PG.showClauses(citations);}}catch(_){}
   },true);
-  PG.collectors.push(async()=>{if(!cachedPolicy||!cachedPolicy.text)await analyze('policy',false,true).catch(()=>{});if(links('terms').length&&!cachedTerms)await analyze('terms').catch(()=>{});return {policy:cachedPolicy||{text:''},terms:{text:cachedTerms?.text||'',partial:!!cachedTerms?.partial,absent:!cachedTerms}};});
+  if(pageLevel)PG.collectors.push(async()=>{if(!cachedPolicy||!cachedPolicy.text)await analyze('policy',false,true).catch(()=>{});if(links('terms').length&&!cachedTerms)await analyze('terms').catch(()=>{});return {policy:cachedPolicy||{text:''},terms:{text:cachedTerms?.text||'',partial:!!cachedTerms?.partial,absent:!cachedTerms}};});
 })();

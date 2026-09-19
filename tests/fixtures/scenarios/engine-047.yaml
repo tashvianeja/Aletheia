@@ -26,8 +26,8 @@
   "expected": {
     "outcome": "INFORM",
     "rationale_keywords": [
-      "phone",
-      "social",
+      "phone number",
+      "social network",
       "does not appear necessary"
     ]
   },

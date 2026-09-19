@@ -26,8 +26,8 @@
   "expected": {
     "outcome": "INFORM",
     "rationale_keywords": [
-      "location precise",
-      "saas b2b",
+      "precise location",
+      "business tool",
       "does not appear necessary"
     ]
   },

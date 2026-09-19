@@ -68,7 +68,9 @@ async function handleCommands(result) {
   for (const command of result?.commands || []) {
     if (command.type !== 'collect_context') continue;
     const tabs = await api.tabs.query({active:true,lastFocusedWindow:true});
-    if (tabs[0]?.id) await api.tabs.sendMessage(tabs[0].id,{pg:'refresh_context',request_id:command.id}).catch(()=>{});
+    // Frame 0 only: every frame answers a broadcast, and each answer is a whole
+    // page analysis, so a page with three iframes reported itself four times.
+    if (tabs[0]?.id) await api.tabs.sendMessage(tabs[0].id,{pg:'refresh_context',request_id:command.id},{frameId:0}).catch(()=>{});
   }
 }
 async function route(message,sender) {
@@ -146,7 +148,7 @@ api.tabs.onRemoved.addListener(tabId=>{tabContexts.delete(tabId);tabSignals.dele
 api.tabs.onUpdated.addListener((tabId,change)=>{if(change.status==='loading'){tabContexts.delete(tabId);tabSignals.delete(tabId);}});
 api.action.onClicked.addListener(async tab => {
   if (!tab.id) return;
-  await api.tabs.sendMessage(tab.id,{pg:'refresh_context'}).catch(()=>{});
+  await api.tabs.sendMessage(tab.id,{pg:'refresh_context'},{frameId:0}).catch(()=>{});
   await native('deep_check',{origin:new URL(tab.url).origin}).catch(()=>{});
 });
 setInterval(()=>native('ping',{browser:'webextension'},4000).then(handleCommands).catch(()=>{}),1000);

@@ -26,8 +26,8 @@
   "expected": {
     "outcome": "IGNORE",
     "rationale_keywords": [
-      "passport",
-      "banking",
+      "passport number",
+      "bank",
       "is needed"
     ]
   },

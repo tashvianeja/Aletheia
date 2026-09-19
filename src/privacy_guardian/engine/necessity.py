@@ -8,6 +8,7 @@ from importlib.resources import files
 from pydantic import BaseModel
 
 from privacy_guardian.core.events import DataCategory
+from privacy_guardian.engine.labels import article, category_label, purpose_label
 
 
 class Necessity(StrEnum):
@@ -41,13 +42,16 @@ def necessity_for(
 ) -> NecessityAssessment:
     category = DataCategory(category)
     entry = load_matrix().get(purpose)
-    label = category.value.replace(".", " ").replace("_", " ")
+    label = category_label(category.value)
     if entry is None or purpose_confidence < 0.35:
         return NecessityAssessment(
             category=category,
             verdict=Necessity.REASONABLE,
             confidence=0.2,
-            rationale=f"The purpose is uncertain, so whether {label} is necessary is not yet known.",
+            rationale=(
+                f"{label}: this requester's purpose is uncertain, "
+                "so whether it is necessary is not yet known."
+            ),
         )
     vector = entry["categories"]
     if not isinstance(vector, dict):
@@ -59,11 +63,12 @@ def necessity_for(
         "unnecessary": "does not appear necessary",
         "red_flag": "is unusually sensitive and does not appear necessary",
     }[verdict.value]
+    named = purpose_label(purpose)
     return NecessityAssessment(
         category=category,
         verdict=verdict,
         confidence=max(0.0, min(1.0, purpose_confidence)),
-        rationale=f"{label.capitalize()} {description} for a {purpose.replace('_', ' ')}.",
+        rationale=f"{label} {description} for {article(named)} {named}.",
     )
 
 

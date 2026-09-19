@@ -8,6 +8,15 @@
   Blob.prototype.arrayBuffer=async function(){const bytes=await blobArrayBuffer.call(this);binaryFiles.set(bytes,this);return bytes;};
   const readArrayBuffer=FileReader.prototype.readAsArrayBuffer;
   FileReader.prototype.readAsArrayBuffer=function(blob){this.addEventListener('load',()=>{if(this.result instanceof ArrayBuffer)binaryFiles.set(this.result,blob);},{once:true});return readArrayBuffer.call(this,blob);};
+  // A chunked upload sends slices of the chosen file, so a slice keeps its origin.
+  const blobSlice=Blob.prototype.slice,slicedFrom=new WeakMap();
+  Blob.prototype.slice=function(...args){const part=blobSlice.apply(this,args);const origin=chosenFile(this);if(origin)slicedFrom.set(part,origin);return part;};
+  // Adding a slice to a form re-wraps it as an anonymous File; carry the origin across.
+  for(const method of ['append','set']){const original=FormData.prototype[method];FormData.prototype[method]=function(name,value,...rest){
+    const origin=chosenFile(value);const result=original.call(this,name,value,...rest);
+    if(origin){const stored=this.getAll(name).pop();if(stored instanceof File&&stored!==origin)slicedFrom.set(stored,origin);}
+    return result;
+  };}
   const attachShadow=Element.prototype.attachShadow;
   Element.prototype.attachShadow=function(options){const root=attachShadow.call(this,options);if(options.mode==='open')queueMicrotask(()=>window.postMessage({pgBridge:'shadow_attached'},location.origin));return root;};
   window.addEventListener('message',event=>{
@@ -22,12 +31,32 @@
     if(event.data.pgBridge==='upload_hold'){waiter.intervene=true;return;}
     if(event.data.pgBridge==='upload_result'){waiting.delete(event.data.id);waiter.resolve(event.data);}
   });
-  function hasFiles(body){return body instanceof Blob||(body instanceof FormData&&Array.from(body.values()).some(value=>value instanceof File&&value.size))||(body instanceof ArrayBuffer&&binaryFiles.has(body))||(ArrayBuffer.isView(body)&&binaryFiles.has(body.buffer));}
+  // What counts as "a file this person is sharing". Only something that came from a
+  // file picker, a drop or the clipboard does: a File, or a slice of one. A Blob the
+  // page built itself is a request body — telemetry, a JSON payload, a media chunk —
+  // and treating those as uploads announced a file share on nearly every site.
+  function chosenFile(value){
+    if(!(value instanceof Blob)||!value.size)return null;
+    const origin=slicedFrom.get(value);
+    if(origin)return origin;
+    // A Blob put into a form arrives as a File the browser names "blob"; anything
+    // the person picked, dropped or pasted carries its own filename.
+    return value instanceof File&&value.name&&value.name!=='blob'?value:null;
+  }
+  function formFiles(body){return Array.from(body.values()).map(chosenFile).filter(Boolean);}
+  function bufferFile(body){
+    const source=body instanceof ArrayBuffer?binaryFiles.get(body):ArrayBuffer.isView(body)?binaryFiles.get(body.buffer):null;
+    return source?chosenFile(source):null;
+  }
+  function hasFiles(body){
+    if(body instanceof FormData)return formFiles(body).length>0;
+    if(body instanceof Blob)return !!chosenFile(body);
+    return !!bufferFile(body);
+  }
   async function checkBody(body){let files=[],binary=false;
-    if(body instanceof FormData)files=Array.from(body.values()).filter(value=>value instanceof File&&value.size);
-    else if(body instanceof Blob)files=[body];
-    else if(body instanceof ArrayBuffer&&binaryFiles.has(body)){files=[binaryFiles.get(body)];binary=true;}
-    else if(ArrayBuffer.isView(body)&&binaryFiles.has(body.buffer)){files=[binaryFiles.get(body.buffer)];binary=true;}
+    if(body instanceof FormData)files=formFiles(body);
+    else if(body instanceof Blob){const file=chosenFile(body);files=file?[file]:[];}
+    else {const file=bufferFile(body);if(file){files=[file];binary=true;}}
     if(!files.length)return {allowed:true,body};
     const id=crypto.randomUUID();const result=await new Promise(resolve=>{
       const waiter={resolve,intervene:false};waiting.set(id,waiter);window.postMessage({pgBridge:'upload_check',id,files},location.origin);
@@ -35,17 +64,26 @@
       setTimeout(()=>{if(waiting.has(id)){waiting.delete(id);resolve({allowed:false,files:[]});}},64000);
     });
     if(!result.allowed)return {allowed:false,body};
-    if(body instanceof FormData){const replacement=new FormData();let index=0;for(const [name,value] of body.entries()){if(value instanceof File&&value.size){const file=result.files[index++]||value;replacement.append(name,file,file.name);}else replacement.append(name,value);}return {allowed:true,body:replacement};}
+    if(body instanceof FormData){const replacement=new FormData();let index=0;for(const [name,value] of body.entries()){if(chosenFile(value)){const file=result.files[index++]||value;replacement.append(name,file,file.name);}else replacement.append(name,value);}return {allowed:true,body:replacement};}
     const replacement=result.files[0]||body;return {allowed:true,body:binary?await blobArrayBuffer.call(replacement):replacement};
   }
+  // A Request swallows its body, so remember when one was built around a chosen file.
+  const NativeRequest=window.Request,requestFiles=new WeakMap();
+  try{window.Request=new Proxy(NativeRequest,{construct(target,args,newTarget){
+    const request=Reflect.construct(target,args,newTarget);
+    const carried=args[0] instanceof NativeRequest&&args[1]?.body===undefined?requestFiles.get(args[0]):null;
+    const file=chosenFile(args[1]?.body)||carried;
+    if(file)requestFiles.set(request,file);
+    return request;
+  }});}catch(_){}
   window.fetch=async function(input,init){
     let body=init?.body,request=input;
-    if(input instanceof Request&&!body&&!['GET','HEAD'].includes(input.method)){
+    if(input instanceof NativeRequest&&body===undefined&&!['GET','HEAD'].includes(input.method)){
       const contentType=input.headers.get('content-type')||'';
-      try{if(contentType.includes('multipart/form-data'))body=await input.clone().formData();else if(/application\/pdf|image\/|application\/octet-stream/.test(contentType))body=await input.clone().blob();}catch(_){}
+      try{if(contentType.includes('multipart/form-data'))body=await input.clone().formData();else body=requestFiles.get(input);}catch(_){}
     }
     const result=await checkBody(body);if(!result.allowed)throw new DOMException('Upload cancelled by Privacy Guardian','AbortError');
-    if(input instanceof Request&&body){const headers=new Headers(init?.headers||input.headers);if(result.body instanceof FormData)headers.delete('content-type');request=new Request(input,{...init,headers,body:result.body});return capturedFetch.call(this,request);}
+    if(input instanceof NativeRequest&&body){const headers=new Headers(init?.headers||input.headers);if(result.body instanceof FormData)headers.delete('content-type');request=new NativeRequest(input,{...init,headers,body:result.body});return capturedFetch.call(this,request);}
     return capturedFetch.call(this,request,init?{...init,body:result.body}:init);
   };
   XMLHttpRequest.prototype.open=function(method,url,async=true,...args){xhrAsync.set(this,async!==false);return capturedOpen.call(this,method,url,async,...args);};

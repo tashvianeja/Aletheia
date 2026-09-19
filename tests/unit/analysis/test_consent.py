@@ -98,3 +98,26 @@ def test_ordinary_non_banner_content_is_not_detected() -> None:
     )
     assert not analysis.detected
     assert analysis.dark_patterns == []
+
+
+def test_a_toggle_label_is_folded_into_the_purpose_it_names() -> None:
+    """ "Targeted advertising" is the advertising purpose, not a fifth one to list."""
+    analysis = analyze_consent(
+        ConsentSnapshot(
+            text="We use cookies.",
+            cmp="onetrust",
+            fixed_or_sticky=True,
+            buttons=[ConsentButton(text="Accept all")],
+            toggles=[
+                ConsentToggle(purpose="Targeted advertising", enabled=True),
+                ConsentToggle(purpose="Site analytics", enabled=True),
+                ConsentToggle(purpose="Partner surveys", enabled=True),
+            ],
+        )
+    )
+
+    assert "advertising" in analysis.purposes
+    assert "analytics" in analysis.purposes
+    assert "Targeted advertising" not in analysis.purposes
+    # A label that matches no known purpose is kept as the site worded it.
+    assert "Partner surveys" in analysis.purposes

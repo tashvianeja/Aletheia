@@ -26,8 +26,8 @@
   "expected": {
     "outcome": "INFORM",
     "rationale_keywords": [
-      "location precise",
-      "social",
+      "precise location",
+      "social network",
       "does not appear necessary"
     ]
   },

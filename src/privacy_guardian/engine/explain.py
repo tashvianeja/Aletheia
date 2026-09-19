@@ -8,6 +8,7 @@ from privacy_guardian.core.events import (
     DataCategory,
     DecisionFinding,
     FileUploadEvent,
+    Finding,
     FormObservedEvent,
     PermissionRequestEvent,
     PolicyDocumentEvent,
@@ -17,58 +18,9 @@ from privacy_guardian.core.events import (
     TrackingEvent,
 )
 from privacy_guardian.engine.context import SiteOrAppProfile
+from privacy_guardian.engine.labels import LABELS, category_label, lowered, purpose_label
+from privacy_guardian.engine.labels import article as _article
 from privacy_guardian.engine.necessity import Necessity, NecessityAssessment
-
-LABELS = {
-    "government_id": "Government ID",
-    "government_id.passport": "Passport number",
-    "government_id.national_id": "National ID number",
-    "government_id.ssn": "Social security number",
-    "government_id.drivers_license": "Driving licence number",
-    "government_id.tax_id": "Tax identification number",
-    "full_name": "Full name",
-    "dob": "Date of birth",
-    "age": "Age",
-    "gender": "Gender",
-    "email": "Email",
-    "phone": "Phone number",
-    "postal_address": "Home address",
-    "biometric_photo": "Photo",
-    "financial": "Financial details",
-    "financial.card_number": "Card number",
-    "financial.iban": "Bank account (IBAN)",
-    "financial.account_number": "Bank account number",
-    "financial.routing": "Bank routing number",
-    "medical": "Medical information",
-    "medical.diagnosis": "Medical diagnosis",
-    "medical.medication": "Medication",
-    "medical.insurance_id": "Health insurance ID",
-    "credentials": "Credentials",
-    "credentials.password": "Password",
-    "credentials.api_key": "API key",
-    "credentials.private_key": "Private key",
-    "location_precise": "Precise location",
-    "location_coarse": "Approximate location",
-    "device_identifiers": "Persistent device identifiers",
-    "browsing_activity": "Browsing activity",
-    "browser_history": "Browser history",
-    "contacts": "Contacts",
-    "calendar": "Calendar",
-    "files_broad": "Full file access",
-    "camera": "Camera",
-    "microphone": "Microphone",
-    "screen": "Screen recording",
-    "clipboard": "Clipboard",
-    "accessibility": "Accessibility control",
-    "automation": "System automation",
-    "background_execution": "Background execution",
-    "startup": "Startup access",
-    "employment": "Employment history",
-    "education": "Education history",
-    "ethnicity_religion_orientation": "Ethnicity, religion or orientation",
-    "minors_data": "Information about a child",
-    "free_text_pii": "Personal details in free text",
-}
 
 # The second half of a finding row: "Full file access — can read every file on this computer".
 CONSEQUENCES = {
@@ -90,50 +42,6 @@ CONSEQUENCES = {
 
 UNCERTAIN_PURPOSE = "Its purpose is uncertain, so whether this is necessary could not be confirmed."
 
-PURPOSE_NAMES = {
-    "government": "government service",
-    "news": "news site",
-    "search": "search engine",
-    "social": "social network",
-    "recipe": "recipe site",
-    "gaming": "game",
-    "weather": "weather service",
-    "image_tool": "image tool",
-    "file_converter": "file converter",
-    "free_download": "free download",
-    "wallpaper_utility": "wallpaper app",
-    "saas_b2b": "business tool",
-    "maps_navigation": "maps app",
-    "video_conference": "video call service",
-    "healthcare_provider": "healthcare provider",
-    "finance_investing": "investment service",
-    "shopping_comparison": "price comparison site",
-    "screen_recorder": "screen recorder",
-    "password_manager": "password manager",
-    "developer_tool": "developer tool",
-    "accessibility_tool": "accessibility tool",
-    "job_board": "job board",
-    "ride_hailing": "ride-hailing service",
-    "food_delivery": "food delivery service",
-    "travel_booking": "travel booking site",
-    "music_streaming": "music service",
-    "video_streaming": "video service",
-    "cloud_storage": "file sharing service",
-    "legal_services": "legal service",
-}
-
-
-def category_label(value: str) -> str:
-    return LABELS.get(value, value.replace(".", " ").replace("_", " ").capitalize())
-
-
-def purpose_label(purpose: str) -> str:
-    return PURPOSE_NAMES.get(purpose, purpose.replace("_", " "))
-
-
-def _article(word: str) -> str:
-    return "an" if word[:1].lower() in "aeiou" else "a"
-
 
 def _requester_name(event: PrivacyEvent) -> str:
     requester = event.requester
@@ -148,8 +56,40 @@ def _sentence_list(items: list[str]) -> str:
     return ", ".join(items[:-1]) + " and " + items[-1]
 
 
+def evidence(findings: list[Finding] | None) -> dict[DataCategory, str]:
+    """Where each thing was found, so a row is checkable rather than just asserted.
+
+    Page numbers only earn their place in a document that has more than one, and
+    metadata always does: that a holiday photo carries the spot it was taken is the
+    whole point of saying so.
+    """
+    pages: dict[DataCategory, set[int]] = {}
+    metadata: set[DataCategory] = set()
+    for finding in findings or []:
+        if finding.span_ref == "metadata":
+            metadata.add(finding.category)
+        elif finding.page:
+            pages.setdefault(finding.category, set()).add(finding.page)
+    multipage = len({page for found in pages.values() for page in found}) > 1
+    details: dict[DataCategory, str] = {}
+    for category in {*pages, *metadata}:
+        parts: list[str] = []
+        found = sorted(pages.get(category, ()))
+        if found and multipage:
+            shown = ", ".join(str(page) for page in found[:3])
+            more = f" and {len(found) - 3} more" if len(found) > 3 else ""
+            parts.append(f"Page{'s' if len(found) > 1 else ''} {shown}{more}")
+        if category in metadata:
+            parts.append("Recorded in the file's own metadata")
+        if parts:
+            details[category] = " · ".join(parts)
+    return details
+
+
 def _rows(
-    assessments: list[NecessityAssessment], explain_consequences: bool
+    assessments: list[NecessityAssessment],
+    explain_consequences: bool,
+    details: dict[DataCategory, str] | None = None,
 ) -> list[DecisionFinding]:
     """One row per category, warning on the ones that do not earn their place."""
     rows: list[DecisionFinding] = []
@@ -167,7 +107,11 @@ def _rows(
         else:
             # Plausible but not required: a neutral note, never a green tick of approval.
             severity = "info"
-        rows.append(DecisionFinding(label=label, severity=severity))
+        rows.append(
+            DecisionFinding(
+                label=label, severity=severity, detail=(details or {}).get(item.category, "")
+            )
+        )
     return _ordered(rows, assessments)
 
 
@@ -217,9 +161,9 @@ def _headline(
             headline = "This file contains more than this site needs."
         else:
             headline = f"This file is being shared with {who}."
+        needless = lowered(unnecessary[0]) if len(unnecessary) == 1 else "most of this information"
         body = (
-            f"{_article(purpose).capitalize()} {purpose} does not appear to require most of "
-            "this information."
+            f"{_article(purpose).capitalize()} {purpose} does not appear to require {needless}."
             if certain and unnecessary
             else f"{who} has not made clear why it needs this information."
             if unnecessary
@@ -247,7 +191,7 @@ def _headline(
         return headline, body
 
     if isinstance(event, ConsentBannerEvent):
-        headline = "This website wants to do more than store necessary cookies."
+        headline = f"{who} wants to do more than store necessary cookies."
         body = (
             "Rejecting is hidden behind extra screens. Privacy Guardian can reject the "
             "optional cookies for you."
@@ -280,7 +224,7 @@ def _headline(
         headline = f"{who} just read your clipboard."
         kinds = [
             f"{_article(category_label(item.category.value))} "
-            f"{category_label(item.category.value).lower()}"
+            f"{lowered(category_label(item.category.value))}"
             for item in assessments
         ]
         body = (
@@ -331,7 +275,7 @@ def _headline(
         )
         return headline, body
 
-    labels = _sentence_list([category_label(item.category.value).lower() for item in assessments])
+    labels = _sentence_list([lowered(category_label(item.category.value)) for item in assessments])
     headline = f"{who} is requesting {labels or 'access to your information'}."
     body = (
         f"This does not appear necessary for {_article(purpose)} {purpose}."
@@ -339,6 +283,40 @@ def _headline(
         else f"{who} has not made clear why it needs this."
     )
     return headline, body
+
+
+# Singular and plural for each verdict, so several categories that share a verdict
+# become one sentence instead of the same sentence repeated with a different noun.
+_VERDICT_WORDING: dict[Necessity, tuple[str, str]] = {
+    Necessity.RED_FLAG: (
+        "is unusually sensitive and does not appear necessary",
+        "are unusually sensitive and do not appear necessary",
+    ),
+    Necessity.UNNECESSARY: ("does not appear necessary", "do not appear necessary"),
+    Necessity.REASONABLE: ("may reasonably be used", "may reasonably be used"),
+    Necessity.REQUIRED: ("is needed", "are needed"),
+}
+
+
+def _necessity_notes(event: PrivacyEvent, assessments: list[NecessityAssessment]) -> list[str]:
+    """The "why am I seeing this" reasoning, grouped so it can be read at a glance."""
+    certain = event.requester.purpose != "unknown" and event.requester.purpose_confidence >= 0.35
+    if not assessments or not certain:
+        # The body already says the purpose could not be established; saying it once
+        # more per category is how four fields became four identical sentences.
+        return []
+    named = purpose_label(event.requester.purpose)
+    notes: list[str] = []
+    for verdict, (singular, plural) in _VERDICT_WORDING.items():
+        labels = [
+            category_label(item.category.value) for item in assessments if item.verdict == verdict
+        ]
+        if not labels:
+            continue
+        verb = singular if len(labels) == 1 else plural
+        named_list = _sentence_list([labels[0], *(lowered(label) for label in labels[1:])])
+        notes.append(f"{named_list} {verb} for {_article(named)} {named}.")
+    return notes
 
 
 def _consequences(profile: SiteOrAppProfile) -> list[str]:
@@ -380,19 +358,18 @@ def _informational(
             if certain
             else f"Nothing in it looks out of place for {who}."
         )
-        if encrypted:
-            body += " Sent over an encrypted connection."
+        if not encrypted:
+            body += " This connection is not encrypted."
         return f"{what} shared with {who}", body
     if assessments:
-        labels = _sentence_list(
-            [category_label(item.category.value).lower() for item in assessments[:3]]
-        )
+        named = [category_label(item.category.value) for item in assessments[:3]]
+        labels = _sentence_list([named[0], *(lowered(label) for label in named[1:])])
         body = (
             f"Expected for {_article(purpose)} {purpose}."
             if certain
             else f"{who} has not explained why, but nothing here looks unusual."
         )
-        return f"{labels.capitalize()} shared with {who}", body
+        return f"{labels} shared with {who}", body
     return None
 
 
@@ -402,6 +379,7 @@ def explain(
     profile: SiteOrAppProfile,
     notes: list[str] | None = None,
     informational: bool = False,
+    found: list[Finding] | None = None,
 ) -> tuple[str, str, list[DecisionFinding], list[str]]:
     """Return the widget's headline, body, finding rows and 'why am I seeing this' detail."""
     headline, body = (informational and _informational(event, assessments)) or _headline(
@@ -410,16 +388,17 @@ def explain(
     if event.requester.purpose == "unknown" or event.requester.purpose_confidence < 0.35:
         # Say plainly that necessity could not be judged rather than implying it was.
         body = UNCERTAIN_PURPOSE if not body or informational else body + " " + UNCERTAIN_PURPOSE
-    findings = _rows(
+    rows = _rows(
         assessments,
         explain_consequences=isinstance(event, SystemAccessEvent | PermissionRequestEvent),
+        details=evidence(found),
     )
     effects = _consequences(profile)
-    rationale = [item.rationale for item in assessments]
+    rationale = _necessity_notes(event, assessments)
     rationale.extend(notes or [])
     if effects:
         rationale.append("The policy says " + "; ".join(effects) + ".")
-    return headline, body, findings, rationale
+    return headline, body, rows, rationale
 
 
 def summarize(headline: str, body: str) -> str:

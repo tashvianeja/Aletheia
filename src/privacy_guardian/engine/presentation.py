@@ -142,12 +142,11 @@ def findings_for(
         rows = form_findings(event, {c for c in event.data_categories if c in unnecessary})
         return rows or default
     if isinstance(event, TrackingEvent):
-        rows = [DecisionFinding(label=signal, severity="warn") for signal in tracking_rows(event)]
-        return rows or default
+        return tracking_rows(event) or default
     if isinstance(event, PolicyDocumentEvent):
         return default
     if isinstance(event, ClipboardReadEvent):
-        from privacy_guardian.engine.explain import _article, category_label
+        from privacy_guardian.engine.labels import article, category_label, lowered
 
         when = event.ts.astimezone().strftime("%H:%M:%S")
         who = event.requester.display_name or event.requester.key
@@ -155,8 +154,8 @@ def findings_for(
         rows.extend(
             DecisionFinding(
                 label="Content looks like "
-                f"{_article(category_label(category.value))} "
-                f"{category_label(category.value).lower()}",
+                f"{article(category_label(category.value))} "
+                f"{lowered(category_label(category.value))}",
                 severity="warn",
             )
             for category in event.data_categories
@@ -167,26 +166,62 @@ def findings_for(
     return default
 
 
-def tracking_rows(event: TrackingEvent) -> list[str]:
+# What each tracking mechanism does, in place of the detector's own name for it.
+# "Cross origin storage identifier" tells the reader nothing they can act on.
+SIGNAL_WORDING = {
+    "persistent_third_party_cookies": "Stores third-party cookies that outlast this visit",
+    "url_decoration": "Tags the links you follow with an identifier for you",
+    "cross_origin_storage_identifier": "Reuses one stored identifier across separate websites",
+    "cname_cloaking": "Disguises a tracker as part of this website",
+    "tracking_pixels": "Loads invisible images that report which pages you open",
+    "identity_linking": "Sends a scrambled form of your identity to match you elsewhere",
+    "persistent_cookie": "Sets an identifier that lasts",
+    "cross_site_identifier": "Reuses one identifier across separate websites",
+    "url_identifier": "Carries an identifier for you in page addresses",
+}
+# Already said by the rows above: the tracker list and the fingerprinting row.
+COVERED_SIGNALS = frozenset({"known_tracker_requests", "fingerprinting"})
+
+
+def named_hosts(hosts: list[str], limit: int = 3) -> str:
+    """Name a few and count the rest: enough to recognise, not a wall of hosts."""
+    shown = ", ".join(hosts[:limit])
+    return f"{shown} and {len(hosts) - limit} more" if len(hosts) > limit else shown
+
+
+def tracking_rows(event: TrackingEvent) -> list[DecisionFinding]:
     """Turn tracking mechanisms into what they mean for the person reading."""
-    rows: list[str] = []
-    others = len({domain for domain in event.tracker_domains})
-    if others:
-        rows.append(f"Links this visit to activity on {others} other websites")
+    rows: list[DecisionFinding] = []
+    domains = sorted(set(event.tracker_domains))
+    if domains:
+        rows.append(
+            DecisionFinding(
+                label=f"Links this visit to activity on {len(domains)} other website"
+                f"{'s' if len(domains) != 1 else ''}",
+                severity="warn",
+                detail=named_hosts(domains),
+            )
+        )
     if event.fingerprinting:
-        rows.append("Creates a fingerprint of this device")
+        rows.append(
+            DecisionFinding(
+                label="Creates a fingerprint of this device",
+                severity="warn",
+                detail="Recognises this browser again even after you clear cookies",
+            )
+        )
     for signal in event.signals:
         text = str(signal)
-        if text.startswith("persistent_cookie:"):
-            rows.append(f"Sets an identifier that lasts {text.split(':', 1)[1]}")
-        elif text == "cross_site_identifier":
-            rows.append("Reuses one identifier across separate websites")
-        elif text == "url_identifier":
-            rows.append("Carries an identifier for you in page addresses")
-        elif text == "cname_cloaking":
-            rows.append("Disguises a tracker as part of this website")
-        else:
-            rows.append(text.replace("_", " ").capitalize())
+        if text in COVERED_SIGNALS:
+            continue
+        prefix, _, suffix = text.partition(":")
+        wording = SIGNAL_WORDING.get(prefix)
+        label = (
+            f"{wording} {suffix}"
+            if wording and suffix
+            else wording or text.replace("_", " ").capitalize()
+        )
+        rows.append(DecisionFinding(label=label, severity="warn"))
     return rows[:5]
 
 

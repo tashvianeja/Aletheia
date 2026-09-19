@@ -244,3 +244,64 @@ def test_broad_access_already_held_is_described_as_held() -> None:
     )
 
     assert headline == "Snipper already has broad access to your computer."
+
+
+def test_upload_rows_say_where_each_thing_was_found() -> None:
+    from privacy_guardian.core.events import FileUploadEvent, Finding
+
+    event = FileUploadEvent(
+        requester=Requester(
+            kind="website",
+            origin="https://shrinkpix.test",
+            display_name="shrinkpix.test",
+            purpose="image_tool",
+            purpose_confidence=0.9,
+        ),
+        filename="statement.pdf",
+    )
+    decision = decide(
+        event,
+        [
+            Finding(category=DataCategory.FINANCIAL_IBAN, page=2),
+            Finding(category=DataCategory.FINANCIAL_IBAN, page=5),
+            Finding(category=DataCategory.LOCATION_PRECISE, span_ref="metadata"),
+        ],
+    )
+    rows = {row.label: row.detail for row in decision.findings}
+
+    assert rows["Bank account (IBAN)"] == "Pages 2, 5"
+    assert rows["Precise location"] == "Recorded in the file's own metadata"
+
+
+def test_a_single_page_document_is_not_labelled_page_one() -> None:
+    from privacy_guardian.core.events import Finding
+    from privacy_guardian.engine.explain import evidence
+
+    assert evidence([Finding(category=DataCategory.EMAIL, page=1)]) == {}
+
+
+def test_tracking_rows_name_the_trackers_and_read_as_english() -> None:
+    from privacy_guardian.core.events import TrackingEvent
+    from privacy_guardian.engine.presentation import tracking_rows
+
+    event = TrackingEvent(
+        requester=Requester(kind="website", origin="https://news.test"),
+        tracker_domains=["criteo.com", "doubleclick.net"],
+        signals=["known_tracker_requests", "cross_origin_storage_identifier"],
+    )
+    rows = tracking_rows(event)
+
+    assert rows[0].label == "Links this visit to activity on 2 other websites"
+    assert rows[0].detail == "criteo.com, doubleclick.net"
+    # The detector's own name for a mechanism is not an explanation of it.
+    assert [row.label for row in rows[1:]] == [
+        "Reuses one stored identifier across separate websites"
+    ]
+
+
+def test_page_context_warnings_name_the_site() -> None:
+    from privacy_guardian.sensors.browser_bridge import prepare_context
+
+    prepared = prepare_context({"origin": "https://news.example", "signals": {}})
+
+    assert prepared["requester"]["display_name"] == "news.example"

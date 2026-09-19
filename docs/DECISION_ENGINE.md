@@ -17,6 +17,14 @@ Events describe the requester, purpose confidence, categories, and event class. 
 
 Event-specific rules cover consent dark patterns, tracking signals, broad system access, screen capture, denied permissions, form observation, clipboard allowlists, expected permissions, and requester allow overrides. Actions are selected by event type: for example, file uploads offer `cancel`, `continue`, and `redact`; consent offers `reject_optional`; tracking offers `block`.
 
+## One warning per thing to say
+
+`decide()` is pure and does not know what has already been shown. The service does, and it folds a repeat of a warning already on record onto that warning rather than raising a second one, because every surface keys the card it is showing by event id.
+
+`engine.notice.notice_signature()` names what makes one warning different from another: for tracking, the set of mechanisms and whether the device is fingerprinted, not the tracker count or confidence, both of which climb as a page finishes loading; for consent, the CMP, dark patterns and purposes, not the vendor count or button geometry, which move with every re-render. A repeat may sharpen an outstanding warning but never lowers its outcome, and one the person has already answered becomes `IGNORE`.
+
+Two classes are always raised afresh, listed in `notice.ALWAYS_ASK`: warnings that hold up something the person is doing now — uploads, form submissions, terms acceptance — because reusing one would apply an earlier answer to a new action; and warnings that report a moment rather than a standing state, which today means clipboard reads.
+
 ## Examples
 
 | Situation | Evidence used | Expected engine behavior |

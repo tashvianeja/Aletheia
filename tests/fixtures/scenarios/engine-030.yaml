@@ -26,8 +26,8 @@
   "expected": {
     "outcome": "INFORM",
     "rationale_keywords": [
-      "location precise",
-      "banking",
+      "precise location",
+      "bank",
       "does not appear necessary"
     ]
   },

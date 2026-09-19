@@ -26,7 +26,7 @@
   "expected": {
     "outcome": "INFORM",
     "rationale_keywords": [
-      "phone",
+      "phone number",
       "image tool",
       "does not appear necessary"
     ]
