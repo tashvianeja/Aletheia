@@ -2,13 +2,13 @@
 
 ## Verification status
 
-The implementation includes macOS and Windows adapter code behind a common `PlatformAdapter` interface. Injection/unit coverage is present, plus one real FSEvents check, a read-only actual-macOS permissions check, and a clean-clone packaged install/onboarding/native-host/OCR/uninstall exercise. Real TCC/Full Disk Access/Accessibility/screen-capture grants, real Windows execution, final CI, and final browser totals remain TODO.
+The implementation includes macOS and Windows adapter code behind a common `PlatformAdapter` interface. Injection/unit coverage is present, plus one real FSEvents check, a read-only actual-macOS permissions check, and a current packaged install/onboarding/native-host/OCR/uninstall exercise. Real TCC/Full Disk Access/Accessibility/screen-capture grants, real Windows execution, final CI, and final browser totals remain TODO.
 
 ## macOS
 
 The macOS adapter reads observable TCC changes, watches launch/startup locations, observes relevant system logs when available, checks Accessibility status, monitors clipboard state, and can open selected System Settings privacy panes. Availability of TCC and several system signals depends on Full Disk Access and Accessibility; the app exposes separate controls for those permissions. Sandboxing, System Integrity Protection, user permissions, OS version differences, app signing, and process visibility can prevent or delay events.
 
-The adapter can create/remove a user LaunchAgent for autostart. A packaged app/DMG has been smoke-tested from a clean clone, but a final current-source rebuild, notarization, Gatekeeper behavior, and protected permission grants remain pending. “Full Disk Access granted” only indicates that this app may read certain protected locations; it does not prove full OS-wide monitoring.
+The adapter can create/remove a user LaunchAgent for autostart. The current ARM app/DMG lifecycle passed visible onboarding/tray, native protocol-v1 readiness, bundled OCR, uninstall, and registration restoration. Intel packaging is not accepted: its lifecycle audit found an `ossl-modules/legacy.dylib` x86_64 slice that requires macOS 15. Notarization, Gatekeeper behavior, and protected permission grants remain pending. “Full Disk Access granted” only indicates that this app may read certain protected locations; it does not prove full OS-wide monitoring.
 
 ## Windows
 

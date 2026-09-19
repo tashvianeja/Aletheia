@@ -16,4 +16,4 @@ All notable changes will be documented here. This project has not produced a ver
 
 ### Verification pending
 
-- Exact raw-passport timing, final browser counts, real TCC/Full Disk Access/Accessibility/screen and Windows checks, green CI, final rebuild/install-uninstall smoke, post-light-worker perf measurement, and release artifacts.
+- Real TCC/Full Disk Access/Accessibility/screen and Windows checks, Intel packaging compatibility, Intel policy-performance optimization, final fresh clone, green CI, and release artifacts.

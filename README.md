@@ -4,14 +4,14 @@ Privacy Guardian is a local-first background app for macOS and Windows that help
 
 The app can classify sensitive categories in documents and forms, inspect consent and tracking signals, and relate a request to the apparent purpose of a site or application. It presents one of three outcomes: **Ignore**, **Inform**, or **Intervene**, with an explanation and an action where one is available.
 
-This repository is an in-progress initial build. All 20 functional requirements are implemented, with independent evidence recorded in `docs/PLAN.md`; final acceptance counts, the exact raw-passport timing, physical Windows validation, protected macOS permission grants, the latest package rebuild, and a green CI run remain pending. Treat the installation and packaging sections below as build instructions, not a claim that release artifacts exist today.
+This repository is an in-progress initial build. All 20 functional requirements are implemented, with independent evidence recorded in `docs/PLAN.md`; physical Windows validation, protected macOS permission grants, Intel compatibility, policy-performance optimization, final fresh-clone verification, and a green CI run remain pending. The current ARM macOS app and DMG passed the installed lifecycle, but no GitHub release has been published.
 
 ## Feature matrix
 
 | Capability | Browser extension | macOS desktop | Windows desktop | Offline | Optional LLM-assisted |
 |---|---:|---:|---:|---:|---:|
-| Document category detection and redaction | Upload flow wired; raw-passport target still optimizing | — | — | Yes | No |
-| Form field semantics | 17 headed browser cases: 15 pass, two timing fixes in progress | — | — | Yes | No |
+| Document category detection and redaction | Connected warning visible in 1.095 s; bounded 5 MiB full scan passes current gate | — | — | Yes | No |
+| Form field semantics | Connected headed form case 238.983 ms | — | — | Yes | No |
 | Policy and terms clause extraction | Wired, including exact three-finding Deep Check coverage | — | — | Yes | Policy refinement only |
 | Consent-banner analysis | Five known CMPs, three heuristics, and three rejects pass | — | — | Yes | No |
 | Tracker and fingerprinting signal analysis | DNR/cookie blocking and session preservation tested | — | — | Yes | No |
@@ -20,7 +20,7 @@ This repository is an in-progress initial build. All 20 functional requirements 
 | Decision engine, preferences, and local history | Service API wired | Service/UI wired | Service/UI wired; platform verification pending | Yes | Explanation polish only |
 | Deep Check | Context supplied by extension | UI rendered; exact three-finding coverage | UI rendered; Windows validation pending | Yes | Narrative only |
 
-Headed Chromium has 17 exercised browser cases with 15 passing; Firefox’s fixed-ID native-host handshake takes 3.02 seconds. The final browser count is pending. A dash means that the capability is outside that surface.
+The latest local headed browser/performance/native-clipboard run has 34 passing and one skipped case. A connected passport DOM-change-to-visible warning took 1.095 s (host-side 1.327781 s), and native-bridge setup took 1.354564 s, within its separate five-second budget. Historical cold first action before bridge readiness was 2.386 s. A dash means that the capability is outside that surface.
 
 ## Screenshots
 
@@ -85,7 +85,7 @@ uv run python scripts/build_extension.py
 uv run python scripts/build.py windows
 ```
 
-`make build-extension` writes `dist/privacy-guardian-chromium.zip` and `dist/privacy-guardian-firefox.zip`. `make build-mac` builds `dist/PrivacyGuardian.app` and `dist/PrivacyGuardian-<version>.dmg`; it signs ad hoc by default, or uses `CODESIGN_IDENTITY` and optional `NOTARY_PROFILE`. `make build-win` invokes PyInstaller and Inno Setup on Windows. A final rebuild and installer smoke checks remain required before distributing any artifact. For non-English OCR, install the appropriate Tesseract language data in the host operating system; English and OSD data are the currently bundled packaging target.
+`make build-extension` writes `dist/privacy-guardian-chromium.zip` and `dist/privacy-guardian-firefox.zip`. `make build-mac` builds `dist/PrivacyGuardian.app` and `dist/PrivacyGuardian-<version>.dmg`; it signs ad hoc by default, or uses `CODESIGN_IDENTITY` and optional `NOTARY_PROFILE`. The current app/DMG passed visible onboarding/tray, native protocol-v1 `0.1.0` readiness, bundled OCR, uninstall, registration restoration, and a 339-Mach-O-slice maximum deployment target of macOS 13. `make build-win` invokes PyInstaller and Inno Setup on Windows; Windows installer/runtime verification remains required. For non-English OCR, install the appropriate Tesseract language data in the host operating system; English and OSD data are the currently bundled packaging target.
 
 ## Run in development
 
@@ -109,7 +109,7 @@ For a development registration, start the desktop service then run:
 uv run privacy-guardian --install-native-host
 ```
 
-Load the matching unpacked extension source in the browser’s developer-extension view. Chromium-family browsers use ID `bfdjphkbgihhbonhnmjbbfhckdddonob`; Firefox uses `privacy-guardian@privacyguardian.local`. The installer writes native-host manifests for Chrome, Edge, Brave, and Firefox. Chromium native-host handshake plus a three-badge fixture path were verified; reconnection and the remaining browser scenarios remain pending.
+Load the matching unpacked extension source in the browser’s developer-extension view. Chromium-family browsers use ID `bfdjphkbgihhbonhnmjbbfhckdddonob`; Firefox uses `privacy-guardian@privacyguardian.local`. The installer writes native-host manifests for Chrome, Edge, Brave, and Firefox. Chromium and Firefox native-host handshakes, browser recovery after a killed upload analysis, and a three-badge fixture path are verified; final browser totals remain pending.
 
 Runtime data defaults to `~/Library/Application Support/PrivacyGuardian` on macOS, `%APPDATA%\\PrivacyGuardian` on Windows, and `$XDG_DATA_HOME/PrivacyGuardian` on other systems. Logs are configured below that data directory.
 
@@ -125,9 +125,9 @@ make typecheck
 make check
 ```
 
-The verified coverage checkpoint is 85.09% for core (`1,638/1,925`) and 74.52% overall (`4,034/5,413`), exceeding the final 85% scoped/70% overall targets. A run reported 260 passed, 4 skipped, and one transient macOS permission-status timeout; the isolated retry passed in 0.51 seconds. Final counts are still pending. Ruff was clean for 165 files, strict mypy for 73 modules, and Bandit medium-and-above was clean.
+The latest local `make check` baseline is green: Ruff checks 173 files; strict mypy checks 73 modules; core/unit/integration/platform/packaging tests report 270 passed, 4 skipped, and 2 deselected in 41.67 seconds; the real headed browser/performance/native-clipboard run reports 34 passed and 1 skipped in 95.26 seconds. Total: **304 passed, 5 skipped**. Exact line coverage is **85.71%** scoped (`1,667/1,945`) and **75.39%** overall (`4,107/5,448`), above the 85%/70% gates.
 
-Use `-m macos`, `-m windows`, `-m e2e`, `-m perf`, and `-m llm` only in an environment that supports those markers. Current outstanding checks include the exact raw-passport 1.5-second target (currently 1.83–2.39 seconds), final browser totals, physical Windows CI, protected macOS TCC/Full Disk Access/Accessibility/screen grant tests, a fresh post-light-worker performance run, final macOS rebuild/install/uninstall smoke, and green CI. The earlier CI run is not green evidence.
+Use `-m macos`, `-m windows`, `-m e2e`, `-m perf`, and `-m llm` only in an environment that supports those markers. The final native-Cocoa 300-second run measured 0.823200875-second tray readiness, 197.734375 MiB warm-median RSS, 200.78125 MiB peak RSS, and 0.0442277493% CPU. Warm median and CPU meet their targets; the peak is 0.78125 MiB over 200 MiB. Two first-phase perf cases are excluded from the local baseline but included in runtime acceptance. Current outstanding checks include physical Windows CI, protected macOS TCC/Full Disk Access/Accessibility/screen grant tests, Intel packaging compatibility (the Intel lifecycle audit found a legacy OpenSSL module requiring macOS 15), policy-performance optimization, final fresh-clone verification, and green CI.
 
 ## Configuration
 
@@ -182,7 +182,7 @@ Privacy Guardian has no telemetry in its declared design. Network use is limited
 
 ## Platform limitations
 
-Read [Platform limitations](docs/PLATFORM_LIMITATIONS.md) before relying on a signal for security or compliance decisions. Real TCC grant/screen-capture verification, real Windows execution, most browser scenarios, final installer smoke tests, and CI are pending. The tool gives privacy guidance; it cannot guarantee interception of every application, browser, permission change, or network transfer.
+Read [Platform limitations](docs/PLATFORM_LIMITATIONS.md) before relying on a signal for security or compliance decisions. Real TCC grant/screen-capture verification, real Windows execution, final browser totals, and CI are pending. The tool gives privacy guidance; it cannot guarantee interception of every application, browser, permission change, or network transfer.
 
 ## Troubleshooting
 
@@ -192,7 +192,7 @@ If macOS events are missing, grant the requested Full Disk Access or Accessibili
 
 ## Uninstall
 
-The native-host deregistration/uninstall path is implemented but final packaged-app smoke verification is pending. The declared macOS target is:
+The native-host deregistration/uninstall path is implemented and the current macOS packaged lifecycle passed it. The declared macOS target is:
 
 ```sh
 make uninstall-mac
