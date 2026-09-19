@@ -4,7 +4,7 @@ Privacy Guardian is a local-first background app for macOS and Windows that help
 
 The app can classify sensitive categories in documents and forms, inspect consent and tracking signals, and relate a request to the apparent purpose of a site or application. It presents one of three outcomes: **Ignore**, **Inform**, or **Intervene**, with an explanation and an action where one is available.
 
-This repository is an in-progress initial build. All 20 functional requirements are implemented, with independent evidence recorded in `docs/PLAN.md`; physical Windows validation, protected macOS permission grants, a refreshed artifact for the later UI-only source change, and a green CI run remain pending. The `2af` macOS artifact passed its installed lifecycle. Corrected Intel static-crypto packaging and installed-package smoke/audit passed at 14:14 UTC, but its earlier job remains failed and is not green evidence. The [latest-source CI run](https://github.com/tashvianeja/Privacy-Guardian/actions/runs/35449032544) has no jobs because of an account billing limit. No GitHub release has been published.
+This repository is an in-progress initial build. All 20 functional requirements are implemented, with independent evidence recorded in `docs/PLAN.md`; physical Windows validation, protected macOS permission grants, and a green CI run remain pending. The final `1539390` macOS artifact passed its installed lifecycle. Corrected Intel static-crypto packaging and installed-package smoke/audit passed at 14:14 UTC, but its earlier job remains failed and is not green evidence. The [latest-source CI run](https://github.com/tashvianeja/Privacy-Guardian/actions/runs/35449032544) has no jobs because of an account billing limit. No GitHub release has been published.
 
 ## Feature matrix
 
@@ -20,7 +20,7 @@ This repository is an in-progress initial build. All 20 functional requirements 
 | Decision engine, preferences, and local history | Service API wired | Service/UI wired | Service/UI wired; platform verification pending | Yes | Explanation polish only |
 | Deep Check | Context supplied by extension | UI rendered; exact three-finding coverage | UI rendered; Windows validation pending | Yes | Narrative only |
 
-The final local headed check at source `2af6d4a` has 34 runtime passes and one skip; all 23 real Chromium cases and Firefox pass. A connected passport DOM-change-to-visible warning took 1.095 s (host-side 1.327781 s), and native-bridge setup took 1.354564 s, within its separate five-second budget. Historical cold first action before bridge readiness was 2.386 s. A dash means that the capability is outside that surface.
+The final local headed check at source `1539390` has 34 runtime passes and one skip; all 23 real Chromium cases and Firefox pass. A connected passport DOM-change-to-visible warning took 1.095 s (host-side 1.327781 s), and native-bridge setup took 1.354564 s, within its separate five-second budget. Historical cold first action before bridge readiness was 2.386 s. A dash means that the capability is outside that surface.
 
 ## Screenshots
 
@@ -57,7 +57,7 @@ macOS monitoring may require Full Disk Access and Accessibility permission. The 
 
 ## Build from source
 
-These are the repository’s declared commands. Final fresh-clone evidence at `d3390ba` passed setup, full `make check`, source macOS build, packaged DMG mount/install/visible tray/onboarding/native handshake, packaged PNG/native-JPEG OCR, uninstall/restore, and a 339-Mach-O macOS-13 deployment audit. Windows run `35448070182` built the installer and its packaged `diagnose` emitted valid JSON with OCR and registry checks true, but a PowerShell windowed-executable `$LASTEXITCODE` gate failed before an installed lifecycle could run. `1539390` replaces that gate with `Start-Process -Wait -PassThru` and reads `ExitCode`, but a Windows rerun is unverified because the latest-source CI is billing-blocked.
+These are the repository’s declared commands. The final source `1539390` macOS DMG passed deep/strict codesign, a 339-file macOS-13 deployment audit, and its installed lifecycle: mounted onboarding/tray, native version `0.1.0`/protocol `1` readiness, bundled OCR, uninstall/registration restoration, and unmount. Its SHA-256 is `85b4ac8513e34bfeb9df37129abd19f4706176073ea6166c7a1122df801b66ad`. Windows run `35448070182` built the installer and its packaged `diagnose` emitted valid JSON with OCR and registry checks true, but a PowerShell windowed-executable `$LASTEXITCODE` gate failed before an installed lifecycle could run. `1539390` replaces that gate with `Start-Process -Wait -PassThru` and reads `ExitCode`, but a Windows rerun is unverified because the latest-source CI is billing-blocked.
 
 macOS:
 
@@ -125,9 +125,9 @@ make typecheck
 make check
 ```
 
-The final local headed `make check` at source `2af6d4a` reports **311 passed, 5 skipped**: 277 instrumented passes with four skips and two deselections in 42.54 seconds, plus 34 runtime passes and one skip in 104.11 seconds. Ruff checks 176 files; strict mypy checks 73 modules. Exact line coverage is **85.55%** scoped (`1,687/1,972`) and **75.43%** overall (`4,136/5,483`), above the 85%/70% gates. The earlier clean-clone `d3390ba` run remains separately recorded under Build from source.
+The final local headed `make check` at source `1539390` with tests `aefa972` reports **312 passed, 5 skipped**: 278 instrumented passes with four skips and two deselections in 42.31 seconds, plus 34 runtime passes and one skip in 101.30 seconds. Ruff checks 176 files; strict mypy checks 73 modules. Exact line coverage is **85.55%** scoped (`1,687/1,972`) and **75.46%** overall (`4,144/5,492`), above the 85%/70% gates.
 
-Use `-m macos`, `-m windows`, `-m e2e`, `-m perf`, and `-m llm` only in an environment that supports those markers. The final native-Cocoa 300-second run measured 0.823200875-second tray readiness, 207.33952 MB warm-median RSS, 210.5344 MB peak RSS, and 0.0442277493% CPU. CPU meets its target; raw RSS misses the decimal 200-MB target by 7.33952 MB at the median and 10.5344 MB at peak, though the 25% tolerance gate passes. Two first-phase perf cases are excluded from the initial phase but included in runtime acceptance. Current outstanding checks include a Windows rerun for the fixed lifecycle gate, protected macOS TCC/Full Disk Access/Accessibility/screen grant tests, a refreshed artifact for the later UI-only source change, and a green CI result; the latest-source run is currently blocked by an account billing limit.
+Use `-m macos`, `-m windows`, `-m e2e`, `-m perf`, and `-m llm` only in an environment that supports those markers. The final native-Cocoa 300-second run measured 0.823200875-second tray readiness, 207.33952 MB warm-median RSS, 210.5344 MB peak RSS, and 0.0442277493% CPU. CPU meets its target; raw RSS misses the decimal 200-MB target by 7.33952 MB at the median and 10.5344 MB at peak, though the 25% tolerance gate passes. Two first-phase perf cases are excluded from the initial phase but included in runtime acceptance. Current outstanding checks include a Windows rerun for the fixed lifecycle gate, protected macOS TCC/Full Disk Access/Accessibility/screen grant tests, and a green CI result; the latest-source run is currently blocked by an account billing limit.
 
 ## Configuration
 

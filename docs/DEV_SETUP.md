@@ -86,7 +86,7 @@ The worker must record command exit codes, test/coverage totals, generated exten
 | `make run` | Start the console app | Fresh clone diagnose/smoke passed |
 | `make test` | Pytest with coverage | Fresh clone passed within final check |
 | `make e2e` | Playwright browser suite | Fresh clone runtime suite passed; Windows browser runtime remains pending |
-| `make check` | Lint, typecheck, and test | Final local headed run: 311 passed, 5 skipped; clean clone passed 307, 5 skipped |
+| `make check` | Lint, typecheck, and test | Final local headed run: 312 passed, 5 skipped; clean clone passed 307, 5 skipped |
 | `make build-extension` | Generate/build extension assets | Fresh clone passed |
 | `make build-mac` | macOS app + DMG with bundled compatible OCR | Current lifecycle passed |
 | `make build-win` | Build the Windows installer on Windows | Final installed-runtime acceptance pending |

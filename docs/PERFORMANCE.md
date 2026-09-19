@@ -6,7 +6,7 @@ The final 205 KB policy measurement was **0.306559 s** in the root run and **0.3
 
 The final 300-second native-Cocoa whole-tree measurement recorded tray readiness at **0.823200875 s**, initial RSS at **200.5 MiB**, warm median RSS at **197.734375 MiB** (**207.33952 MB**), peak RSS at **200.78125 MiB** (**210.5344 MB**), final RSS at **192.78125 MiB**, and cumulative CPU at **0.0442277493%**. CPU meets its target. The raw decimal-200-MB criterion is missed by **7.33952 MB** at the median and **10.5344 MB** at peak, although the configured 25% tolerance gate passes. The script reports MiB; both units are shown to avoid treating them as interchangeable.
 
-Document-path measurements include a 38 MB mixed PDF at **1.4866 s cold** and **0.1633 s warm**. The bounded full 5 MiB text scan measured **1.822472 s**: it misses the raw 1.5-second target by **0.322472 s**, while passing the 1.875-second 25%-tolerance gate. Keep cold and connected measurements distinct. Intel policy performance passed at `d3390ba`; the remaining Intel runtime miss was a 2.1257-second passport DOM warning against the 1.5-second raw target and 1.875-second tolerated target.
+Document-path measurements include a 38 MB mixed PDF at **1.4866 s cold** and **0.1633 s warm**. The bounded full 5 MiB text scan measured **1.822472 s**: it misses the raw 1.5-second target by **0.322472 s**, while passing the 1.875-second 25%-tolerance gate. Keep cold and connected measurements distinct. Intel policy performance passed at `d3390ba`; the remaining Intel runtime miss was a 2.1257-second passport DOM warning, **0.6257 s** over the 1.5-second raw target and **0.2507 s** over the 1.875-second tolerated target.
 
 ## Targets and status
 
@@ -23,3 +23,5 @@ Document-path measurements include a 38 MB mixed PDF at **1.4866 s cold** and **
 ## Measurement notes
 
 The project’s perf suite measures controlled paths and permits a 25% tolerance where configured. Clipboard evidence is 185.7 ms for the real clipboard/spawn-worker path; an earlier 7.6 ms inline-pool number is superseded. Do not compare isolated policy/terms timings directly with UI or browser latency: they do not include process startup, browser transport, rendering, or OCR.
+
+Known raw misses are retained rather than averaged away: the native-Cocoa warm median is **+7.33952 MB** over the decimal 200-MB target; the full 5 MiB scan is **+0.322472 s** over its raw target; Intel passport DOM was **+0.6257 s**; an ARM cold-bridge run was **+1.552899 s** over its five-second raw target; and a Windows policy run was **+2.702934 s** over the 2.5-second raw target while orphaned processes remained. The latter condition is suspected, not established, as a contributor. The Windows measurement has not been rerun after process-cleanup fixes, so it is diagnostic evidence rather than a current Windows performance result.

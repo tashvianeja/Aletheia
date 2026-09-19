@@ -1,6 +1,6 @@
 # Acceptance map
 
-`tests/ACCEPTANCE.json` is the machine-readable source of the acceptance map. It covers all 20 functional requirements and all 18 end-to-end scenarios; this page makes its current status readable without changing the test contract. Final local headed `make check` evidence at `2af6d4a` is 311 passed and 5 skipped: 277 instrumented passes with four skips and two deselections, plus 34 runtime passes and one skip. Exact line coverage is 85.55% scoped (`1,687/1,972`) and 75.43% overall (`4,136/5,483`).
+`tests/ACCEPTANCE.json` is the machine-readable source of the acceptance map. It covers all 20 functional requirements and all 18 end-to-end scenarios; this page makes its current status readable without changing the test contract. Final local headed `make check` evidence at source `1539390` with tests `aefa972` is 312 passed and 5 skipped: 278 instrumented passes with four skips and two deselections, plus 34 runtime passes and one skip. Exact line coverage is 85.55% scoped (`1,687/1,972`) and 75.46% overall (`4,144/5,492`).
 
 ## Functional requirements
 
@@ -24,7 +24,7 @@
 | FR-16 Event history | store test | Unit evidence present |
 | FR-17 Native messaging | IPC transport/protocol tests; Chromium/Firefox handshakes and recovery exercised | Implemented and exercised |
 | FR-18 Onboarding | UI coverage and packaged onboarding smoke | Implemented and exercised |
-| FR-19 Packaging | `2af` app/DMG lifecycle: onboarding/tray, protocol-v1 readiness, OCR, uninstall/restoration, codesign, 339 Mach-O slices at macOS 13; Windows installer built and `diagnose` JSON passed | Windows installed lifecycle not reached because the old PowerShell exit-code gate failed; fixed rerun unverified |
+| FR-19 Packaging | `1539390` app/DMG lifecycle: onboarding/tray, native version 0.1.0/protocol 1 readiness, OCR, uninstall/restoration, unmount, codesign, 339 Mach-O slices at macOS 13; Windows installer built and `diagnose` JSON passed | macOS exercised; Windows installed lifecycle not reached because the old PowerShell exit-code gate failed; fixed rerun unverified |
 | FR-20 Logging/resilience | SIGKILL-mid-analysis abort/service-alive/reconnect coverage; native-host death/result-race regression passed in 14.78 seconds | Implemented and exercised |
 
 ## End-to-end scenarios
@@ -41,7 +41,7 @@
 | 14 | Exact three-finding Deep Check coverage exercised. |
 | 15 | Preference learning and export/import round trip covered. |
 | 16 | SIGKILL mid-analysis abort plus service-alive/reconnect exercised. |
-| 17 | `2af` macOS DMG lifecycle exercised; Windows installer built but its lifecycle did not run because of the old PowerShell exit-code gate. |
+| 17 | `1539390` macOS DMG lifecycle exercised; Windows installer built but its lifecycle did not run because of the old PowerShell exit-code gate. |
 | 18 | Final 300-second Cocoa run: 0.823200875 s tray-ready and 0.0442277493% CPU; raw RSS misses 200 MB by 7.33952 MB at median and 10.5344 MB at peak, while the 25% tolerance gate passes. |
 
 The source JSON gives the precise test/fixture names and should be updated with test evidence as implementation lands. The reported verification baseline is recorded in `docs/PLAN.md`; a full acceptance pass is not complete.
