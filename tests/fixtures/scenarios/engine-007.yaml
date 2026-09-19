@@ -1,0 +1,40 @@
+{
+  "context": {
+    "consequence_factor": 1.0,
+    "expected_risk": 0.5,
+    "necessity": "unnecessary",
+    "purpose": "image_tool",
+    "purpose_confidence": 1.0,
+    "sensitivity": 0.5,
+    "tracking_boost": 0.0
+  },
+  "event": {
+    "data_categories": [
+      "phone"
+    ],
+    "event_type": "form_submit",
+    "requester": {
+      "display_name": "image-compressor.test",
+      "kind": "website",
+      "origin": "https://image-compressor.test",
+      "purpose": "image_tool",
+      "purpose_confidence": 1.0,
+      "trust_tier": "unknown"
+    },
+    "source": "browser"
+  },
+  "expected": {
+    "outcome": "INFORM",
+    "rationale_keywords": [
+      "phone",
+      "image tool",
+      "does not appear necessary"
+    ]
+  },
+  "id": "engine-007",
+  "preferences": {
+    "category": "ask",
+    "prior_consistent_allows": 0,
+    "site_override": null
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "clauses": [
+    "automatic_renewal",
+    "retention_after_deletion"
+  ],
+  "negated_clauses": [
+    "cross_border_transfer"
+  ],
+  "synthetic": true
+}

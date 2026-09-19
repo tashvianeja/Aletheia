@@ -1,0 +1,11 @@
+{
+  "clauses": [
+    "content_licence_to_provider",
+    "cross_border_transfer",
+    "liability_cap"
+  ],
+  "negated_clauses": [
+    "retention_after_deletion"
+  ],
+  "synthetic": true
+}

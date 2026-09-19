@@ -1,0 +1,10 @@
+{
+  "clauses": [
+    "arbitration_or_class_waiver",
+    "governing_law_foreign"
+  ],
+  "negated_clauses": [
+    "third_party_sharing"
+  ],
+  "synthetic": true
+}

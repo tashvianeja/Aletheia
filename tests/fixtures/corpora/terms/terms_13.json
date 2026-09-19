@@ -1,0 +1,11 @@
+{
+  "clauses": [
+    "arbitration_or_class_waiver",
+    "content_licence_to_provider",
+    "cross_border_transfer"
+  ],
+  "negated_clauses": [
+    "automatic_renewal"
+  ],
+  "synthetic": true
+}

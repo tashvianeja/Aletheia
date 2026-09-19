@@ -1,0 +1,10 @@
+{
+  "clauses": [
+    "account_termination_without_notice",
+    "data_sale"
+  ],
+  "negated_clauses": [
+    "unilateral_change_of_terms"
+  ],
+  "synthetic": true
+}

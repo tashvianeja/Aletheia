@@ -1,0 +1,11 @@
+{
+  "clauses": [
+    "liability_cap",
+    "training_on_user_content",
+    "unilateral_change_of_terms"
+  ],
+  "negated_clauses": [
+    "account_termination_without_notice"
+  ],
+  "synthetic": true
+}

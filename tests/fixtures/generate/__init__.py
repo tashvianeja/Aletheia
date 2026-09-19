@@ -1,0 +1,1 @@
+"""Deterministic synthetic-fixture generators."""

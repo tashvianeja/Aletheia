@@ -1,0 +1,11 @@
+{
+  "clauses": [
+    "cross_border_transfer",
+    "liability_cap",
+    "unilateral_change_of_terms"
+  ],
+  "negated_clauses": [
+    "data_sale"
+  ],
+  "synthetic": true
+}

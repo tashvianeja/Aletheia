@@ -1,0 +1,10 @@
+{
+  "clauses": [
+    "account_termination_without_notice",
+    "governing_law_foreign"
+  ],
+  "negated_clauses": [
+    "training_on_user_content"
+  ],
+  "synthetic": true
+}

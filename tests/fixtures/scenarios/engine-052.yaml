@@ -1,0 +1,40 @@
+{
+  "context": {
+    "consequence_factor": 1.0,
+    "expected_risk": 1.0,
+    "necessity": "red_flag",
+    "purpose": "wallpaper_utility",
+    "purpose_confidence": 1.0,
+    "sensitivity": 1.0,
+    "tracking_boost": 0.0
+  },
+  "event": {
+    "data_categories": [
+      "credentials.password"
+    ],
+    "event_type": "system_access",
+    "requester": {
+      "display_name": "Simple Wallpaper App",
+      "kind": "application",
+      "origin": "",
+      "purpose": "wallpaper_utility",
+      "purpose_confidence": 1.0,
+      "trust_tier": "unknown"
+    },
+    "source": "os"
+  },
+  "expected": {
+    "outcome": "INTERVENE",
+    "rationale_keywords": [
+      "password",
+      "wallpaper utility",
+      "unusually sensitive"
+    ]
+  },
+  "id": "engine-052",
+  "preferences": {
+    "category": "ask",
+    "prior_consistent_allows": 0,
+    "site_override": null
+  }
+}

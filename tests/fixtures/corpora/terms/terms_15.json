@@ -1,0 +1,10 @@
+{
+  "clauses": [
+    "data_sale",
+    "retention_after_deletion"
+  ],
+  "negated_clauses": [
+    "liability_cap"
+  ],
+  "synthetic": true
+}

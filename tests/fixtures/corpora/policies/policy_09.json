@@ -1,0 +1,19 @@
+{
+  "collects": [
+    "email",
+    "device_identifiers"
+  ],
+  "negated": {
+    "purpose": [
+      "personalised_ads"
+    ]
+  },
+  "purposes": [
+    "research"
+  ],
+  "shares_with": [
+    "advertising_partners",
+    "buyers_on_acquisition"
+  ],
+  "synthetic": true
+}

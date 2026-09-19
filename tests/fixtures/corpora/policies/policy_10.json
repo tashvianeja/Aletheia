@@ -1,0 +1,18 @@
+{
+  "collects": [
+    "email",
+    "device_identifiers"
+  ],
+  "negated": {
+    "purpose": [
+      "marketing_email"
+    ]
+  },
+  "purposes": [
+    "analytics"
+  ],
+  "shares_with": [
+    "analytics_providers"
+  ],
+  "synthetic": true
+}

@@ -1,0 +1,10 @@
+{
+  "clauses": [
+    "automatic_renewal",
+    "minimum_age"
+  ],
+  "negated_clauses": [
+    "content_licence_to_provider"
+  ],
+  "synthetic": true
+}

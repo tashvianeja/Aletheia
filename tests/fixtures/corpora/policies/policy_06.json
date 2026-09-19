@@ -1,0 +1,18 @@
+{
+  "collects": [
+    "email",
+    "device_identifiers"
+  ],
+  "negated": {
+    "share": [
+      "law_enforcement"
+    ]
+  },
+  "purposes": [
+    "product_improvement"
+  ],
+  "shares_with": [
+    "affiliates"
+  ],
+  "synthetic": true
+}

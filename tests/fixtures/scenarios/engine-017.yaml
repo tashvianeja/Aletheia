@@ -1,0 +1,40 @@
+{
+  "context": {
+    "consequence_factor": 1.0,
+    "expected_risk": 1.0,
+    "necessity": "red_flag",
+    "purpose": "recipe",
+    "purpose_confidence": 1.0,
+    "sensitivity": 0.95,
+    "tracking_boost": 0.0
+  },
+  "event": {
+    "data_categories": [
+      "government_id.passport"
+    ],
+    "event_type": "form_submit",
+    "requester": {
+      "display_name": "weeknight-recipes.test",
+      "kind": "website",
+      "origin": "https://weeknight-recipes.test",
+      "purpose": "recipe",
+      "purpose_confidence": 1.0,
+      "trust_tier": "unknown"
+    },
+    "source": "browser"
+  },
+  "expected": {
+    "outcome": "INTERVENE",
+    "rationale_keywords": [
+      "passport",
+      "recipe",
+      "unusually sensitive"
+    ]
+  },
+  "id": "engine-017",
+  "preferences": {
+    "category": "ask",
+    "prior_consistent_allows": 0,
+    "site_override": null
+  }
+}

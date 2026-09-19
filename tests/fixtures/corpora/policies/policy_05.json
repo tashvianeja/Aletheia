@@ -1,0 +1,19 @@
+{
+  "collects": [
+    "email",
+    "device_identifiers"
+  ],
+  "negated": {
+    "share": [
+      "data_brokers"
+    ]
+  },
+  "purposes": [
+    "security"
+  ],
+  "shares_with": [
+    "analytics_providers",
+    "buyers_on_acquisition"
+  ],
+  "synthetic": true
+}

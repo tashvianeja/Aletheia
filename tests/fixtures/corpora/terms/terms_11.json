@@ -1,0 +1,10 @@
+{
+  "clauses": [
+    "minimum_age",
+    "third_party_sharing"
+  ],
+  "negated_clauses": [
+    "arbitration_or_class_waiver"
+  ],
+  "synthetic": true
+}

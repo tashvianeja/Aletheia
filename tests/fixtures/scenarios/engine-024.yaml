@@ -1,0 +1,40 @@
+{
+  "context": {
+    "consequence_factor": 1.0,
+    "expected_risk": 0.15,
+    "necessity": "reasonable",
+    "purpose": "recipe",
+    "purpose_confidence": 1.0,
+    "sensitivity": 0.3,
+    "tracking_boost": 0.0
+  },
+  "event": {
+    "data_categories": [
+      "email"
+    ],
+    "event_type": "form_submit",
+    "requester": {
+      "display_name": "weeknight-recipes.test",
+      "kind": "website",
+      "origin": "https://weeknight-recipes.test",
+      "purpose": "recipe",
+      "purpose_confidence": 1.0,
+      "trust_tier": "unknown"
+    },
+    "source": "browser"
+  },
+  "expected": {
+    "outcome": "IGNORE",
+    "rationale_keywords": [
+      "email",
+      "recipe",
+      "may reasonably"
+    ]
+  },
+  "id": "engine-024",
+  "preferences": {
+    "category": "ask",
+    "prior_consistent_allows": 0,
+    "site_override": null
+  }
+}

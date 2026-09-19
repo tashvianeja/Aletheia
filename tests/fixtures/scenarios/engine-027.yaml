@@ -1,0 +1,40 @@
+{
+  "context": {
+    "consequence_factor": 1.0,
+    "expected_risk": 0.45,
+    "necessity": "reasonable",
+    "purpose": "banking",
+    "purpose_confidence": 1.0,
+    "sensitivity": 0.9,
+    "tracking_boost": 0.0
+  },
+  "event": {
+    "data_categories": [
+      "financial.card_number"
+    ],
+    "event_type": "form_submit",
+    "requester": {
+      "display_name": "community-bank.test",
+      "kind": "website",
+      "origin": "https://community-bank.test",
+      "purpose": "banking",
+      "purpose_confidence": 1.0,
+      "trust_tier": "known_trusted"
+    },
+    "source": "browser"
+  },
+  "expected": {
+    "outcome": "INFORM",
+    "rationale_keywords": [
+      "card number",
+      "banking",
+      "may reasonably"
+    ]
+  },
+  "id": "engine-027",
+  "preferences": {
+    "category": "ask",
+    "prior_consistent_allows": 0,
+    "site_override": null
+  }
+}

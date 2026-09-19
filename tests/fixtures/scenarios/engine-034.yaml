@@ -1,0 +1,40 @@
+{
+  "context": {
+    "consequence_factor": 1.0,
+    "expected_risk": 1.0,
+    "necessity": "red_flag",
+    "purpose": "saas_b2b",
+    "purpose_confidence": 1.0,
+    "sensitivity": 0.9,
+    "tracking_boost": 0.0
+  },
+  "event": {
+    "data_categories": [
+      "medical.diagnosis"
+    ],
+    "event_type": "form_submit",
+    "requester": {
+      "display_name": "project-board.test",
+      "kind": "website",
+      "origin": "https://project-board.test",
+      "purpose": "saas_b2b",
+      "purpose_confidence": 1.0,
+      "trust_tier": "known_trusted"
+    },
+    "source": "browser"
+  },
+  "expected": {
+    "outcome": "INTERVENE",
+    "rationale_keywords": [
+      "diagnosis",
+      "saas b2b",
+      "unusually sensitive"
+    ]
+  },
+  "id": "engine-034",
+  "preferences": {
+    "category": "ask",
+    "prior_consistent_allows": 0,
+    "site_override": null
+  }
+}

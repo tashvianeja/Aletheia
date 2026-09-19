@@ -1,0 +1,11 @@
+{
+  "clauses": [
+    "third_party_sharing",
+    "training_on_user_content",
+    "unilateral_change_of_terms"
+  ],
+  "negated_clauses": [
+    "governing_law_foreign"
+  ],
+  "synthetic": true
+}

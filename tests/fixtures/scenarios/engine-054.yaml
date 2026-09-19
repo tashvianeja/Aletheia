@@ -1,0 +1,40 @@
+{
+  "context": {
+    "consequence_factor": 1.0,
+    "expected_risk": 0.5,
+    "necessity": "unnecessary",
+    "purpose": "wallpaper_utility",
+    "purpose_confidence": 1.0,
+    "sensitivity": 0.5,
+    "tracking_boost": 0.0
+  },
+  "event": {
+    "data_categories": [
+      "location_precise"
+    ],
+    "event_type": "system_access",
+    "requester": {
+      "display_name": "Simple Wallpaper App",
+      "kind": "application",
+      "origin": "",
+      "purpose": "wallpaper_utility",
+      "purpose_confidence": 1.0,
+      "trust_tier": "unknown"
+    },
+    "source": "os"
+  },
+  "expected": {
+    "outcome": "INFORM",
+    "rationale_keywords": [
+      "location precise",
+      "wallpaper utility",
+      "does not appear necessary"
+    ]
+  },
+  "id": "engine-054",
+  "preferences": {
+    "category": "ask",
+    "prior_consistent_allows": 0,
+    "site_override": null
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "clauses": [
+    "arbitration_or_class_waiver",
+    "content_licence_to_provider"
+  ],
+  "negated_clauses": [
+    "minimum_age"
+  ],
+  "synthetic": true
+}
