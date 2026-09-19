@@ -86,3 +86,31 @@ def finish_upload(upload_id: str) -> Any:
 
 def abort_upload(upload_id: str) -> None:
     _UPLOADS.pop(upload_id, None)
+
+
+def refine_context(
+    use: str,
+    payload: dict[str, object],
+    settings: dict[str, object],
+    schema_name: str,
+    fallback: dict[str, object],
+) -> dict[str, object]:
+    from typing import cast
+
+    from pydantic import BaseModel
+
+    from privacy_guardian.config import LLMSettings
+    from privacy_guardian.llm.client import LLMClient, Use
+    from privacy_guardian.llm.schemas import DeepCheckNarrative, PolishedExplanation, RefinedPurpose
+
+    schemas: dict[str, type[BaseModel]] = {
+        "purpose": RefinedPurpose,
+        "explanation": PolishedExplanation,
+        "deep_check": DeepCheckNarrative,
+    }
+    schema = schemas[schema_name]
+    result = LLMClient(LLMSettings.model_validate(settings)).complete(
+        cast(Use, use), payload, schema, schema.model_validate(fallback)
+    )
+    value: dict[str, object] = result.value.model_dump(mode="json")
+    return value

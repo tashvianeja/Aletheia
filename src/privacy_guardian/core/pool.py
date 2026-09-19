@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import multiprocessing
+import time
 from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
@@ -16,6 +17,8 @@ class AnalysisPool:
         self.timeout = timeout
         self._pool: ProcessPoolExecutor | None = None
         self.generation = 0
+        self.last_used = time.monotonic()
+        self.active = 0
         self._semaphore = asyncio.Semaphore(8)
 
     def _create(self) -> ProcessPoolExecutor:
@@ -38,6 +41,8 @@ class AnalysisPool:
 
     async def run(self, function: Callable[..., T], *args: Any) -> T:
         async with self._semaphore:
+            self.last_used = time.monotonic()
+            self.active += 1
             try:
                 return await asyncio.wait_for(
                     asyncio.get_running_loop().run_in_executor(
@@ -49,6 +54,9 @@ class AnalysisPool:
                 self.recycle()
                 self._create()
                 raise RuntimeError("Analysis worker restarted; retry the operation") from None
+            finally:
+                self.last_used = time.monotonic()
+                self.active -= 1
 
     def close(self) -> None:
         self.recycle()

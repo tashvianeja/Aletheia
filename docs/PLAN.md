@@ -36,3 +36,13 @@ P0: in progress. All functional requirements and numeric targets unverified unti
 ### P1 interim evidence (12:00 UTC)
 
 Root independently ran `.venv/bin/python -m pytest tests/unit -q`: 58 passed in 0.54s. Core/config/storage/util strict mypy: 16 files clean; ruff clean. Nested environment setting regression fixed after Sol failure. IPC review hardening applied: reject NaN/Infinity, contain bad-auth Windows clients, validate exact caller origin, contain callback exceptions, avoid frozen-host recursion. Tesseract/create-dmg install in progress.
+
+### P1/P2 implementation checkpoint (12:17 UTC, T+0:28)
+
+Foundations commit `b21b4ce` pushed; initial CI run `35441787422` reached both platforms but stopped at Ruff formatting in two files. Formatting corrected; no Windows runtime verification claimed. Root independent tests: 107 passed at Sol checkpoint `662b508`; contextual logging regression fixed and re-run (3 tests passed). Root IPC integration: 3 passed. Source strict mypy currently 70 modules clean.
+
+Installed: uv-managed CPython3.12.13; 154 project/dev packages including spaCy model3.8.0 via locked wheel URL; Tesseract5.5.3 with English/OSD traineddata and create-dmg1.3.0 via Homebrew. OpenAI SDK3.16.2 official API verified by analysis worker; configured default model gpt-6-astra.
+
+First macOS package built at `dist/PrivacyGuardian.app` and `dist/PrivacyGuardian-0.1.0.dmg` (145,079,029 compressed bytes; app268MiB). Root verified deep strict codesign, UDZO imageinfo, isolated offscreen packaged smoke exit0. Bundled OCR runs successfully, non-system libraries rewritten to loader-relative paths. This artifact predates subsequent source changes and must be rebuilt at final acceptance.
+
+Service/UI/platform implementations now present; independent Sol tests being added. Mandatory local analysis remains separate from bounded background cloud I/O, so cloud latency cannot delay native upload/form decisions. Raw worker payloads release on continue/cancel/redaction and expire through idle pool recycle. Remaining review work: full platform native monitoring/revocation, supervisor lifecycle, complete dashboard/settings, CI gates, browser E2E, live platform checks, perf and installer smoke. No feature is accepted merely for existing.

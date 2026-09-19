@@ -24,7 +24,13 @@ def configure_logging(data_dir: Path, level: str = "INFO") -> None:
     (log_dir / "guardian.log").chmod(0o600)
     handler.setFormatter(
         structlog.stdlib.ProcessorFormatter(
-            processor=structlog.processors.JSONRenderer(), foreign_pre_chain=[redact_processor]
+            processor=structlog.processors.JSONRenderer(),
+            foreign_pre_chain=[
+                structlog.stdlib.ExtraAdder(
+                    allow=["purpose", "input_tokens", "output_tokens", "latency_ms", "error_type"]
+                ),
+                redact_processor,
+            ],
         )
     )
     logging.basicConfig(

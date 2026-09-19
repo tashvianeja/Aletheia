@@ -60,6 +60,12 @@ async def forward(settings: Settings, request: dict[str, Any]) -> dict[str, Any]
 
 
 def main() -> int:
+    if sys.platform == "win32":
+        import msvcrt
+        import os
+
+        msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
+        msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
     settings = Settings.load()
     if not validate_caller(sys.argv[1:], settings.allowed_extension_ids):
         return 2

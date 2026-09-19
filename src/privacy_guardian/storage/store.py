@@ -169,7 +169,10 @@ class Store:
         table = "site_profiles" if kind in {"site", "website"} else "app_profiles"
         with self._lock, self.connection:
             self.connection.execute(
-                f"INSERT OR REPLACE INTO {table} VALUES (?,?,?)",
+                {
+                    "site_profiles": "INSERT OR REPLACE INTO site_profiles VALUES (?,?,?)",
+                    "app_profiles": "INSERT OR REPLACE INTO app_profiles VALUES (?,?,?)",
+                }[table],
                 (safe_origin(key), datetime.now(UTC).isoformat(), self._json(profile)),
             )
 
@@ -177,7 +180,11 @@ class Store:
         table = "site_profiles" if kind in {"site", "website"} else "app_profiles"
         with self._lock:
             row = self.connection.execute(
-                f"SELECT profile_json FROM {table} WHERE key=?", (safe_origin(key),)
+                {
+                    "site_profiles": "SELECT profile_json FROM site_profiles WHERE key=?",
+                    "app_profiles": "SELECT profile_json FROM app_profiles WHERE key=?",
+                }[table],
+                (safe_origin(key),),
             ).fetchone()
         return json.loads(row[0]) if row else None
 

@@ -23,7 +23,7 @@ def data_directory() -> Path:
 
 class LLMSettings(BaseModel):
     enabled: bool = False
-    model: str = "gpt-5.4"
+    model: str = "gpt-6-astra"
     policy_refinement: bool = True
     purpose_refinement: bool = True
     explanation_polishing: bool = True
@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     reject_optional_cookies: bool = True
     llm: LLMSettings = Field(default_factory=LLMSettings)
     allowed_extension_ids: list[str] = Field(
-        default_factory=lambda: ["privacy-guardian@privacyguardian.local"]
+        default_factory=lambda: ["privacy-guardian@privacyguardian.local", "bfdjphkbgihhbonhnmjbbfhckdddonob"]
     )
     clipboard_allowlist: list[str] = Field(default_factory=list)
 
