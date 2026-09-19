@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import json
+import os
 import plistlib
 import sqlite3
+import subprocess
 import sys
 import threading
 import time
@@ -222,13 +225,31 @@ def test_windows_scheduler_detects_new_and_modified_tasks() -> None:
     adapter = WindowsAdapter(
         registry=Registry({}), clipboard=WindowsBackend(), scheduler=scheduler, watch_paths=[]
     )
-    scheduler.state = {r"\Synthetic\Privacy Guardian": "<Task version='1'/>"}
+    executable = r"c:\apps\capture.exe"
+    adapter._access[executable] = {DataCategory.CAMERA}
+    first_definition = (
+        r"<Task version='1'><Actions><Exec><Command>C:\Apps\capture.exe</Command>"
+        r"</Exec></Actions></Task>"
+    )
+    second_definition = first_definition.replace("version='1'", "version='2'")
+    scheduler.state = {r"\Synthetic\Privacy Guardian": first_definition}
     created = adapter.poll_tasks()
-    scheduler.state = {r"\Synthetic\Privacy Guardian": "<Task version='2'/>"}
+    scheduler.state = {r"\Synthetic\Privacy Guardian": second_definition}
     modified = adapter.poll_tasks()
 
     assert created[0].mechanism == "scheduled_task" and created[0].modified is False
+    assert created[0].requester.exe_path == executable
+    assert set(created[1].data_categories) == {
+        DataCategory.CAMERA,
+        DataCategory.STARTUP,
+        DataCategory.BACKGROUND_EXECUTION,
+    }
+    assert created[1].breadth == 1
     assert modified[0].mechanism == "scheduled_task" and modified[0].modified is True
+
+    scheduler.state = {}
+    assert adapter.poll_tasks() == []
+    assert adapter._access[executable] == {DataCategory.CAMERA}
 
 
 def test_browser_extension_permission_scan_has_plain_access_categories(tmp_path: Path) -> None:
@@ -248,6 +269,12 @@ def test_browser_extension_permission_scan_has_plain_access_categories(tmp_path:
     assert events[0].breadth == 1
 
 
+@pytest.mark.macos
+@pytest.mark.platform
+@pytest.mark.skipif(
+    os.getenv("PRIVACY_GUARDIAN_NATIVE_WATCH_TEST") != "1",
+    reason="set PRIVACY_GUARDIAN_NATIVE_WATCH_TEST=1 outside a filesystem sandbox",
+)
 def test_macos_native_path_monitor_emits_launch_agent_within_two_seconds(tmp_path: Path) -> None:
     agents = tmp_path / "LaunchAgents"
     agents.mkdir()
@@ -306,13 +333,23 @@ def test_permission_settings_links_are_specific(monkeypatch) -> None:
 @pytest.mark.macos
 @pytest.mark.skipif(sys.platform != "darwin", reason="real macOS read-only status check")
 def test_real_macos_permission_status_is_read_only() -> None:
-    adapter = MacOSAdapter()
-    before = [(path, path.stat().st_mtime_ns) for path in adapter.tcc_paths if path.exists()]
-    status = adapter.permissions_status()
-    after = [(path, path.stat().st_mtime_ns) for path in adapter.tcc_paths if path.exists()]
+    script = """
+import json
+from privacy_guardian.sensors.platform.macos import MacOSAdapter
+adapter = MacOSAdapter()
+before = [(str(path), path.stat().st_mtime_ns) for path in adapter.tcc_paths if path.exists()]
+status = adapter.permissions_status()
+after = [(str(path), path.stat().st_mtime_ns) for path in adapter.tcc_paths if path.exists()]
+print(json.dumps({'before': before, 'status': status, 'after': after}))
+"""
+    process = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True, timeout=10, check=True
+    )
+    result = json.loads(process.stdout)
+    status = result["status"]
     assert set(status) == {"full_disk_access", "accessibility"}
     assert all(isinstance(value, bool) for value in status.values())
-    assert after == before
+    assert result["after"] == result["before"]
 
 
 @pytest.mark.windows
