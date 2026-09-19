@@ -75,7 +75,7 @@ jobs:
           dist/PrivacyGuardian.app/Contents/MacOS/PrivacyGuardian --diagnose
           PRIVACY_GUARDIAN_DATA_DIR="$RUNNER_TEMP/guardian-smoke" dist/PrivacyGuardian.app/Contents/MacOS/PrivacyGuardian --smoke-test
           codesign --verify --deep --strict dist/PrivacyGuardian.app
-          uv run python tests/packaging/verify_packaged_installation.py --platform macos --artifact dist/PrivacyGuardian-0.1.0.dmg --maximum-macos 13.0
+          uv run python tests/packaging/verify_packaged_installation.py --platform macos --artifact dist/PrivacyGuardian-*.dmg --maximum-macos 13.0
       - name: Packaged Windows smoke
         if: runner.os == 'Windows'
         shell: pwsh
@@ -83,7 +83,9 @@ jobs:
           $env:PRIVACY_GUARDIAN_DATA_DIR = "$env:RUNNER_TEMP/guardian-smoke"
           & dist/PrivacyGuardian/PrivacyGuardian.exe --diagnose
           & dist/PrivacyGuardian/PrivacyGuardian.exe --smoke-test
-          uv run python tests/packaging/verify_packaged_installation.py --platform windows --artifact dist/PrivacyGuardian-Setup-0.1.0.exe
+          $installer = @(Get-ChildItem dist/PrivacyGuardian-Setup-*.exe)
+          if ($installer.Count -ne 1) { throw "Expected exactly one installer artifact" }
+          uv run python tests/packaging/verify_packaged_installation.py --platform windows --artifact $installer[0].FullName
       - uses: actions/upload-artifact@v4
         if: always()
         with:
