@@ -24,7 +24,9 @@ def _windows_browser_installed(executable: str) -> bool:
         return True
     # Windows browsers are not on PATH; they register an absolute path under App Paths,
     # which for some installers only exists in the 32-bit registry view.
-    import winreg
+    import importlib
+
+    winreg = importlib.import_module("winreg")
 
     key_path = rf"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\{executable}"
     for root in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
