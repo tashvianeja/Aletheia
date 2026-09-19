@@ -82,6 +82,8 @@ def _segmenter() -> Any:
 def sentences(text: str) -> list[tuple[str, str]]:
     # Line-aware segmentation preserves headings and avoids model loading in the hot path.
     result: list[tuple[str, str]] = []
+    paragraph_segments: dict[str, tuple[str, ...]] = {}
+    cached_characters = 0
     heading = ""
     for paragraph in re.split(r"\n+", text):
         paragraph = paragraph.strip()
@@ -93,10 +95,20 @@ def sentences(text: str) -> list[tuple[str, str]]:
             and (paragraph.endswith(":") or len(paragraph.split()) <= 5)
         ):
             heading = paragraph.rstrip(":")
-        for segment in _segmenter().segment(paragraph):
-            for sentence in re.split(r";\s*|\s+(?:but|however|nevertheless)\s+", segment):
-                if sentence.strip():
-                    result.append((sentence.strip(), heading))
+        segmented = paragraph_segments.get(paragraph)
+        if segmented is None:
+            segmented = tuple(
+                sentence.strip()
+                for segment in _segmenter().segment(paragraph)
+                for sentence in re.split(r";\s*|\s+(?:but|however|nevertheless)\s+", segment)
+                if sentence.strip()
+            )
+            # Cache only segmentation, never headings or analysis decisions. Bound the
+            # cache to this call and a small share of the document's memory budget.
+            if len(paragraph_segments) < 256 and cached_characters + len(paragraph) <= 262_144:
+                paragraph_segments[paragraph] = segmented
+                cached_characters += len(paragraph)
+        result.extend((sentence, heading) for sentence in segmented)
     return result
 
 
@@ -112,11 +124,15 @@ def _negated(text: str, start: int, end: int) -> bool:
 
 
 def analyze_terms(text: str) -> TermsProfile:
+    return _terms_from_sentences(text, sentences(text[:2_000_000]))
+
+
+def _terms_from_sentences(text: str, segmented: list[tuple[str, str]]) -> TermsProfile:
     digest = hashlib.sha256(text.encode()).hexdigest()
     if not text.strip():
         return TermsProfile(document_hash=digest, missing=True, nothing_unusual=[])
     found: dict[str, Clause] = {}
-    for sentence, heading in sentences(text[:2_000_000]):
+    for sentence, heading in segmented:
         for category, (positive, negative, scopes) in _compiled().items():
             if category in found:
                 continue
@@ -204,7 +220,8 @@ def _positive_labels(sentence: str, rules: dict[str, str]) -> list[str]:
 
 
 def analyze_policy(text: str, purpose: str = "unknown") -> PolicyProfile:
-    terms = analyze_terms(text)
+    segmented = sentences(text[:2_000_000])
+    terms = _terms_from_sentences(text, segmented)
     profile = PolicyProfile(
         document_hash=terms.document_hash,
         clauses=terms.clauses,
@@ -218,7 +235,7 @@ def analyze_policy(text: str, purpose: str = "unknown") -> PolicyProfile:
     used: set[str] = set()
     shares: set[str] = set()
     rights: set[str] = set()
-    for sentence, heading in sentences(text[:2_000_000]):
+    for sentence, heading in segmented:
         lower = sentence.lower()
         used.update(_positive_labels(sentence, _PURPOSES))
         if re.search(
