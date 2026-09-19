@@ -4,8 +4,8 @@ import re
 
 from pydantic import BaseModel
 
-from privacy_guardian.core.events import DataCategory, FormField
-from privacy_guardian.engine.necessity import Necessity, NecessityAssessment, necessity_for
+from privacy_guardian.core.events import DataCategory, FormContext, FormField
+from privacy_guardian.engine.necessity import NecessityAssessment
 
 _AUTOCOMPLETE = {
     "name": "full_name",
@@ -55,6 +55,9 @@ class FieldAssessment(BaseModel):
     necessity: NecessityAssessment | None = None
     badge: bool = False
     optional: bool = True
+    role: str = ""
+    intent: str = "unknown"
+    intent_confidence: float = 0.0
 
 
 def label_field(field: FormField) -> FormField:
@@ -80,34 +83,42 @@ def label_field(field: FormField) -> FormField:
 
 
 def analyze_fields(
-    fields: list[FormField], purpose: str = "unknown", purpose_confidence: float = 1.0
+    fields: list[FormField],
+    purpose: str = "unknown",
+    purpose_confidence: float = 1.0,
+    context: FormContext | None = None,
 ) -> list[FieldAssessment]:
-    result = []
-    sensitive = {
-        "phone",
-        "dob",
-        "postal_address",
-        "government_id",
-        "financial",
-        "medical",
-        "ethnicity_religion_orientation",
-    }
-    for field in fields:
-        labelled = label_field(field)
-        necessity = (
-            necessity_for(purpose, labelled.category, purpose_confidence)
-            if labelled.category
-            else None
+    """Judge a form's fields against what the form is for.
+
+    Necessity used to be looked up from the site's industry category alone, which cannot
+    tell a registration form from a mailing-list box and so reported Instagram's account
+    identifier as unnecessary. The judgement now runs on the inferred intent of this
+    form, with the site's purpose kept as a supporting signal.
+    """
+    from privacy_guardian.intelligence.necessity import assess_form
+
+    labelled = [label_field(field) for field in fields]
+    judgement = assess_form(labelled, context, purpose)
+    confidence = max(0.0, min(1.0, purpose_confidence))
+    return [
+        FieldAssessment(
+            field=item.field,
+            necessity=(
+                NecessityAssessment(
+                    category=item.field.category,
+                    verdict=item.verdict,
+                    confidence=min(item.confidence, confidence) if confidence else item.confidence,
+                    rationale=item.rationale,
+                )
+                if item.field.category is not None
+                else None
+            ),
+            badge=item.flag,
+            # `optional` reports the HTML attribute; an asserted "*" stays distinct from it.
+            optional=not item.field.required,
+            role=item.role.value,
+            intent=judgement.intent.intent.value,
+            intent_confidence=judgement.intent.confidence,
         )
-        badge = (
-            necessity is not None
-            and necessity.verdict in {Necessity.UNNECESSARY, Necessity.RED_FLAG}
-            and labelled.category is not None
-            and labelled.category.value.split(".")[0] in sensitive
-        )
-        result.append(
-            FieldAssessment(
-                field=labelled, necessity=necessity, badge=badge, optional=not labelled.required
-            )
-        )
-    return result
+        for item in judgement.fields
+    ]

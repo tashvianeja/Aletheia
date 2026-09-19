@@ -64,6 +64,7 @@ class Store:
         value = event.model_dump(mode="json")
         value.pop("payload_ref", None)
         value.pop("fields", None)
+        value.pop("context", None)
         value["requester"]["origin"] = safe_origin(event.requester.origin)
         # Paths and app names can contain user identities; store public identity only.
         value["requester"].pop("exe_path", None)

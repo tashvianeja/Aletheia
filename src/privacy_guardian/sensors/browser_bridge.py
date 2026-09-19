@@ -5,7 +5,13 @@ from urllib.parse import urlsplit
 
 from privacy_guardian.analysis.forms import label_field
 from privacy_guardian.analysis.purpose import infer_purpose
-from privacy_guardian.core.events import EVENT_ADAPTER, FormObservedEvent, PrivacyEvent, Requester
+from privacy_guardian.core.events import (
+    EVENT_ADAPTER,
+    FormContext,
+    FormObservedEvent,
+    PrivacyEvent,
+    Requester,
+)
 
 
 def enrich_browser_requester(
@@ -53,4 +59,26 @@ def prepare_context(payload: dict[str, Any]) -> dict[str, Any]:
     result["purpose"] = requester.purpose
     result["purpose_confidence"] = requester.purpose_confidence
     result["requester"] = requester.model_dump(mode="json")
+    forms = result.get("forms")
+    if isinstance(forms, dict):
+        forms["context"] = _form_context(forms.get("context"), payload.get("signals", {}))
     return result
+
+
+def _form_context(value: object, signals: dict[str, Any] | None) -> dict[str, Any]:
+    """Fold the page's own title and headings into the form's context.
+
+    A form element carries a submit label and maybe a legend; what the page says it is
+    for usually sits in the surrounding markup, and that is the part that separates a
+    registration form from a mailing-list box.
+    """
+    signals = signals or {}
+    context = FormContext.model_validate(value if isinstance(value, dict) else {})
+    headings = signals.get("headings", [])
+    if not context.page_title:
+        context = context.model_copy(update={"page_title": str(signals.get("title", ""))[:300]})
+    if not context.heading and isinstance(headings, list) and headings:
+        context = context.model_copy(update={"heading": str(headings[0])[:300]})
+    if not context.nearby_text:
+        context = context.model_copy(update={"nearby_text": str(signals.get("meta", ""))[:500]})
+    return context.model_dump(mode="json")

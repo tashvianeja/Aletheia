@@ -14,7 +14,9 @@ Document extraction supports PDF, DOCX, XLSX, PPTX, text-like files, and images.
 
 ## Forms, consent, policies, and tracking
 
-Form semantics use field ID/name, labels, input type, autocomplete, required markers, and confidence. Field metadata sent through the browser bridge is allowlisted; raw field values are forbidden.
+Form semantics use field ID/name, labels, input type, autocomplete, required markers, maximum length, and confidence, together with a `FormContext` describing the surrounding prose: submit label, nearest heading, fieldset legend, action path, nearby text, and page title. Field metadata sent through the browser bridge is allowlisted; raw field values are forbidden, and the context carries page copy only.
+
+Whether a field is necessary is decided from the form's inferred intent rather than the site's industry, using an on-device sentence encoder plus structural evidence. See *Judging a form* in `DECISION_ENGINE.md`.
 
 Consent analysis receives structured button/toggle/snapshot data and identifies optional purposes and dark-pattern indications. Policy and terms analysis segments text, applies YAML clause patterns with positive/negative scope rules, sanitizes citations before caching, and extracts clauses, collection categories, purposes, sharing, retention, rights, and policy warnings. It recognizes public policy text only; a missing or partial policy remains a warning, not a clean result.
 

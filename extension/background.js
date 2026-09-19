@@ -89,7 +89,7 @@ async function route(message,sender) {
   if (message.type === 'event') {
     payload.event = {...payload.event,source:'browser',requester};
     if (payload.event.fields) {
-      const allowed = ['field_id','category','label','name','input_type','autocomplete','required','asserted_required','filled','confidence'];
+      const allowed = ['field_id','category','label','name','input_type','autocomplete','required','asserted_required','filled','confidence','max_length'];
       payload.event.fields = payload.event.fields.map(field => Object.fromEntries(Object.entries(field).filter(([key])=>allowed.includes(key))));
     }
     if (!PGValidate(payload.event,schemas.event)) throw new Error('Invalid event');

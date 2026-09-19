@@ -121,11 +121,29 @@ class FormField(Model):
     asserted_required: bool = False
     filled: bool = False
     confidence: float = Field(default=0, ge=0, le=1)
+    # A short numeric box labelled "code" is a one-time passcode, not a phone number.
+    max_length: int = Field(default=0, ge=0)
+
+
+class FormContext(Model):
+    """The prose around a form, which is what separates a signup from a mailing list.
+
+    Field shape alone cannot tell "Email" on a newsletter box from "Email" as the
+    identifier on a registration form, and necessity differs completely between them.
+    """
+
+    submit_text: str = Field(default="", max_length=200)
+    heading: str = Field(default="", max_length=300)
+    legend: str = Field(default="", max_length=300)
+    action_path: str = Field(default="", max_length=300)
+    nearby_text: str = Field(default="", max_length=600)
+    page_title: str = Field(default="", max_length=300)
 
 
 class FormObservedEvent(PrivacyEvent):
     event_type: Literal["form_observed"] = "form_observed"
     fields: list[FormField] = Field(default_factory=list)
+    context: FormContext = Field(default_factory=FormContext)
 
 
 class FormSubmitEvent(FormObservedEvent):

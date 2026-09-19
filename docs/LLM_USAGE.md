@@ -1,4 +1,22 @@
-# Optional LLM usage
+# Model usage
+
+## On-device models (always local, always on)
+
+Two models run on this machine and never contact a network. Neither is affected by the
+cloud settings below.
+
+| Model | Where | What it does |
+|---|---|---|
+| spaCy `en_core_web_sm` | analysis worker | Named-entity recognition inside the PII detector |
+| MiniLM-L6 sentence encoder, int8 ONNX (~23 MB on disk, ~95 MB resident) | service process, lazy | Infers what a form is for, so necessity is judged against the transaction rather than the site's industry |
+
+The encoder is loaded on the first form judged and released after 90 idle seconds. Its
+input is page copy — heading, submit label, legend, nearby text, title — never field
+values. It ships as a build input fetched and checksummed by `scripts/fetch_model.py`;
+when it is missing, form judgement falls back to structural inference and reports less
+rather than reporting wrongly. `docs/DECISION_ENGINE.md` describes how its output is used.
+
+## Optional cloud assistance
 
 ## Default and opt-in
 

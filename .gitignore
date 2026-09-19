@@ -23,3 +23,7 @@ playwright-report/
 # Design reference media (212 MB of renders, footage and voiceover). Kept locally;
 # the README screenshots are generated from the real widgets instead.
 mockups/
+
+# On-device sentence encoder: fetched by scripts/fetch_model.py, checksummed there.
+src/privacy_guardian/data/models/*.onnx
+src/privacy_guardian/data/models/vocab.txt

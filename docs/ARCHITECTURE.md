@@ -6,6 +6,8 @@ Contract version 1 (2026-09-19). `core/events.py` is the authoritative executabl
 
 Qt runs on the main thread. The async service runs on a dedicated thread. A bounded, single-process analysis pool owns raw document bytes and opaque payload handles, preserving handle affinity across analysis/redaction. Native transport necessarily forwards bytes, then discards them; raw bytes are not returned to the engine, persisted, or logged. The browser-spawned host is a framing/authentication transport only. Pool failure discards handles, restarts the worker, and returns an explicit retryable error.
 
+The on-device sentence encoder in `intelligence/` is a third boundary. It is an int8 MiniLM running under `onnxruntime` with a dependency-free WordPiece tokenizer, loaded lazily on the first form judged, held in the service process alongside the metadata executor, and released after 90 idle seconds so its roughly 95 MB resident cost does not count against the idle-memory budget. Nothing leaves the machine. When the weights or the runtime are absent, form judgement falls back to structural inference and reports less rather than reporting wrongly.
+
 Optional LLM work is isolated from the critical analysis queue in a separate lazy `ProcessPoolExecutor` with one worker. It is created only when cloud assistance is enabled and torn down on disable/stop; cloud latency therefore does not block upload, form, or native decisions.
 
 ## Models
@@ -26,7 +28,7 @@ Analysis agent owns `analysis.worker.analyze_payload(payload:dict[str,object])` 
 
 Native framing: 4-byte little-endian unsigned byte length then UTF-8 JSON; maximum message 900 KiB. Requests `{v:1,id:str,type:str,payload:object}`. Responses `{v:1,id:str,ok:bool,result:object|null,error:{code:str,message:str}|null}`. Local host connection first sends `{token:<per-install secret>,request:<request>}` using the same framing. Unix socket is mode 0600 inside mode 0700 data directory. Windows uses AF_PIPE named pipe with the per-install token. Native host validates caller origin against configured extension allowlist.
 
-Types: ping, event, file_start, file_chunk, file_finish, action, action_poll, context, deep_check, disconnect, focus. File chunks have upload_id, sequence, data (base64); start has upload_id, filename, size, mime, requester; finish has upload_id. Raw form values are forbidden; field metadata admits only field_id, category, label, name, input_type, autocomplete, required, asserted_required, filled, confidence.
+Types: ping, event, file_start, file_chunk, file_finish, action, action_poll, context, deep_check, disconnect, focus. File chunks have upload_id, sequence, data (base64); start has upload_id, filename, size, mime, requester; finish has upload_id. Raw form values are forbidden; field metadata admits only field_id, category, label, name, input_type, autocomplete, required, asserted_required, filled, confidence, max_length. A form may also carry a `context` of page copy: submit_text, heading, legend, action_path, nearby_text, page_title.
 
 ## Storage
 

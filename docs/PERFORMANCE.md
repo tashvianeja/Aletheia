@@ -8,6 +8,12 @@ The final 300-second native-Cocoa whole-tree measurement recorded tray readiness
 
 Document-path measurements include a 38 MB mixed PDF at **1.4866 s cold** and **0.1633 s warm**. The bounded full 5 MiB text scan measured **1.822472 s**: it misses the raw 1.5-second target by **0.322472 s**, while passing the 1.875-second 25%-tolerance gate. Keep cold and connected measurements distinct. Intel policy performance passed at `d3390ba`; its historical passport DOM warning was 2.1257 seconds, **0.6257 s** over the 1.5-second raw target and **0.2507 s** over the 1.875-second tolerated target. The completed later Intel job `105910359735` passed installed lifecycle at 14:40:13, but measured passport DOM at **3.1154 s**: **+1.6154 s** raw and **+1.2404 s** over the tolerated target. Its other runtime cases had 33 passes and one skip; no threshold was changed.
 
+## On-device sentence encoder
+
+Adding the form-intent encoder was measured on the ARM development machine at `analyze_fields` level. Loading `onnxruntime` plus the int8 weights costs **+95.0 MB resident**; the first judgement including that load is **135.1 ms**, and reloading after an idle release is **31 ms**, both inside the 300 ms form-observation budget. Steady-state judgement is **0.08 ms** median on an unchanged page (embeddings are cached by text) and **2.51 ms** median when every page is new. The existing 40-field microbenchmark moved from roughly 1 ms to **27.9 ms** against its 300 ms budget.
+
+The resident cost is the reason the session is released after 90 idle seconds rather than held: the idle-memory target is already exceeded, and a permanently loaded encoder would push the median from 207.3 MB to roughly 302 MB. Idle figures in the table below predate the encoder and have not been re-measured with it; the release path is what keeps them applicable, and a fresh whole-tree run is pending.
+
 ## Targets and status
 
 | Target | Status |

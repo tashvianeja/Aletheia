@@ -66,6 +66,9 @@ class Service:
             max_workers=2, thread_name_prefix="guardian-metadata"
         )
         self.metadata_slots = asyncio.Semaphore(8)
+        # Set once a form has actually been judged, so the maintenance loop knows there
+        # are sentence-encoder weights worth handing back.
+        self._embedder_loaded = False
         self.preferences = UserPreferences.model_validate(
             self.store.get_preferences().get("user", {})
         )
@@ -265,6 +268,10 @@ class Service:
                 ):
                     self.pool.recycle()
                     self.prepare_browser_worker()
+                if self._embedder_loaded:
+                    from privacy_guardian.intelligence.embedder import release_if_idle
+
+                    self._embedder_loaded = not release_if_idle(now)
                 for event_id, since in list(self.pending_since.items()):
                     event = self.events.get(event_id)
                     if (
@@ -1020,6 +1027,8 @@ class Service:
                             )
                         ]
                 elif kind in {"forms", "consent", "tracking"}:
+                    if kind == "forms":
+                        self._embedder_loaded = True
                     if self.metadata_slots.locked():
                         raise ValueError("Metadata analysis queue is full")
                     async with self.metadata_slots:

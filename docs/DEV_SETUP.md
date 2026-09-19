@@ -15,7 +15,7 @@ uv sync
 make setup
 ```
 
-`uv sync` also resolves the direct `en_core_web_sm` spaCy-model wheel dependency. Internet access to its GitHub release is required during resolution. Start the app with `make run`; run code checks with `make lint`, `make typecheck`, `make test`, and `make check`.
+`uv sync` also resolves the direct `en_core_web_sm` spaCy-model wheel dependency. Internet access to its GitHub release is required during resolution. `make setup` additionally runs `scripts/fetch_model.py`, which downloads and checksums the on-device sentence encoder used to judge what a form is for (about 23 MB, from Hugging Face). Without it the app runs and form judgement falls back to structural inference, catching fewer cases of over-collection; rerun the script at any time to restore it. Start the app with `make run`; run code checks with `make lint`, `make typecheck`, `make test`, and `make check`.
 
 Tesseract is used only when document extraction needs OCR. Confirm the executable is on `PATH` with `tesseract --version`. The macOS package builds a separate compatible static Tesseract 5.5.3, Leptonica 1.87, and libpng 1.6.58 bundle targeting macOS 13 via `scripts/build_ocr.py`; this needs Xcode compiler tools, CMake, Autotools, libtool, pkg-config, and source downloads. Additional OCR languages are host-installed Tesseract data; the package target currently includes English and OSD.
 

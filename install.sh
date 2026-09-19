@@ -88,6 +88,10 @@ bold "Installing Python dependencies"
 uv sync
 info "Dependencies ready in ${ROOT}/.venv"
 
+bold "Fetching the on-device form-intent model"
+# Roughly 23 MB. The app runs without it, but judges forms on structure alone.
+uv run python scripts/fetch_model.py || info "Model unavailable; falling back to structural inference"
+
 bold "Building the browser extension"
 uv run python scripts/generate_schema.py
 uv run python scripts/build_extension.py >/dev/null

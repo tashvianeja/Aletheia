@@ -19,7 +19,7 @@ from privacy_guardian.analysis.forms import FieldAssessment, analyze_fields
 from privacy_guardian.analysis.pii import detect_pii
 from privacy_guardian.analysis.policy import analyze_policy, analyze_terms
 from privacy_guardian.analysis.tracking import TrackingSnapshot, analyze_tracking
-from privacy_guardian.core.events import DataCategory, Finding, FormField
+from privacy_guardian.core.events import DataCategory, Finding, FormContext, FormField
 
 
 class AnalysisResult(BaseModel):
@@ -154,11 +154,16 @@ def analyze_payload(payload: dict[str, object]) -> AnalysisResult:
             raise ValueError("Fields must be a list")
         fields = [FormField.model_validate(field) for field in fields_value]
         confidence = payload.get("purpose_confidence", 1.0)
+        context_value = payload.get("context")
+        context = FormContext.model_validate(
+            context_value if isinstance(context_value, dict) else {}
+        )
         return AnalysisResult(
             fields=analyze_fields(
                 fields,
                 purpose,
                 float(confidence) if isinstance(confidence, (float, int, str)) else 1.0,
+                context,
             )
         )
     if kind == "consent":

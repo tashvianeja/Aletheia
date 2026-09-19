@@ -408,6 +408,50 @@
       "title": "FileUploadEvent",
       "type": "object"
     },
+    "FormContext": {
+      "additionalProperties": false,
+      "description": "The prose around a form, which is what separates a signup from a mailing list.\n\nField shape alone cannot tell \"Email\" on a newsletter box from \"Email\" as the\nidentifier on a registration form, and necessity differs completely between them.",
+      "properties": {
+        "submit_text": {
+          "default": "",
+          "maxLength": 200,
+          "title": "Submit Text",
+          "type": "string"
+        },
+        "heading": {
+          "default": "",
+          "maxLength": 300,
+          "title": "Heading",
+          "type": "string"
+        },
+        "legend": {
+          "default": "",
+          "maxLength": 300,
+          "title": "Legend",
+          "type": "string"
+        },
+        "action_path": {
+          "default": "",
+          "maxLength": 300,
+          "title": "Action Path",
+          "type": "string"
+        },
+        "nearby_text": {
+          "default": "",
+          "maxLength": 600,
+          "title": "Nearby Text",
+          "type": "string"
+        },
+        "page_title": {
+          "default": "",
+          "maxLength": 300,
+          "title": "Page Title",
+          "type": "string"
+        }
+      },
+      "title": "FormContext",
+      "type": "object"
+    },
     "FormField": {
       "additionalProperties": false,
       "properties": {
@@ -467,6 +511,12 @@
           "minimum": 0,
           "title": "Confidence",
           "type": "number"
+        },
+        "max_length": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Max Length",
+          "type": "integer"
         }
       },
       "required": [
@@ -549,6 +599,9 @@
           },
           "title": "Fields",
           "type": "array"
+        },
+        "context": {
+          "$ref": "#/$defs/FormContext"
         }
       },
       "title": "FormObservedEvent",
@@ -628,6 +681,9 @@
           },
           "title": "Fields",
           "type": "array"
+        },
+        "context": {
+          "$ref": "#/$defs/FormContext"
         }
       },
       "title": "FormSubmitEvent",

@@ -21,7 +21,7 @@ from privacy_guardian.core.events import (
 )
 from privacy_guardian.engine.context import SiteOrAppProfile, analyze_context
 from privacy_guardian.engine.explain import explain, summarize
-from privacy_guardian.engine.necessity import Necessity
+from privacy_guardian.engine.necessity import Necessity, NecessityAssessment
 from privacy_guardian.engine.preferences import LearnedRules, Preference, UserPreferences, protected
 from privacy_guardian.engine.presentation import decorate, findings_for, policy_rows
 from privacy_guardian.engine.risk import score_risk
@@ -53,6 +53,26 @@ _ACTIONS: dict[str, tuple[list[str], str]] = {
 }
 
 
+def form_assessments(event: FormObservedEvent) -> list[NecessityAssessment]:
+    """Necessity for a form, keyed on the transaction rather than the site category."""
+    from privacy_guardian.intelligence.necessity import assess_form, assessments_for
+
+    fields = [
+        field
+        for field in event.fields
+        if not isinstance(event, FormSubmitEvent) or field.filled or field.required
+    ]
+    judgement = assess_form(fields, event.context, event.requester.purpose)
+    assessments = assessments_for(judgement)
+    # Categories that arrived on the event rather than as a field on this form - a
+    # clipboard finding, a sensor observation - still have to be judged, and the form's
+    # intent says nothing about them.
+    covered = {item.category for item in assessments}
+    return assessments + analyze_context(
+        event.requester, [item for item in event.data_categories if item not in covered]
+    )
+
+
 def decide(
     event: PrivacyEvent,
     findings: list[Finding] | None = None,
@@ -72,7 +92,11 @@ def decide(
             and (not isinstance(event, FormSubmitEvent) or field.filled)
         }
     event = event.model_copy(update={"data_categories": sorted(categories, key=str)})
-    assessments = analyze_context(event.requester, event.data_categories)
+    if isinstance(event, FormObservedEvent):
+        # A form is judged against what it is for, not against the site's industry.
+        assessments = form_assessments(event)
+    else:
+        assessments = analyze_context(event.requester, event.data_categories)
     scored = score_risk(assessments, profile, learned_rules, event.requester.purpose)
     risk = scored.risk
     level = 0 if risk < 0.25 else 1 if risk < 0.55 else 2

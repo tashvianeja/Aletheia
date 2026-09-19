@@ -1,6 +1,7 @@
 .PHONY: setup run test lint format typecheck check schema e2e build-mac build-win build-extension clean uninstall-mac
 setup:
 	uv sync
+	uv run python scripts/fetch_model.py
 	uv run python scripts/setup.py
 run:
 	uv run privacy-guardian

@@ -40,6 +40,18 @@ CONSEQUENCES = {
     "location_precise": "can place you to within a few metres",
 }
 
+
+def form_task(event: FormObservedEvent) -> str:
+    """What this form is for, phrased to sit after "needed to"."""
+    from privacy_guardian.intelligence.intent import classify_form
+    from privacy_guardian.intelligence.necessity import INTENT_PHRASES, MIN_INTENT_CONFIDENCE
+
+    result = classify_form(event.fields, event.context, event.requester.purpose)
+    if result.confidence < MIN_INTENT_CONFIDENCE:
+        return ""
+    return INTENT_PHRASES.get(result.intent, "")
+
+
 UNCERTAIN_PURPOSE = "Its purpose is uncertain, so whether this is necessary could not be confirmed."
 
 
@@ -174,15 +186,22 @@ def _headline(
         return headline, body
 
     if isinstance(event, FormObservedEvent):
+        # Name the task, not the industry. "More than a recipe site needs" is not what a
+        # reader is doing; "more than it needs to join a mailing list" is.
+        task = form_task(event)
         headline = (
-            f"This form is asking for more than {_article(purpose)} {purpose} needs."
+            f"This form is asking for more than it needs to {task}."
+            if task and unnecessary
+            else f"This form is asking for more than {_article(purpose)} {purpose} needs."
             if certain and unnecessary
             else "This form is asking for information it may not need."
             if unnecessary
             else f"{who} is asking for your details."
         )
         body = (
-            f"The fields below are not needed to complete {_article(purpose)} {purpose}."
+            f"The fields below are not needed to {task}."
+            if task and unnecessary
+            else f"The fields below are not needed to complete {_article(purpose)} {purpose}."
             if certain and unnecessary
             else "The fields below do not appear necessary for what you are doing."
             if unnecessary

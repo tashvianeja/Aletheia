@@ -16,6 +16,7 @@ from privacy_guardian.core.events import (
     Requester,
 )
 from privacy_guardian.core.service import Service
+from privacy_guardian.intelligence import embedder
 from privacy_guardian.storage import Store
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
@@ -88,6 +89,10 @@ def request(request_id: str, kind: str, payload: dict[str, Any]) -> dict[str, An
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(
+    not embedder.available(),
+    reason="on-device sentence encoder not installed; run scripts/fetch_model.py",
+)
 async def test_context_analyzes_form_metadata_without_accepting_values(service: Service) -> None:
     metadata = {
         "origin": "https://downloads.example/form?campaign=synthetic",
