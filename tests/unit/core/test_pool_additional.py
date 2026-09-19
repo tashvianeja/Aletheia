@@ -126,9 +126,9 @@ async def test_killed_owned_worker_recovers_for_next_analysis_within_two_seconds
         assert pool._pool is not None
         processes = list((getattr(pool._pool, "_processes", {}) or {}).values())
         assert len(processes) == 1
+        started = __import__("time").monotonic()
         processes[0].terminate()
         processes[0].join(timeout=1)
-        started = __import__("time").monotonic()
 
         with pytest.raises(RuntimeError, match="worker restarted"):
             await pool.run(_increment, 2)
