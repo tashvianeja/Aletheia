@@ -34,7 +34,7 @@ uv sync
 uv run python scripts/setup.py
 ```
 
-Physical Windows UI validation has not been performed. Windows CI has exercised adapter tests and the repaired installer run is building; final installer/runtime acceptance remains pending. A separate latest-source CI run has no jobs because of an account billing limit. In particular, validate how `make` is provided in the selected shell before relying on these commands.
+Physical Windows UI validation has not been performed. Windows run `35448070182` built an installer and its packaged `diagnose` emitted valid JSON with OCR and registry checks true, but an old PowerShell windowed-executable `$LASTEXITCODE` gate failed before installed-lifecycle testing. `1539390` switches to `Start-Process -Wait -PassThru` and reads `ExitCode`; that rerun remains unverified because the latest-source CI run has no jobs due to an account billing limit. In particular, validate how `make` is provided in the selected shell before relying on these commands.
 
 ## Browser development
 

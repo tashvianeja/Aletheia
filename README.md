@@ -4,7 +4,7 @@ Privacy Guardian is a local-first background app for macOS and Windows that help
 
 The app can classify sensitive categories in documents and forms, inspect consent and tracking signals, and relate a request to the apparent purpose of a site or application. It presents one of three outcomes: **Ignore**, **Inform**, or **Intervene**, with an explanation and an action where one is available.
 
-This repository is an in-progress initial build. All 20 functional requirements are implemented, with independent evidence recorded in `docs/PLAN.md`; physical Windows validation, protected macOS permission grants, and a green CI run remain pending. The refreshed main macOS artifact passed its installed lifecycle. Corrected Intel static-crypto packaging and installed-package smoke/audit passed at 14:14 UTC, but its earlier job remains failed and is not green evidence. The latest-source CI run has no jobs because of an account billing limit. No GitHub release has been published.
+This repository is an in-progress initial build. All 20 functional requirements are implemented, with independent evidence recorded in `docs/PLAN.md`; physical Windows validation, protected macOS permission grants, a refreshed artifact for the later UI-only source change, and a green CI run remain pending. The `2af` macOS artifact passed its installed lifecycle. Corrected Intel static-crypto packaging and installed-package smoke/audit passed at 14:14 UTC, but its earlier job remains failed and is not green evidence. The latest-source CI run has no jobs because of an account billing limit. No GitHub release has been published.
 
 ## Feature matrix
 
@@ -57,7 +57,7 @@ macOS monitoring may require Full Disk Access and Accessibility permission. The 
 
 ## Build from source
 
-These are the repository’s declared commands. Final fresh-clone evidence at `d3390ba` passed setup, full `make check`, source macOS build, packaged DMG mount/install/visible tray/onboarding/native handshake, packaged PNG/native-JPEG OCR, uninstall/restore, and a 339-Mach-O macOS-13 deployment audit. Windows has an installer artifact, but its old installed host failed with `ModuleNotFoundError: win32security`; frozen dependencies were fixed in `58739d7` and the repaired run is building its installer. The separate latest-source CI run has no jobs because of an account billing limit.
+These are the repository’s declared commands. Final fresh-clone evidence at `d3390ba` passed setup, full `make check`, source macOS build, packaged DMG mount/install/visible tray/onboarding/native handshake, packaged PNG/native-JPEG OCR, uninstall/restore, and a 339-Mach-O macOS-13 deployment audit. Windows run `35448070182` built the installer and its packaged `diagnose` emitted valid JSON with OCR and registry checks true, but a PowerShell windowed-executable `$LASTEXITCODE` gate failed before an installed lifecycle could run. `1539390` replaces that gate with `Start-Process -Wait -PassThru` and reads `ExitCode`, but a Windows rerun is unverified because the latest-source CI is billing-blocked.
 
 macOS:
 
@@ -127,7 +127,7 @@ make check
 
 The final local headed `make check` at source `2af6d4a` reports **311 passed, 5 skipped**: 277 instrumented passes with four skips and two deselections in 42.54 seconds, plus 34 runtime passes and one skip in 104.11 seconds. Ruff checks 176 files; strict mypy checks 73 modules. Exact line coverage is **85.55%** scoped (`1,687/1,972`) and **75.43%** overall (`4,136/5,483`), above the 85%/70% gates. The earlier clean-clone `d3390ba` run remains separately recorded under Build from source.
 
-Use `-m macos`, `-m windows`, `-m e2e`, `-m perf`, and `-m llm` only in an environment that supports those markers. The final native-Cocoa 300-second run measured 0.823200875-second tray readiness, 207.33952 MB warm-median RSS, 210.5344 MB peak RSS, and 0.0442277493% CPU. CPU meets its target; raw RSS misses the decimal 200-MB target by 7.33952 MB at the median and 10.5344 MB at peak, though the 25% tolerance gate passes. Two first-phase perf cases are excluded from the initial phase but included in runtime acceptance. Current outstanding checks include the in-progress Windows installer/runtime CI, protected macOS TCC/Full Disk Access/Accessibility/screen grant tests, and a green CI result; the separate latest-source run is currently blocked by an account billing limit.
+Use `-m macos`, `-m windows`, `-m e2e`, `-m perf`, and `-m llm` only in an environment that supports those markers. The final native-Cocoa 300-second run measured 0.823200875-second tray readiness, 207.33952 MB warm-median RSS, 210.5344 MB peak RSS, and 0.0442277493% CPU. CPU meets its target; raw RSS misses the decimal 200-MB target by 7.33952 MB at the median and 10.5344 MB at peak, though the 25% tolerance gate passes. Two first-phase perf cases are excluded from the initial phase but included in runtime acceptance. Current outstanding checks include a Windows rerun for the fixed lifecycle gate, protected macOS TCC/Full Disk Access/Accessibility/screen grant tests, a refreshed artifact for the later UI-only source change, and a green CI result; the latest-source run is currently blocked by an account billing limit.
 
 ## Configuration
 

@@ -16,4 +16,4 @@ All notable changes will be documented here. This project has not produced a ver
 
 ### Verification pending
 
-- Real TCC/Full Disk Access/Accessibility/screen checks, in-progress Windows installer/runtime acceptance, green CI (the latest-source run is billing-blocked), and release artifacts.
+- Real TCC/Full Disk Access/Accessibility/screen checks, a Windows installed-lifecycle rerun after the fixed PowerShell exit-code gate, a refreshed artifact for the later UI-only source change, green CI (the latest-source run is billing-blocked), and release artifacts.

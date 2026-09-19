@@ -24,7 +24,7 @@
 | FR-16 Event history | store test | Unit evidence present |
 | FR-17 Native messaging | IPC transport/protocol tests; Chromium/Firefox handshakes and recovery exercised | Implemented and exercised |
 | FR-18 Onboarding | UI coverage and packaged onboarding smoke | Implemented and exercised |
-| FR-19 Packaging | Refreshed app/DMG lifecycle: onboarding/tray, protocol-v1 readiness, OCR, uninstall/restoration, codesign, 339 Mach-O slices at macOS 13 | macOS exercised; Windows installer run pending |
+| FR-19 Packaging | `2af` app/DMG lifecycle: onboarding/tray, protocol-v1 readiness, OCR, uninstall/restoration, codesign, 339 Mach-O slices at macOS 13; Windows installer built and `diagnose` JSON passed | Windows installed lifecycle not reached because the old PowerShell exit-code gate failed; fixed rerun unverified |
 | FR-20 Logging/resilience | SIGKILL-mid-analysis abort/service-alive/reconnect coverage; native-host death/result-race regression passed in 14.78 seconds | Implemented and exercised |
 
 ## End-to-end scenarios
@@ -41,7 +41,7 @@
 | 14 | Exact three-finding Deep Check coverage exercised. |
 | 15 | Preference learning and export/import round trip covered. |
 | 16 | SIGKILL mid-analysis abort plus service-alive/reconnect exercised. |
-| 17 | Current macOS DMG lifecycle exercised; Windows pending. |
+| 17 | `2af` macOS DMG lifecycle exercised; Windows installer built but its lifecycle did not run because of the old PowerShell exit-code gate. |
 | 18 | Final 300-second Cocoa run: 0.823200875 s tray-ready and 0.0442277493% CPU; raw RSS misses 200 MB by 7.33952 MB at median and 10.5344 MB at peak, while the 25% tolerance gate passes. |
 
 The source JSON gives the precise test/fixture names and should be updated with test evidence as implementation lands. The reported verification baseline is recorded in `docs/PLAN.md`; a full acceptance pass is not complete.
