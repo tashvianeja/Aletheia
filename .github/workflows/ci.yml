@@ -1,0 +1,53 @@
+name: CI
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PRIVACY_GUARDIAN_LLM__ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: '3.12'
+      - run: uv sync --frozen
+      - name: Install OCR (macOS)
+        if: runner.os == 'macOS'
+        run: brew install tesseract create-dmg
+      - name: Install OCR and installer compiler (Windows)
+        if: runner.os == 'Windows'
+        run: choco install tesseract innosetup -y --no-progress
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy --strict src/
+      - run: uv run pytest --cov=privacy_guardian --cov-report=xml --cov-report=term-missing
+      - run: uv run bandit -r src/ -ll
+      - run: uv run pip-audit --skip-editable
+      - name: Build extension
+        run: uv run python scripts/build_extension.py
+      - name: Build macOS application
+        if: runner.os == 'macOS'
+        run: uv run python scripts/build.py mac
+      - name: Build Windows installer
+        if: runner.os == 'Windows'
+        run: uv run python scripts/build.py windows
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: privacy-guardian-${{ matrix.os }}
+          path: |
+            dist/
+            coverage.xml
+            artifacts/

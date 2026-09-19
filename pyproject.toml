@@ -1,0 +1,55 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "privacy-guardian"
+version = "0.1.0"
+description = "Local-first privacy decisions for your browser and desktop"
+requires-python = ">=3.12,<3.13"
+license = "MIT"
+dependencies = [
+  "pydantic>=2.10", "pydantic-settings>=2.7", "PySide6>=6.8", "platformdirs>=4.3",
+  "structlog>=24.4", "httpx>=0.28", "keyring>=25.5", "watchdog>=6.0", "PyYAML>=6.0",
+  "pypdf>=5.1", "pdfplumber>=0.11", "python-docx>=1.1", "openpyxl>=3.1", "python-pptx>=1.0",
+  "chardet>=5.2", "Pillow>=11", "piexif>=1.1", "pytesseract>=0.3.13", "pypdfium2>=4.30",
+  "phonenumbers>=8.13", "usaddress>=0.5", "pyap>=0.3", "spacy>=3.8", "pysbd>=0.3", "reportlab>=4.2",
+  "openai>=2", "psutil>=6", "pyobjc-framework-Cocoa>=11; sys_platform == 'darwin'",
+  "pyobjc-framework-Quartz>=11; sys_platform == 'darwin'", "pywin32>=308; sys_platform == 'win32'",
+]
+
+[project.scripts]
+privacy-guardian = "privacy_guardian.app:main"
+privacy-guardian-host = "privacy_guardian.core.ipc.native_host:main"
+
+[dependency-groups]
+dev = ["ruff>=0.9", "mypy>=1.14", "pytest>=8.3", "pytest-cov>=6", "pytest-qt>=4.4", "pytest-asyncio>=0.25", "hypothesis>=6.120", "playwright>=1.49", "aiohttp>=3.11", "respx>=0.22", "pre-commit>=4", "pyinstaller>=6.11", "pip-audit>=2.7", "bandit>=1.8", "types-PyYAML", "types-psutil", "types-requests"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/privacy_guardian"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = ["macos: requires a real macOS desktop", "windows: requires Windows", "llm: opt-in real LLM API", "e2e: browser end-to-end", "perf: performance measurement", "platform: requires interactive platform access"]
+
+[tool.coverage.run]
+source = ["privacy_guardian"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 70
