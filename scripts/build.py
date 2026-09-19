@@ -93,6 +93,8 @@ def main() -> None:
     parser.add_argument("platform", choices=["mac", "windows"])
     args = parser.parse_args()
     version = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"]
+    if args.platform == "mac":
+        subprocess.run([sys.executable, str(ROOT / "scripts/build_crypto.py")], check=True)
     bundle_ocr()
     spec = (
         ROOT
