@@ -43,9 +43,13 @@ def create_fixture_app(state: FixtureState | None = None) -> web.Application:
     async def terms(_: web.Request) -> web.Response:
         return web.Response(text=TERMS_DOCUMENT, content_type="text/html")
 
+    async def favicon(_: web.Request) -> web.Response:
+        return web.Response(status=204)
+
     app.router.add_get("/fixtures/{name}", fixture)
     app.router.add_get("/privacy", privacy)
     app.router.add_get("/terms", terms)
+    app.router.add_get("/favicon.ico", favicon)
     app.router.add_post("/received", received)
     app.router.add_get("/_state", state_response)
     return app

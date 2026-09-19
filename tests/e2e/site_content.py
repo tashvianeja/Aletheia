@@ -39,6 +39,17 @@ BANK_KYC_FORM = """
 
 
 def cmp_body(name: str, hidden_reject: bool = False, symmetric: bool = False) -> str:
+    adapters = {
+        "onetrust": ("onetrust-banner-sdk", "onetrust-reject-all-handler", ""),
+        "cookiebot": (
+            "CybotCookiebotDialog",
+            "CybotCookiebotDialogBodyButtonDecline",
+            "",
+        ),
+        "trustarc": ("truste-consent-track", "truste-consent-required", ""),
+        "didomi": ("didomi-host", "didomi-notice-disagree-button", ""),
+    }
+    banner_id, reject_id, banner_class = adapters.get(name, ("cmp", "reject", name))
     reject_style = (
         "display:none"
         if hidden_reject
@@ -50,11 +61,11 @@ def cmp_body(name: str, hidden_reject: bool = False, symmetric: bool = False) ->
         else "font-size:20px;background:#084;color:white;padding:16px"
     )
     return f"""
-<div id="cmp" class="cmp {name}" role="dialog" aria-label="Cookie consent" style="position:fixed;bottom:0;background:white;color:black">
+<div id="{banner_id}" class="cmp {banner_class}" role="dialog" aria-label="Cookie consent" style="position:fixed;bottom:0;background:white;color:black">
  <p>We use necessary, analytics, and advertising cookies.</p>
- <label><input id="analytics" type="checkbox" checked> Analytics</label>
- <label><input id="advertising" type="checkbox" checked> Advertising</label>
- <button id="reject" style="{reject_style}">Reject optional</button>
+ <label><input id="analytics" type="checkbox" {"" if symmetric else "checked"}> Analytics</label>
+ <label><input id="advertising" type="checkbox" {"" if symmetric else "checked"}> Advertising</label>
+ <button id="{reject_id}" data-action="reject" style="{reject_style}">Reject optional</button>
  <button id="accept" style="{accept_style}">Accept all</button>
 </div>
 """
@@ -63,11 +74,11 @@ def cmp_body(name: str, hidden_reject: bool = False, symmetric: bool = False) ->
 CMP_SCRIPT = """
 document.querySelector('#accept')?.addEventListener('click', () => {
  document.cookie='analytics=yes; SameSite=Lax'; document.cookie='advertising=yes; SameSite=Lax';
- document.querySelector('#cmp').remove(); window.consentResult='accepted';
+ document.querySelector('.cmp').remove(); window.consentResult='accepted';
 });
-document.querySelector('#reject')?.addEventListener('click', () => {
+document.querySelector('[data-action="reject"]')?.addEventListener('click', () => {
  document.cookie='necessary=yes; SameSite=Lax';
- document.querySelector('#cmp').remove(); window.consentResult='rejected';
+ document.querySelector('.cmp').remove(); window.consentResult='rejected';
 });
 """
 
@@ -132,8 +143,8 @@ PAGES: Mapping[str, str] = {
     "cmp-onetrust": page("OneTrust Fixture", cmp_body("onetrust"), CMP_SCRIPT),
     "cmp-cookiebot": page("Cookiebot Fixture", cmp_body("cookiebot"), CMP_SCRIPT),
     "cmp-quantcast": page("Quantcast Fixture", cmp_body("qc-cmp2-container"), CMP_SCRIPT),
-    "cmp-trustarc": page("TrustArc Fixture", cmp_body("truste_box_overlay"), CMP_SCRIPT),
-    "cmp-didomi": page("Didomi Fixture", cmp_body("didomi-popup-container"), CMP_SCRIPT),
+    "cmp-trustarc": page("TrustArc Fixture", cmp_body("trustarc"), CMP_SCRIPT),
+    "cmp-didomi": page("Didomi Fixture", cmp_body("didomi"), CMP_SCRIPT),
     "heuristic-banner-one": page("Consent Notice", cmp_body("custom-consent"), CMP_SCRIPT),
     "heuristic-banner-two": page(
         "Privacy Choices", cmp_body("privacy-dialog", symmetric=True), CMP_SCRIPT
