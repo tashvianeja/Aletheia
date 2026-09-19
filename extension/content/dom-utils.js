@@ -122,28 +122,50 @@
       foot.append(why);
     }
     panel.append(foot);
-    return {panel,body};
+    return {panel,body,rationale,remember,check};
   }
   PG.showDecision = (decision,onAction) => {
     if(!decision||decision.outcome==='IGNORE')return Promise.resolve({action:'continue'});
     const previous=PG.decisionStates.get(decision.event_id);
-    if(previous){if(!previous.onAction&&onAction)previous.onAction=onAction;return previous.promise;}
-    const state={onAction,resolved:false,processing:false,selected:null};
+    // A page keeps reporting itself, and a later look sharpens what the service has
+    // already said about it under the same event id. That belongs in the card that is
+    // up: a second card would tell the person the same thing twice.
+    if(previous){if(!previous.onAction&&onAction)previous.onAction=onAction;previous.refresh(decision);return previous.promise;}
+    const state={onAction,decision,resolved:false,processing:false,watching:false,selected:null};
     state.promise=new Promise(resolve=>{state.resolve=resolve;});PG.decisionStates.set(decision.event_id,state);
-    const informational=decision.outcome==='INFORM';
-    const close=()=>{view.panel.remove();PG.panels.delete(decision.event_id);};
-    state.apply=async result=>{if(state.resolved||state.processing)return;state.processing=true;try{await state.onAction?.(result);state.selected=result;state.resolved=true;close();state.resolve(result);}catch(_){view.body.textContent='That action could not be completed. Your submission remains held.';}finally{state.processing=false;}};
+    const close=()=>{state.view.panel.remove();PG.panels.delete(decision.event_id);};
+    state.apply=async result=>{if(state.resolved||state.processing)return;state.processing=true;try{await state.onAction?.(result);state.selected=result;state.resolved=true;close();state.resolve(result);}catch(_){state.view.body.textContent='That action could not be completed. Your submission remains held.';}finally{state.processing=false;}};
     // Dismissing an intervention is the same as letting it time out: the safe default stands.
-    state.dismiss=()=>{if(decision.outcome==='INTERVENE'){state.apply({action:decision.default_action||'cancel'});}else{state.resolved=true;close();state.resolve({action:'continue'});}};
-    const view=buildPanel(decision,state);
-    PG.stack().append(view.panel);PG.panels.set(decision.event_id,view.panel);
+    state.dismiss=()=>{if(state.decision.outcome==='INTERVENE'){state.apply({action:state.decision.default_action||'cancel'});}else{state.resolved=true;close();state.resolve({action:'continue'});}};
+    // The answer can also be given on the desktop widget, so the page watches for one
+    // the whole time it is asking.
+    state.watch=()=>{
+      if(state.watching||state.resolved)return;
+      state.watching=true;
+      (async()=>{const started=Date.now();while(!state.resolved&&Date.now()-started<61000){try{const reply=await PG.request('action_poll',{event_id:decision.event_id});if(!reply.pending&&reply.action)await state.apply(reply.action);}catch(_){}if(!state.resolved)await PG.wait(300);}if(!state.resolved)await state.apply({action:state.decision.default_action||'cancel'});setTimeout(()=>PG.decisionStates.delete(decision.event_id),240000);})();
+    };
+    state.refresh=next=>{
+      if(state.resolved||JSON.stringify(next)===JSON.stringify(state.decision))return;
+      state.decision=next;
+      const refreshed=buildPanel(next,state);
+      // Newer wording, same reader: what they have opened or ticked stays as they left it.
+      refreshed.check.checked=state.view.check.checked;
+      refreshed.remember.hidden=state.view.remember.hidden;
+      refreshed.rationale.hidden=state.view.remember.hidden||!(next.rationale||[]).length;
+      // Keep its place in the column so the card being read does not jump; if the page
+      // has torn the old one out from under us, put the new one back in the stack.
+      if(state.view.panel.parentNode)state.view.panel.replaceWith(refreshed.panel);else PG.stack().append(refreshed.panel);
+      state.view=refreshed;PG.panels.set(next.event_id,refreshed.panel);
+      if(next.outcome!=='INFORM')state.watch();
+    };
+    state.view=buildPanel(decision,state);
+    PG.stack().append(state.view.panel);PG.panels.set(decision.event_id,state.view.panel);
     if(decision.auto_action){
       // The user authorised this action; carry it out, record it, let the toast report it.
       (async()=>{try{await state.onAction?.({action:decision.auto_action});}catch(_){}
         try{await PG.request('action',{event_id:decision.event_id,action:decision.auto_action});}catch(_){}})();
     }
-    if(informational)return state.promise;
-    (async()=>{const started=Date.now();while(!state.resolved&&Date.now()-started<61000){try{const reply=await PG.request('action_poll',{event_id:decision.event_id});if(!reply.pending&&reply.action)await state.apply(reply.action);}catch(_){}if(!state.resolved)await PG.wait(300);}if(!state.resolved)await state.apply({action:decision.default_action||'cancel'});setTimeout(()=>PG.decisionStates.delete(decision.event_id),240000);})();
+    if(decision.outcome!=='INFORM')state.watch();
     return state.promise;
   };
   PG.awaitDecision = async(decision,onAction)=> {

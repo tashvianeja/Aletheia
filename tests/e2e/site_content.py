@@ -113,6 +113,14 @@ navigator.hardwareConcurrency; navigator.deviceMemory; navigator.plugins.length;
 document.cookie='tracker_fixture=synthetic-id; Max-Age=31536000; SameSite=Lax';
 """
 
+# A page that shows its hand in instalments: the advertising pixels while it loads,
+# the fingerprinting script only once something else on the page runs it.
+LATE_FINGERPRINT_SCRIPT = """
+for (const host of ['tracker-one.test','ads-two.test']) {
+ const img=document.createElement('img'); img.width=1; img.height=1; img.src='http://'+host+':'+location.port+'/tracker-pixel?uid=synthetic-id'; document.body.append(img);
+}
+"""
+
 SPA_SCRIPT = """
 setTimeout(() => {
  const form=document.createElement('form'); form.id='dynamic-form';
@@ -144,6 +152,11 @@ PAGES: Mapping[str, str] = {
     "bank-kyc": page("Community Bank Identity Verification", BANK_KYC_FORM),
     "signup-with-terms": page("Synthetic Cloud Signup", TERMS),
     "tracker-heavy": page("Tracker Heavy News", cmp_body("onetrust"), TRACKER_SCRIPT + CMP_SCRIPT),
+    "tracker-late-fingerprint": page(
+        "Tracker Late Fingerprint News",
+        "<p>Synthetic headlines.</p>",
+        LATE_FINGERPRINT_SCRIPT,
+    ),
     "clean-blog": page(
         "Clean Gardening Blog", "<article><p>How to grow synthetic tomatoes.</p></article>"
     ),

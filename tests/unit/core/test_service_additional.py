@@ -418,13 +418,19 @@ async def _noop() -> None:
     return None
 
 
-def _tracking(signals: list[str], domains: list[str], confidence: float = 0.6) -> TrackingEvent:
+def _tracking(
+    signals: list[str],
+    domains: list[str],
+    confidence: float = 0.6,
+    fingerprinting: bool = False,
+) -> TrackingEvent:
     return TrackingEvent(
         requester=Requester(origin="https://news.test", display_name="news.test"),
         data_categories=[DataCategory.DEVICE_IDENTIFIERS],
         tracker_domains=domains,
         signals=signals,
         confidence=confidence,
+        fingerprinting=fingerprinting,
     )
 
 
@@ -440,14 +446,18 @@ async def test_repeat_of_the_same_warning_updates_one_notice(service: Service) -
 
 
 @pytest.mark.asyncio
-async def test_a_new_tracking_mechanism_raises_its_own_notice(service: Service) -> None:
+async def test_a_new_tracking_mechanism_sharpens_the_notice_already_up(service: Service) -> None:
+    """Finding a mechanism late is news about the card on screen, not a second card."""
     first = await service.process_event(_tracking(["known_tracker_requests"], ["a.test"]))
     fingerprinting = await service.process_event(
-        _tracking(["known_tracker_requests", "fingerprinting"], ["a.test"])
+        _tracking(["known_tracker_requests", "fingerprinting"], ["a.test"], fingerprinting=True)
     )
 
-    assert fingerprinting.event_id != first.event_id
+    assert fingerprinting.event_id == first.event_id
+    assert len(service.decisions) == 1
     assert fingerprinting.outcome != Outcome.IGNORE
+    assert not any("fingerprint" in row.label.lower() for row in first.findings)
+    assert any("fingerprint" in row.label.lower() for row in fingerprinting.findings)
 
 
 @pytest.mark.asyncio

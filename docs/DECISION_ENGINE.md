@@ -69,7 +69,7 @@ falls silent on the ambiguous remainder rather than guessing at it.
 
 `decide()` is pure and does not know what has already been shown. The service does, and it folds a repeat of a warning already on record onto that warning rather than raising a second one, because every surface keys the card it is showing by event id.
 
-`engine.notice.notice_signature()` names what makes one warning different from another: for tracking, the set of mechanisms and whether the device is fingerprinted, not the tracker count or confidence, both of which climb as a page finishes loading; for consent, the CMP, dark patterns and purposes, not the vendor count or button geometry, which move with every re-render. A repeat may sharpen an outstanding warning but never lowers its outcome, and one the person has already answered becomes `IGNORE`.
+`engine.notice.notice_signature()` names what makes one warning different from another: for tracking, the site alone, because there is one thing to say about a page — that it is building an advertising profile — and the mechanisms behind it arrive in waves as the page loads, each wave being that same statement better evidenced; for consent, the CMP, dark patterns and purposes, not the vendor count or button geometry, which move with every re-render. A repeat may sharpen an outstanding warning but never lowers its outcome, and one the person has already answered becomes `IGNORE`.
 
 Two classes are always raised afresh, listed in `notice.ALWAYS_ASK`: warnings that hold up something the person is doing now — uploads, form submissions, terms acceptance — because reusing one would apply an earlier answer to a new action; and warnings that report a moment rather than a standing state, which today means clipboard reads.
 

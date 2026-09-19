@@ -526,6 +526,33 @@ async def test_terms_interception_shows_three_risks_and_preserves_checkbox_state
 
 
 @pytest.mark.asyncio
+async def test_tracking_found_in_waves_sharpens_one_card_instead_of_stacking(
+    real_browser: RealBrowser, fixture_site: tuple[str, object]
+) -> None:
+    """A real page reveals its trackers over several seconds, and must not queue a card per wave."""
+    base_url, _ = fixture_site
+    page = await real_browser.context.new_page()
+    await page.goto(f"{base_url}/fixtures/tracker-late-fingerprint")
+    panels = page.locator(".pg-panel")
+    await panels.first.wait_for(timeout=10_000)
+    assert "advertising profile" in (await panels.first.inner_text()).lower()
+    assert "fingerprint" not in (await panels.first.inner_text()).lower()
+
+    # The fingerprinting this page only gets round to once something else runs.
+    await page.evaluate(
+        """() => {const canvas=document.createElement('canvas');
+          canvas.getContext('2d').fillText('synthetic',2,2);canvas.toDataURL();}"""
+    )
+    await page.locator(".pg-panel", has_text="fingerprint").wait_for(timeout=10_000)
+
+    assert await panels.count() == 1
+    assert decision_count(real_browser, "tracking") == 1
+    sharpened = (await panels.first.inner_text()).lower()
+    assert "2 other websites" in sharpened
+    assert "creates a fingerprint of this device" in sharpened
+
+
+@pytest.mark.asyncio
 async def test_tracker_block_adds_dnr_rules_and_preserves_unrelated_storage(
     real_browser: RealBrowser, fixture_site: tuple[str, object]
 ) -> None:

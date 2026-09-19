@@ -55,6 +55,14 @@ All notable changes will be documented here. This project has not produced a ver
   polished wording from an optional cloud call was pushed at the desktop for browser events the
   page was already showing, and page-level analysis ran once per frame, so a page with three
   iframes reported itself four times.
+- A site could still stack up two or three "building an advertising profile" cards, one a moment
+  after the other, each listing a little more than the last. The mechanisms behind that one
+  statement arrive in waves — the tracker requests as the page loads, the fingerprint when that
+  script gets its turn, the pixels later still — and a wave that brought a new mechanism was taken
+  for a different warning, so it was raised as its own card. A page's tracking is now one notice
+  for as long as the person is on it, and the in-page panel, like the desktop widget before it,
+  takes a sharpened decision into the card already on screen rather than leaving the first wording
+  up: what the reader has opened or ticked stays as they left it.
 - Privacy Guardian announced a file share on sites where nothing had been shared. Any `Blob` or
   `ArrayBuffer` request body counted as an upload, which covers analytics beacons, JSON payloads
   and media chunks on a large share of the web; the "file" was then named `upload.bin` and flagged

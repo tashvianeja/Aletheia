@@ -401,3 +401,51 @@ async def test_invalid_or_unknown_messages_have_bounded_non_sensitive_errors(
             "code": "invalid_request",
             "message": "Request failed validation",
         }
+
+
+@pytest.mark.asyncio
+async def test_tracking_revealed_in_waves_sharpens_one_card(service: Service) -> None:
+    """A page shows its hand over several seconds; the person gets one card, not three."""
+    origin = "https://news.example"
+
+    async def wave(request_id: str, snapshot: dict[str, Any]) -> dict[str, Any]:
+        response = await service.handle_message(
+            request(
+                request_id,
+                "context",
+                {"origin": origin, "tracking": {"snapshot": {"origin": origin, **snapshot}}},
+            )
+        )
+        assert response["ok"] is True, response
+        return dict(response["result"]["tracking"]["decision"])
+
+    opening = await wave(
+        "wave-one",
+        {
+            "request_hosts": ["pagead2.googlesyndication.com"],
+            "urls": ["https://pagead2.googlesyndication.com/pcs/view?uid=synthetic"],
+        },
+    )
+    sharpened = await wave(
+        "wave-two",
+        {
+            "request_hosts": [
+                "pagead2.googlesyndication.com",
+                "doubleclick.net",
+                "cm.g.doubleclick.net",
+            ],
+            "urls": [
+                "https://pagead2.googlesyndication.com/pcs/view?uid=synthetic",
+                "https://cm.g.doubleclick.net/pixel?uid=synthetic",
+            ],
+            "api_calls": ["canvas.fillText", "canvas.toDataURL"],
+        },
+    )
+
+    assert sharpened["event_id"] == opening["event_id"]
+    assert [event.event_type for event in service.events.values()].count("tracking") == 1
+    assert sharpened["outcome"] == "INFORM"
+    assert "1 other website" in " ".join(row["label"] for row in opening["findings"])
+    later_rows = " ".join(row["label"] for row in sharpened["findings"]).lower()
+    assert "3 other websites" in later_rows
+    assert "fingerprint" in later_rows

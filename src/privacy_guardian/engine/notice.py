@@ -36,9 +36,14 @@ def notice_signature(event: PrivacyEvent) -> str:
         return ""
     parts: list[str]
     if isinstance(event, TrackingEvent):
-        # Tracker domains and confidence both climb as the page keeps loading; the
-        # mechanisms at work are what make one tracking warning different from another.
-        parts = sorted(set(event.signals)) + [f"fingerprinting={event.fingerprinting}"]
+        # There is one thing to say about a page here — that it is building an
+        # advertising profile — and every mechanism behind it arrives in its own
+        # wave: the tracker requests as the page loads, the fingerprint when that
+        # script gets its turn, the pixels later still. Keying on the mechanisms
+        # made each wave a separate warning, so the person was shown the same card
+        # two or three times over, each one listing a little more than the last.
+        # A later look sharpens the card already up; it is not a second card.
+        parts = []
     elif isinstance(event, ConsentBannerEvent):
         # Vendor counts and button geometry move with every banner re-render.
         parts = [event.cmp, *sorted(set(event.dark_patterns)), *sorted(set(event.purposes))]
