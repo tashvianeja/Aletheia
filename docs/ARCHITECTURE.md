@@ -36,6 +36,12 @@ Tables: schema_version(version); events(id,ts,event_type,requester,categories,ev
 
 `PlatformAdapter` exposes `start(emit)`, `stop()`, `permissions_status()->dict[str,bool]`, `foreground_requester()->Requester`, `snapshot()->list[PrivacyEvent]`, `open_settings(permission)`, `set_autostart(enabled)`. Implementations inject registry/TCC/clipboard/filesystem readers for portable tests. Clipboard content classification goes straight to the analysis worker; only categories remain in the monitor.
 
+## Browser boundary
+
+The WebExtension runs as a thin sensor/actuator. Its background worker obtains website identity from browser sender data rather than page-supplied identity, validates event/request/response schemas, and allowlists form metadata fields. It holds observed URL/tracker context only in extension memory and clears tab context on navigation or close. Chromium’s fixed development extension ID is `bfdjphkbgihhbonhnmjbbfhckdddonob`; Firefox’s ID is `privacy-guardian@privacyguardian.local`. Native host name: `com.privacyguardian.host`.
+
+The extension can create bounded dynamic blocking rules and remove relevant browser cookies after a user action. Browser installation, native-host registration, and a real browser/service E2E run are not yet verification evidence.
+
 ## Verification
 
 Sol writes independent tests. Platform-specific real checks are separate from injected adapter tests. No claim of real Windows execution without a successful runner result. UI uses `tr()` for strings; optional LLM is disabled by default, sanitized at one choke point, keyring credentials only.
