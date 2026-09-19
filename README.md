@@ -74,7 +74,7 @@ make build-mac
 Windows (PowerShell):
 
 ```powershell
-winget install --id AstralSoftware.UV -e
+winget install --id astral-sh.uv -e
 winget install --id UB-Mannheim.TesseractOCR -e
 winget install --id JRSoftware.InnoSetup -e
 winget install --id OpenJS.NodeJS.LTS -e

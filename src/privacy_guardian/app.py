@@ -17,6 +17,28 @@ from typing import Any
 from privacy_guardian.config import Settings
 
 
+def _windows_browser_installed(executable: str) -> bool:
+    import shutil
+
+    if shutil.which(executable):
+        return True
+    # Windows browsers are not on PATH; they register an absolute path under App Paths,
+    # which for some installers only exists in the 32-bit registry view.
+    import winreg
+
+    key_path = rf"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\{executable}"
+    for root in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+        for view in (winreg.KEY_WOW64_64KEY, winreg.KEY_WOW64_32KEY):
+            try:
+                with winreg.OpenKey(root, key_path, 0, winreg.KEY_READ | view) as key:
+                    location = str(winreg.QueryValueEx(key, "")[0]).strip('"')
+            except OSError:
+                continue
+            if location and Path(location).exists():
+                return True
+    return False
+
+
 def diagnose(settings: Settings) -> dict[str, Any]:
     import importlib.metadata
     import shutil
@@ -76,7 +98,7 @@ def diagnose(settings: Settings) -> dict[str, Any]:
         }
         if sys.platform == "darwin"
         else {
-            name: bool(shutil.which(exe))
+            name: _windows_browser_installed(exe)
             for name, exe in {
                 "chrome": "chrome.exe",
                 "edge": "msedge.exe",
