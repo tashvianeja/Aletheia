@@ -553,6 +553,27 @@ async def test_tracking_found_in_waves_sharpens_one_card_instead_of_stacking(
 
 
 @pytest.mark.asyncio
+async def test_thorough_check_takes_the_page_cards_down(
+    real_browser: RealBrowser, fixture_site: tuple[str, object]
+) -> None:
+    """The check card lands in the same corner as the page's cards, so the page is asked
+    to take its own down first. The desktop queues the ask; the extension acts on it."""
+    base_url, _ = fixture_site
+    page = await real_browser.context.new_page()
+    await page.goto(f"{base_url}/fixtures/tracker-late-fingerprint")
+    await page.bring_to_front()
+    panels = page.locator(".pg-panel")
+    await panels.first.wait_for(timeout=10_000)
+
+    await real_browser.worker.evaluate(
+        "handleCommands({commands:[{id:'thorough-check',type:'dismiss_panels'}]})"
+    )
+
+    await panels.first.wait_for(state="detached", timeout=5_000)
+    assert await panels.count() == 0
+
+
+@pytest.mark.asyncio
 async def test_tracker_block_adds_dnr_rules_and_preserves_unrelated_storage(
     real_browser: RealBrowser, fixture_site: tuple[str, object]
 ) -> None:

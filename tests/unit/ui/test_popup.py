@@ -172,3 +172,44 @@ def test_a_notice_is_not_given_a_green_tick_it_has_not_earned(qtbot) -> None:
         assert any(label.pixmap().toImage() == wanted.toImage() for label in glyphs), (
             f"expected the {expected} glyph beside the headline"
         )
+
+
+def test_queue_gives_way_to_the_thorough_check_and_resumes_after_it(qtbot, ui_controller) -> None:
+    """The card that is up is closed as its own close control would close it; the ones
+    that have not been shown yet wait rather than landing under the check card."""
+    queue = PopupQueue(ui_controller)
+    qtbot.addWidget(queue)
+    queue.enqueue(decision("first"))
+    queue.enqueue(decision("second"))
+    assert queue.current is not None and queue.current.decision.event_id == "first"
+
+    queue.hold()
+    queue.dismiss_current()
+
+    assert ("response", "first", "cancel", False) in ui_controller.calls
+    qtbot.wait(20)
+    assert queue.current is None, "nothing takes the corner while the check card is up"
+    assert [item.event_id for item in queue.queue] == ["second"]
+
+    queue.release()
+    qtbot.waitUntil(
+        lambda: queue.current is not None and queue.current.decision.event_id == "second"
+    )
+    queue.current.dismiss()
+
+
+def test_desktop_surfaces_stay_up_while_the_app_is_inactive(qtbot) -> None:
+    popup = InterventionPopup(decision())
+    qtbot.addWidget(popup)
+    assert popup.windowFlags() & Qt.WindowType.WindowDoesNotAcceptFocus
+    assert popup.testAttribute(Qt.WidgetAttribute.WA_MacAlwaysShowToolWindow)
+    from privacy_guardian.ui.popup import ConfirmationBar
+
+    bar = ConfirmationBar("3 fields marked as not needed")
+    qtbot.addWidget(bar)
+    assert bar.testAttribute(Qt.WidgetAttribute.WA_MacAlwaysShowToolWindow)
+    finished = []
+    bar.done.connect(lambda: finished.append(True))
+    bar.dismiss()
+    bar.dismiss()
+    assert finished == [True], "dismissing twice reports once and never touches a dead bar"

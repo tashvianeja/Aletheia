@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import QTimer, Signal
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -22,9 +22,11 @@ from privacy_guardian.core.events import DecisionFinding
 from privacy_guardian.ui import icons
 from privacy_guardian.ui.card import (
     CARD_WIDTH,
+    FLOATING_FLAGS,
     SCREEN_MARGIN,
     GuardianCard,
     anchor_bottom_right,
+    make_floating,
     release_surface,
     scrollable,
 )
@@ -50,19 +52,18 @@ STAGE_SOURCES = {
 
 
 class DeepCheckWindow(QWidget):
+    # The card has left the screen, whichever way: Done, the full report, or the close
+    # control. Whatever was held back while it was up can come forward again.
+    dismissed = Signal()
+
     def __init__(self, service: Any, mode: str = "system") -> None:
-        super().__init__(
-            None,
-            Qt.WindowType.Tool
-            | Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.WindowStaysOnTopHint,
-        )
+        super().__init__(None, FLOATING_FLAGS)
         self.service = service
         self.mode = mode
         self.colors = palette(mode)
         self.report: dict[str, Any] | None = None
         self.setWindowTitle(tr("deep_check"))
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        make_floating(self)
         self.setStyleSheet(card_stylesheet(mode))
         self.setFixedWidth(CARD_WIDTH + 2 * SCREEN_MARGIN)
         self._outer = QVBoxLayout(self)
@@ -198,3 +199,4 @@ class DeepCheckWindow(QWidget):
     def hideEvent(self, event: Any) -> None:
         release_surface(self)
         super().hideEvent(event)
+        self.dismissed.emit()

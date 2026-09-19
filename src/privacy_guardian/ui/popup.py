@@ -10,10 +10,12 @@ from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QLabel, QPushButton, QVBox
 from privacy_guardian.core.events import Decision, Outcome
 from privacy_guardian.ui.card import (
     CARD_WIDTH,
+    FLOATING_FLAGS,
     SCREEN_MARGIN,
     GuardianCard,
     anchor_bottom_right,
     glyph,
+    make_floating,
     release_surface,
     scrollable,
 )
@@ -44,18 +46,11 @@ class InterventionPopup(QWidget):
         parent: QWidget | None = None,
         mode: str = "system",
     ) -> None:
-        super().__init__(
-            parent,
-            Qt.WindowType.Tool
-            | Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.WindowStaysOnTopHint
-            | Qt.WindowType.WindowDoesNotAcceptFocus,
-        )
+        super().__init__(parent, FLOATING_FLAGS)
         self.decision = decision
         self.mode = mode
         self._resolved = False
-        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        make_floating(self)
         self.setAccessibleName(tr("app_name"))
         self.setAccessibleDescription(decision.explanation)
         self.setFixedWidth(CARD_WIDTH + 2 * SCREEN_MARGIN)
@@ -252,6 +247,7 @@ class PopupQueue(QWidget):
         self.service = service
         self.queue: deque[Decision] = deque()
         self.current: InterventionPopup | None = None
+        self.held = False
         self.anchor: Any = None
         self.reconcile_timer = QTimer(self)
         self.reconcile_timer.timeout.connect(self._reconcile)
@@ -273,7 +269,7 @@ class PopupQueue(QWidget):
         self._next()
 
     def _next(self) -> None:
-        if self.current or not self.queue:
+        if self.current or self.held or not self.queue:
             return
         decision = self.queue.popleft()
         core = getattr(self.service, "core", None)
@@ -299,6 +295,30 @@ class PopupQueue(QWidget):
     def _respond(self, event_id: str, action: str, remember: bool) -> None:
         self.service.submit_response(event_id, action, remember)
 
+    # -- making room ------------------------------------------------------------
+
+    def dismiss_current(self) -> None:
+        """Step away from the card that is up, exactly as its close control would.
+
+        The thorough check is asked for on purpose and reports on everything the card
+        was about, so the card gives way to it rather than sharing the corner. The safe
+        answer stands for anything the card was holding, the same as closing it.
+        """
+        if self.current is not None:
+            self.current.dismiss()
+
+    def hold(self) -> None:
+        """Keep the cards that have not been shown yet until release() is called.
+
+        They are not dropped: a warning the person has never seen is still owed to
+        them, just not on top of the surface they asked for.
+        """
+        self.held = True
+
+    def release(self) -> None:
+        self.held = False
+        self._next()
+
     def _closed(self) -> None:
         if self.current:
             release_surface(self.current)
@@ -313,17 +333,10 @@ class ConfirmationBar(QWidget):
     done = Signal()
 
     def __init__(self, message: str, parent: QWidget | None = None, mode: str = "system") -> None:
-        super().__init__(
-            parent,
-            Qt.WindowType.Tool
-            | Qt.WindowType.FramelessWindowHint
-            | Qt.WindowType.WindowStaysOnTopHint
-            | Qt.WindowType.WindowDoesNotAcceptFocus,
-        )
+        super().__init__(parent, FLOATING_FLAGS)
         from privacy_guardian.ui import icons
 
-        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        make_floating(self)
         self.setStyleSheet(card_stylesheet(mode))
         colors = palette(mode)
         outer = QVBoxLayout(self)
@@ -341,18 +354,22 @@ class ConfirmationBar(QWidget):
         row.addWidget(label, 1)
         button = QPushButton(tr("done"))
         button.setProperty("tier", "primary")
-        button.clicked.connect(self._finish)
+        button.clicked.connect(self.dismiss)
         row.addWidget(button)
         card.add_layout(row)
         outer.addWidget(card)
         self.setAccessibleName(message)
-        QTimer.singleShot(6000, self._finish)
+        self._finished = False
+        QTimer.singleShot(6000, self.dismiss)
 
     def showEvent(self, event: Any) -> None:
         super().showEvent(event)
         QTimer.singleShot(0, lambda: anchor_bottom_right(self))
 
-    def _finish(self) -> None:
+    def dismiss(self) -> None:
+        if self._finished:
+            return
+        self._finished = True
         self.hide()
         release_surface(self)
         self.done.emit()

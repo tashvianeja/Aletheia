@@ -66,11 +66,18 @@ async function blockTracking(tabId, origin, hosts) {
 }
 async function handleCommands(result) {
   for (const command of result?.commands || []) {
-    if (command.type !== 'collect_context') continue;
+    if (command.type !== 'collect_context' && command.type !== 'dismiss_panels') continue;
     const tabs = await api.tabs.query({active:true,lastFocusedWindow:true});
+    if (!tabs[0]?.id) continue;
+    if (command.type === 'dismiss_panels') {
+      // The desktop is putting up the thorough-check card in the same corner the
+      // page's cards sit in. Every frame may have one, so this one is a broadcast.
+      await api.tabs.sendMessage(tabs[0].id,{pg:'dismiss_panels'}).catch(()=>{});
+      continue;
+    }
     // Frame 0 only: every frame answers a broadcast, and each answer is a whole
     // page analysis, so a page with three iframes reported itself four times.
-    if (tabs[0]?.id) await api.tabs.sendMessage(tabs[0].id,{pg:'refresh_context',request_id:command.id},{frameId:0}).catch(()=>{});
+    await api.tabs.sendMessage(tabs[0].id,{pg:'refresh_context',request_id:command.id},{frameId:0}).catch(()=>{});
   }
 }
 async function route(message,sender) {

@@ -187,6 +187,13 @@
     setTimeout(()=>panel.remove(),8000);
     return panel;
   };
+  // Take every card down at once, each the way its own close control would: the
+  // safe answer stands for anything a card was holding. The desktop asks for this
+  // when the thorough check goes up in the same corner.
+  PG.dismissAll = ()=>{
+    for(const state of PG.decisionStates.values())if(!state.resolved)state.dismiss();
+    document.querySelectorAll('.pg-panel[data-pg-confirm]').forEach(panel=>panel.remove());
+  };
   // "Show me where": find the quoted clause on the page and take the reader to it.
   PG.showClauses = citations=>{
     const wanted=(citations||[]).map(text=>String(text).replace(/\s+/g,' ').trim().slice(0,120)).filter(Boolean);
@@ -218,6 +225,7 @@
   };
   api.runtime.onMessage.addListener((message,_sender,sendResponse)=>{
     if(message.pg==='refresh_context'){PG.collectContext(message.request_id).then(result=>sendResponse({ok:true,result})).catch(()=>sendResponse({ok:false}));return true;}
+    if(message.pg==='dismiss_panels'){PG.dismissAll();sendResponse({ok:true});}
     if(message.pg==='tracking_identifier_confirmed'){window.postMessage({pgBridge:'mark_tracking_identifier',hash:message.hash},location.origin);sendResponse({ok:true});}
     if(message.pg==='block_local_tracking'){window.postMessage({pgBridge:'clear_tracking_identifiers'},location.origin);PG.rejectConsent?.();sendResponse({ok:true});}
   });

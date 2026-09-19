@@ -15,6 +15,7 @@ from datetime import UTC, datetime, timedelta
 from functools import partial
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import psutil
 from pydantic import ValidationError
@@ -115,6 +116,17 @@ class Service:
         self._worker_preparation: asyncio.Task[None] | None = None
         self._ner_generation = -1
         self._light_generation = -1
+
+    def dismiss_page_panels(self) -> None:
+        """Ask the page in front to take its cards down.
+
+        The desktop is about to put up a surface that covers everything those cards
+        said — the thorough check — and the two would otherwise sit in the same corner
+        of the screen, one on top of the other. The page treats it as the person
+        closing each card, so the safe answer stands for anything a card was holding.
+        """
+        if self.connected_browsers:
+            self.browser_commands.append({"id": str(uuid4()), "type": "dismiss_panels"})
 
     def prepare_browser_worker(self) -> None:
         if self.pool._pool is not None or (

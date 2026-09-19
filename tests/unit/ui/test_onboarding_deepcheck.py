@@ -294,3 +294,48 @@ def test_skipping_the_extension_is_deliberate_and_leaves_setup_incomplete(
     assert ui_controller.settings.onboarding_complete is False, (
         "a skipped setup must keep prompting rather than claim to be ready"
     )
+
+
+def _button(window: DeepCheckWindow, text: str) -> QPushButton:
+    return next(b for b in window.findChildren(QPushButton) if b.text() == text)
+
+
+def test_deep_check_card_is_a_non_activating_panel_that_stays_up(qtbot, ui_controller) -> None:
+    """The bug this guards: on macOS a click on Done only activated the app, and the card
+    then vanished with the app's next deactivation, so neither button ever fired."""
+    window = DeepCheckWindow(ui_controller)
+    qtbot.addWidget(window)
+    assert window.windowFlags() & Qt.WindowType.WindowDoesNotAcceptFocus
+    assert window.windowFlags() & Qt.WindowType.Tool
+    assert window.testAttribute(Qt.WidgetAttribute.WA_MacAlwaysShowToolWindow)
+    assert window.testAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+
+
+def test_deep_check_done_button_closes_the_card_when_clicked(qtbot, ui_controller) -> None:
+    window = DeepCheckWindow(ui_controller)
+    qtbot.addWidget(window)
+    window.show()
+    window.show_report({"summary": "Nothing to review", "findings": [], "groups": []})
+    dismissed = []
+    window.dismissed.connect(lambda: dismissed.append(True))
+
+    qtbot.mouseClick(_button(window, "Done"), Qt.MouseButton.LeftButton)
+
+    qtbot.waitUntil(lambda: not window.isVisible())
+    assert dismissed, "the controller is told the card has gone"
+    assert not [call for call in ui_controller.calls if call[0] in {"report", "dashboard"}]
+
+
+def test_deep_check_full_analysis_button_opens_the_report_when_clicked(
+    qtbot, ui_controller
+) -> None:
+    window = DeepCheckWindow(ui_controller)
+    qtbot.addWidget(window)
+    window.show()
+    report = {"summary": "2 things to review", "findings": [], "groups": []}
+    window.show_report(report)
+
+    qtbot.mouseClick(_button(window, "View full analysis"), Qt.MouseButton.LeftButton)
+
+    qtbot.waitUntil(lambda: not window.isVisible())
+    assert ("report", report) in ui_controller.calls

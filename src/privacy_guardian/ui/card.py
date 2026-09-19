@@ -44,6 +44,32 @@ from privacy_guardian.util.i18n import tr
 CARD_WIDTH = 360
 SCREEN_MARGIN = 24
 
+# The window flags every floating surface in the corner shares.
+#
+# WindowDoesNotAcceptFocus matters more than it looks: on macOS it makes the panel
+# non-activating, so a click on one of its buttons reaches the button. Without it the
+# first click only activates the app, and because a Tool window is hidden by macOS
+# the moment its app deactivates again, the card vanishes instead of answering. The
+# person sees a button that does nothing and a card that disappears.
+FLOATING_FLAGS = (
+    Qt.WindowType.Tool
+    | Qt.WindowType.FramelessWindowHint
+    | Qt.WindowType.WindowStaysOnTopHint
+    | Qt.WindowType.WindowDoesNotAcceptFocus
+)
+
+
+def make_floating(widget: QWidget) -> None:
+    """Apply the attributes a corner surface needs, before its native window exists.
+
+    Showing it must not pull focus from the page the person is on, and it must stay
+    on screen whether or not this app happens to be the active one: a warning that
+    hides itself when the person clicks back into their browser was never read.
+    """
+    widget.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+    widget.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+    widget.setAttribute(Qt.WidgetAttribute.WA_MacAlwaysShowToolWindow)
+
 
 def glyph(name: str, color: str, size: int = 15) -> QLabel:
     label = QLabel()
