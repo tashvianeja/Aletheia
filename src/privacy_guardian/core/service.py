@@ -238,6 +238,8 @@ class Service:
                         )
                 for upload_id, meta in list(self.uploads.items()):
                     if now - meta["touched"] > 120:
+                        if "event_id" in meta:
+                            self.store.mark_aborted(meta["event_id"])
                         await self.pool.run(abort_upload, upload_id)
                         self.uploads.pop(upload_id, None)
                 for event_id, event in list(self.events.items()):
@@ -657,6 +659,7 @@ class Service:
             )
             initial_event = FileUploadEvent(requester=requester, size_bytes=int(payload["size"]))
             self.store.save_event(initial_event)
+            self.store.mark_pending(initial_event.id)
             self.uploads[upload_id] = {
                 "requester": requester,
                 "touched": time.monotonic(),
@@ -736,6 +739,7 @@ class Service:
                         await self.pool.run(release_payload, event.payload_ref)
                 return {"aborted": True, "decision": decision.model_dump(mode="json")}
             decision = await self.process_event(event, analysis.findings)
+            self.store.mark_complete(event.id)
             self.event_owners[event.id] = session
             return {
                 "decision": decision.model_dump(mode="json"),

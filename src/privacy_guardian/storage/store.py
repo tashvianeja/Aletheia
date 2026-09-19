@@ -116,6 +116,16 @@ class Store:
         with self._lock, self.connection:
             self.connection.execute("UPDATE events SET status='aborted' WHERE id=?", (event_id,))
 
+    def mark_pending(self, event_id: str) -> None:
+        with self._lock, self.connection:
+            self.connection.execute("UPDATE events SET status='pending' WHERE id=?", (event_id,))
+
+    def mark_complete(self, event_id: str) -> None:
+        with self._lock, self.connection:
+            self.connection.execute(
+                "UPDATE events SET status='complete' WHERE id=? AND status='pending'", (event_id,)
+            )
+
     def history(
         self, limit: int = 100, requester: str | None = None, outcome: str | None = None
     ) -> list[dict[str, Any]]:
