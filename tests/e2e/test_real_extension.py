@@ -88,18 +88,54 @@ async def test_real_extension_native_service_labels_unnecessary_fields(
     page.on(
         "console", lambda message: errors.append(message.text) if message.type == "error" else None
     )
+    await page.add_init_script(
+        """(() => {
+          window.__pgSensitiveInputVisibleAt = null;
+          window.__pgAllBadgesVisibleAt = null;
+          const observe = () => {
+            const sensitive = document.querySelector(
+              'input[name="phone"],input[name="date_of_birth"],input[name="home_address"]'
+            );
+            if (
+              sensitive && sensitive.getClientRects().length &&
+              window.__pgSensitiveInputVisibleAt === null
+            ) window.__pgSensitiveInputVisibleAt = performance.now();
+            const badges = [...document.querySelectorAll('.pg-badge')];
+            if (
+              badges.length === 3 && badges.every(badge => badge.getClientRects().length) &&
+              window.__pgAllBadgesVisibleAt === null
+            ) window.__pgAllBadgesVisibleAt = performance.now();
+          };
+          new MutationObserver(observe).observe(document, {
+            subtree: true, childList: true, attributes: true
+          });
+          document.addEventListener('DOMContentLoaded', observe, {once: true});
+        })();"""
+    )
     ping = await native_ping(real_browser)
     assert ping.get("ok") is True, ping
     started = time.perf_counter()
     await page.goto(f"{base_url}/fixtures/free-pdf-download")
 
     await page.locator(".pg-badge").first.wait_for(timeout=10_000)
-    latency_ms = (time.perf_counter() - started) * 1000
-    print(f"initial navigation-to-form-badge latency: {latency_ms:.3f}ms")
+    await page.wait_for_function(
+        "Number.isFinite(window.__pgSensitiveInputVisibleAt) && "
+        "Number.isFinite(window.__pgAllBadgesVisibleAt)",
+        timeout=10_000,
+    )
+    navigation_latency_ms = (time.perf_counter() - started) * 1000
+    timing = await page.evaluate(
+        "({input:window.__pgSensitiveInputVisibleAt,badges:window.__pgAllBadgesVisibleAt})"
+    )
+    assert timing["input"] is not None and timing["badges"] is not None, timing
+    observation_latency_ms = float(timing["badges"]) - float(timing["input"])
+    assert observation_latency_ms > 0, timing
+    print(f"initial navigation-to-form-badge latency: {navigation_latency_ms:.3f}ms")
+    print(f"form-observation-to-visible-badges latency: {observation_latency_ms:.3f}ms")
 
     badges = await page.locator(".pg-badge").all_text_contents()
     assert badges == ["May be unnecessary"] * 3
-    assert latency_ms <= 300 * PERFORMANCE_TOLERANCE, latency_ms
+    assert observation_latency_ms <= 300 * PERFORMANCE_TOLERANCE, observation_latency_ms
     assert not errors
 
 
