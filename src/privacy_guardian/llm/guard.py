@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import re
 import unicodedata
 from urllib.parse import unquote
@@ -11,7 +12,7 @@ class OutboundPrivacyError(ValueError):
     pass
 
 
-def _clean_string(value: str) -> str:
+def _clean_string(value: str, use_ner: bool = True) -> str:
     value = unicodedata.normalize("NFKC", value)
     value = "".join(char for char in value if unicodedata.category(char) != "Cf")
     value = re.sub("[‐‑‒–—−]", "-", value)
@@ -22,7 +23,7 @@ def _clean_string(value: str) -> str:
             break
         value = decoded
     for _ in range(3):
-        redacted = redact_text(value, use_ner=True)
+        redacted = redact_text(value, use_ner=use_ner)
         if redacted == value:
             break
         value = redacted
@@ -31,17 +32,19 @@ def _clean_string(value: str) -> str:
     return value
 
 
-def sanitize_outbound(payload: object) -> object:
+def sanitize_outbound(payload: object, *, use_ner: bool = True) -> object:
     def visit(value: object, depth: int) -> object:
         if depth > 25:
             raise OutboundPrivacyError("Outbound structure exceeds maximum depth")
         if isinstance(value, str):
             if len(value) > 2_000_000:
                 raise OutboundPrivacyError("Outbound text exceeds maximum size")
-            return _clean_string(value)
+            return _clean_string(value, use_ner)
         if value is None or isinstance(value, bool):
             return value
         if isinstance(value, (int, float)):
+            if isinstance(value, float) and not math.isfinite(value):
+                raise OutboundPrivacyError("Non-finite numbers are not valid outbound metadata")
             if any(finding.validator_passed for finding in detect_pii(str(value))) or (
                 isinstance(value, int) and abs(value) >= 100_000_000
             ):
@@ -54,7 +57,7 @@ def sanitize_outbound(payload: object) -> object:
             for key, item in value.items():
                 if not isinstance(key, str):
                     raise OutboundPrivacyError("Outbound object keys must be text")
-                new_key = _clean_string(key)
+                new_key = _clean_string(key, use_ner)
                 if new_key in clean:
                     raise OutboundPrivacyError("Sanitized keys collided")
                 clean[new_key] = visit(item, depth + 1)

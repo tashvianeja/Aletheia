@@ -33,6 +33,8 @@ class ConsentSnapshot(BaseModel):
     purposes: list[str] = Field(default_factory=list)
     vendor_count: int = Field(default=0, ge=0)
     tcf_present: bool = False
+    tcf_purpose_consents: dict[str, bool] = Field(default_factory=dict)
+    tcf_vendor_count: int = Field(default=0, ge=0)
     fixed_or_sticky: bool = False
     reject_clicks: int = 1
 
@@ -77,6 +79,24 @@ def analyze_consent(snapshot: ConsentSnapshot | dict[str, object]) -> ConsentAna
     if not detected:
         return result
     purposes = set(snapshot.purposes)
+    tcf_categories = {
+        "1": "necessary",
+        "2": "advertising",
+        "3": "profiling",
+        "4": "advertising",
+        "5": "profiling",
+        "6": "profiling",
+        "7": "analytics",
+        "8": "analytics",
+        "9": "analytics",
+        "10": "analytics",
+    }
+    for purpose_id, enabled in snapshot.tcf_purpose_consents.items():
+        if purpose_id in tcf_categories:
+            purposes.add(tcf_categories[purpose_id])
+            if enabled and purpose_id != "1":
+                result.dark_patterns.append("preticked_optional")
+    result.vendor_count = max(result.vendor_count, snapshot.tcf_vendor_count)
     for name, pattern in {
         "necessary": "necessary|essential|functional",
         "analytics": "analytics|statistics|measurement",
@@ -138,4 +158,5 @@ def analyze_consent(snapshot: ConsentSnapshot | dict[str, object]) -> ConsentAna
     adapter = cmp_adapters().get(cmp, {})
     result.reject_selectors = adapter.get("reject", [])
     result.manage_selectors = adapter.get("manage", [])
+    result.dark_patterns = list(dict.fromkeys(result.dark_patterns))
     return result

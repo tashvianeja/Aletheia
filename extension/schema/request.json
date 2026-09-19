@@ -1,0 +1,45 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "v": {
+      "const": 1,
+      "default": 1,
+      "title": "V",
+      "type": "integer"
+    },
+    "id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Id",
+      "type": "string"
+    },
+    "type": {
+      "enum": [
+        "ping",
+        "event",
+        "file_start",
+        "file_chunk",
+        "file_finish",
+        "action",
+        "action_poll",
+        "context",
+        "deep_check",
+        "disconnect",
+        "focus"
+      ],
+      "title": "Type",
+      "type": "string"
+    },
+    "payload": {
+      "additionalProperties": true,
+      "title": "Payload",
+      "type": "object"
+    }
+  },
+  "required": [
+    "id",
+    "type"
+  ],
+  "title": "Request",
+  "type": "object"
+}

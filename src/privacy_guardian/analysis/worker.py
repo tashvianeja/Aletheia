@@ -52,6 +52,14 @@ def _expire() -> None:
         _PAYLOADS.popitem(last=False)
 
 
+def warm_analysis() -> dict[str, bool]:
+    from privacy_guardian.analysis.pii.detector import _ner
+    from privacy_guardian.analysis.policy.analyzer import _segmenter
+
+    _segmenter()
+    return {"ner_ready": _ner() is not None}
+
+
 def analyze_payload(payload: dict[str, object]) -> AnalysisResult:
     _expire()
     kind = str(payload.get("kind", "document" if "data" in payload else "text"))
@@ -114,7 +122,10 @@ def analyze_payload(payload: dict[str, object]) -> AnalysisResult:
         )
     if kind == "terms":
         terms = analyze_terms(str(payload.get("text", "")))
-        return AnalysisResult(profile=terms.model_dump(mode="json"), partial=terms.partial)
+        return AnalysisResult(
+            profile=terms.model_dump(mode="json"),
+            partial=terms.partial,
+        )
     if kind == "forms":
         fields_value = payload.get("fields", [])
         if not isinstance(fields_value, list):

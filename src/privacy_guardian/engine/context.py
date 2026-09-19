@@ -9,6 +9,8 @@ from privacy_guardian.engine.necessity import NecessityAssessment, necessity_for
 
 
 class Observation(BaseModel):
+    event_class: str = ""
+    signals: list[str] = Field(default_factory=list)
     categories: list[DataCategory] = Field(default_factory=list)
     ts: datetime
     red_flags: list[DataCategory] = Field(default_factory=list)

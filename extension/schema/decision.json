@@ -1,0 +1,60 @@
+{
+  "$defs": {
+    "Outcome": {
+      "enum": [
+        "IGNORE",
+        "INFORM",
+        "INTERVENE"
+      ],
+      "title": "Outcome",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "event_id": {
+      "title": "Event Id",
+      "type": "string"
+    },
+    "outcome": {
+      "$ref": "#/$defs/Outcome"
+    },
+    "risk": {
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Risk",
+      "type": "number"
+    },
+    "explanation": {
+      "title": "Explanation",
+      "type": "string"
+    },
+    "rationale": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Rationale",
+      "type": "array"
+    },
+    "actions": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Actions",
+      "type": "array"
+    },
+    "default_action": {
+      "default": "cancel",
+      "title": "Default Action",
+      "type": "string"
+    }
+  },
+  "required": [
+    "event_id",
+    "outcome",
+    "risk",
+    "explanation"
+  ],
+  "title": "Decision",
+  "type": "object"
+}

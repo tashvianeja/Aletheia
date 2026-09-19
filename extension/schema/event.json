@@ -1,0 +1,1284 @@
+{
+  "$defs": {
+    "ClipboardReadEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        },
+        "event_type": {
+          "const": "clipboard_read",
+          "default": "clipboard_read",
+          "title": "Event Type",
+          "type": "string"
+        },
+        "source": {
+          "default": "clipboard",
+          "enum": [
+            "browser",
+            "os",
+            "clipboard",
+            "manual"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "requester": {
+          "$ref": "#/$defs/Requester"
+        },
+        "data_categories": {
+          "items": {
+            "$ref": "#/$defs/DataCategory"
+          },
+          "title": "Data Categories",
+          "type": "array"
+        },
+        "payload_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Payload Ref"
+        },
+        "platform": {
+          "default": "unknown",
+          "title": "Platform",
+          "type": "string"
+        },
+        "correlation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Correlation Id"
+        },
+        "writer_key": {
+          "default": "",
+          "title": "Writer Key",
+          "type": "string"
+        },
+        "proxy": {
+          "default": true,
+          "title": "Proxy",
+          "type": "boolean"
+        },
+        "cloud_sync": {
+          "default": false,
+          "title": "Cloud Sync",
+          "type": "boolean"
+        }
+      },
+      "title": "ClipboardReadEvent",
+      "type": "object"
+    },
+    "ConsentBannerEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        },
+        "event_type": {
+          "const": "consent_banner",
+          "default": "consent_banner",
+          "title": "Event Type",
+          "type": "string"
+        },
+        "source": {
+          "default": "browser",
+          "enum": [
+            "browser",
+            "os",
+            "clipboard",
+            "manual"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "requester": {
+          "$ref": "#/$defs/Requester"
+        },
+        "data_categories": {
+          "items": {
+            "$ref": "#/$defs/DataCategory"
+          },
+          "title": "Data Categories",
+          "type": "array"
+        },
+        "payload_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Payload Ref"
+        },
+        "platform": {
+          "default": "unknown",
+          "title": "Platform",
+          "type": "string"
+        },
+        "correlation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Correlation Id"
+        },
+        "purposes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Purposes",
+          "type": "array"
+        },
+        "dark_patterns": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Dark Patterns",
+          "type": "array"
+        },
+        "vendor_count": {
+          "default": 0,
+          "title": "Vendor Count",
+          "type": "integer"
+        },
+        "cmp": {
+          "default": "unknown",
+          "title": "Cmp",
+          "type": "string"
+        }
+      },
+      "title": "ConsentBannerEvent",
+      "type": "object"
+    },
+    "DataCategory": {
+      "enum": [
+        "full_name",
+        "email",
+        "phone",
+        "postal_address",
+        "dob",
+        "age",
+        "gender",
+        "government_id",
+        "government_id.passport",
+        "government_id.national_id",
+        "government_id.ssn",
+        "government_id.drivers_license",
+        "government_id.tax_id",
+        "financial",
+        "financial.card_number",
+        "financial.iban",
+        "financial.account_number",
+        "financial.routing",
+        "medical",
+        "medical.diagnosis",
+        "medical.medication",
+        "medical.insurance_id",
+        "credentials",
+        "credentials.password",
+        "credentials.api_key",
+        "credentials.private_key",
+        "biometric_photo",
+        "location_precise",
+        "location_coarse",
+        "device_identifiers",
+        "browsing_activity",
+        "contacts",
+        "calendar",
+        "files_broad",
+        "camera",
+        "microphone",
+        "screen",
+        "clipboard",
+        "accessibility",
+        "automation",
+        "background_execution",
+        "startup",
+        "browser_history",
+        "employment",
+        "education",
+        "ethnicity_religion_orientation",
+        "minors_data",
+        "free_text_pii"
+      ],
+      "title": "DataCategory",
+      "type": "string"
+    },
+    "DeepCheckRequestEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        },
+        "event_type": {
+          "const": "deep_check",
+          "default": "deep_check",
+          "title": "Event Type",
+          "type": "string"
+        },
+        "source": {
+          "default": "manual",
+          "enum": [
+            "browser",
+            "os",
+            "clipboard",
+            "manual"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "requester": {
+          "$ref": "#/$defs/Requester"
+        },
+        "data_categories": {
+          "items": {
+            "$ref": "#/$defs/DataCategory"
+          },
+          "title": "Data Categories",
+          "type": "array"
+        },
+        "payload_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Payload Ref"
+        },
+        "platform": {
+          "default": "unknown",
+          "title": "Platform",
+          "type": "string"
+        },
+        "correlation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Correlation Id"
+        }
+      },
+      "title": "DeepCheckRequestEvent",
+      "type": "object"
+    },
+    "FileUploadEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        },
+        "event_type": {
+          "const": "file_upload",
+          "default": "file_upload",
+          "title": "Event Type",
+          "type": "string"
+        },
+        "source": {
+          "default": "browser",
+          "enum": [
+            "browser",
+            "os",
+            "clipboard",
+            "manual"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "requester": {
+          "$ref": "#/$defs/Requester"
+        },
+        "data_categories": {
+          "items": {
+            "$ref": "#/$defs/DataCategory"
+          },
+          "title": "Data Categories",
+          "type": "array"
+        },
+        "payload_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Payload Ref"
+        },
+        "platform": {
+          "default": "unknown",
+          "title": "Platform",
+          "type": "string"
+        },
+        "correlation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Correlation Id"
+        },
+        "document_type": {
+          "default": "generic",
+          "title": "Document Type",
+          "type": "string"
+        },
+        "file_count": {
+          "default": 1,
+          "minimum": 1,
+          "title": "File Count",
+          "type": "integer"
+        },
+        "size_bytes": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        },
+        "partial": {
+          "default": false,
+          "title": "Partial",
+          "type": "boolean"
+        }
+      },
+      "title": "FileUploadEvent",
+      "type": "object"
+    },
+    "FormField": {
+      "additionalProperties": false,
+      "properties": {
+        "field_id": {
+          "title": "Field Id",
+          "type": "string"
+        },
+        "category": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DataCategory"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "label": {
+          "default": "",
+          "title": "Label",
+          "type": "string"
+        },
+        "name": {
+          "default": "",
+          "title": "Name",
+          "type": "string"
+        },
+        "input_type": {
+          "default": "text",
+          "title": "Input Type",
+          "type": "string"
+        },
+        "autocomplete": {
+          "default": "",
+          "title": "Autocomplete",
+          "type": "string"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "asserted_required": {
+          "default": false,
+          "title": "Asserted Required",
+          "type": "boolean"
+        },
+        "filled": {
+          "default": false,
+          "title": "Filled",
+          "type": "boolean"
+        },
+        "confidence": {
+          "default": 0,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        }
+      },
+      "required": [
+        "field_id"
+      ],
+      "title": "FormField",
+      "type": "object"
+    },
+    "FormObservedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        },
+        "event_type": {
+          "const": "form_observed",
+          "default": "form_observed",
+          "title": "Event Type",
+          "type": "string"
+        },
+        "source": {
+          "default": "browser",
+          "enum": [
+            "browser",
+            "os",
+            "clipboard",
+            "manual"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "requester": {
+          "$ref": "#/$defs/Requester"
+        },
+        "data_categories": {
+          "items": {
+            "$ref": "#/$defs/DataCategory"
+          },
+          "title": "Data Categories",
+          "type": "array"
+        },
+        "payload_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Payload Ref"
+        },
+        "platform": {
+          "default": "unknown",
+          "title": "Platform",
+          "type": "string"
+        },
+        "correlation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Correlation Id"
+        },
+        "fields": {
+          "items": {
+            "$ref": "#/$defs/FormField"
+          },
+          "title": "Fields",
+          "type": "array"
+        }
+      },
+      "title": "FormObservedEvent",
+      "type": "object"
+    },
+    "FormSubmitEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        },
+        "event_type": {
+          "const": "form_submit",
+          "default": "form_submit",
+          "title": "Event Type",
+          "type": "string"
+        },
+        "source": {
+          "default": "browser",
+          "enum": [
+            "browser",
+            "os",
+            "clipboard",
+            "manual"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "requester": {
+          "$ref": "#/$defs/Requester"
+        },
+        "data_categories": {
+          "items": {
+            "$ref": "#/$defs/DataCategory"
+          },
+          "title": "Data Categories",
+          "type": "array"
+        },
+        "payload_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Payload Ref"
+        },
+        "platform": {
+          "default": "unknown",
+          "title": "Platform",
+          "type": "string"
+        },
+        "correlation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Correlation Id"
+        },
+        "fields": {
+          "items": {
+            "$ref": "#/$defs/FormField"
+          },
+          "title": "Fields",
+          "type": "array"
+        }
+      },
+      "title": "FormSubmitEvent",
+      "type": "object"
+    },
+    "PermissionRequestEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        },
+        "event_type": {
+          "const": "permission_request",
+          "default": "permission_request",
+          "title": "Event Type",
+          "type": "string"
+        },
+        "source": {
+          "default": "browser",
+          "enum": [
+            "browser",
+            "os",
+            "clipboard",
+            "manual"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "requester": {
+          "$ref": "#/$defs/Requester"
+        },
+        "data_categories": {
+          "items": {
+            "$ref": "#/$defs/DataCategory"
+          },
+          "title": "Data Categories",
+          "type": "array"
+        },
+        "payload_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Payload Ref"
+        },
+        "platform": {
+          "default": "unknown",
+          "title": "Platform",
+          "type": "string"
+        },
+        "correlation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Correlation Id"
+        },
+        "permission": {
+          "default": "",
+          "title": "Permission",
+          "type": "string"
+        },
+        "state": {
+          "default": "requested",
+          "enum": [
+            "requested",
+            "granted",
+            "denied",
+            "active",
+            "stopped"
+          ],
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "title": "PermissionRequestEvent",
+      "type": "object"
+    },
+    "PolicyDocumentEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        },
+        "event_type": {
+          "const": "policy_document",
+          "default": "policy_document",
+          "title": "Event Type",
+          "type": "string"
+        },
+        "source": {
+          "default": "browser",
+          "enum": [
+            "browser",
+            "os",
+            "clipboard",
+            "manual"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "requester": {
+          "$ref": "#/$defs/Requester"
+        },
+        "data_categories": {
+          "items": {
+            "$ref": "#/$defs/DataCategory"
+          },
+          "title": "Data Categories",
+          "type": "array"
+        },
+        "payload_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Payload Ref"
+        },
+        "platform": {
+          "default": "unknown",
+          "title": "Platform",
+          "type": "string"
+        },
+        "correlation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Correlation Id"
+        },
+        "kind": {
+          "default": "privacy_policy",
+          "enum": [
+            "privacy_policy",
+            "terms"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "document_hash": {
+          "default": "",
+          "title": "Document Hash",
+          "type": "string"
+        },
+        "missing": {
+          "default": false,
+          "title": "Missing",
+          "type": "boolean"
+        }
+      },
+      "title": "PolicyDocumentEvent",
+      "type": "object"
+    },
+    "Requester": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "default": "website",
+          "enum": [
+            "website",
+            "application",
+            "extension"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "origin": {
+          "default": "",
+          "title": "Origin",
+          "type": "string"
+        },
+        "etld_plus_one": {
+          "default": "",
+          "title": "Etld Plus One",
+          "type": "string"
+        },
+        "bundle_id": {
+          "default": "",
+          "title": "Bundle Id",
+          "type": "string"
+        },
+        "exe_path": {
+          "default": "",
+          "title": "Exe Path",
+          "type": "string"
+        },
+        "signer": {
+          "default": "",
+          "title": "Signer",
+          "type": "string"
+        },
+        "display_name": {
+          "default": "Unknown requester",
+          "title": "Display Name",
+          "type": "string"
+        },
+        "purpose": {
+          "default": "unknown",
+          "title": "Purpose",
+          "type": "string"
+        },
+        "purpose_confidence": {
+          "default": 0.0,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Purpose Confidence",
+          "type": "number"
+        },
+        "trust_tier": {
+          "default": "unknown",
+          "enum": [
+            "known_trusted",
+            "known_risky",
+            "unknown"
+          ],
+          "title": "Trust Tier",
+          "type": "string"
+        }
+      },
+      "title": "Requester",
+      "type": "object"
+    },
+    "ScreenCaptureEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        },
+        "event_type": {
+          "const": "screen_capture",
+          "default": "screen_capture",
+          "title": "Event Type",
+          "type": "string"
+        },
+        "source": {
+          "default": "browser",
+          "enum": [
+            "browser",
+            "os",
+            "clipboard",
+            "manual"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "requester": {
+          "$ref": "#/$defs/Requester"
+        },
+        "data_categories": {
+          "items": {
+            "$ref": "#/$defs/DataCategory"
+          },
+          "title": "Data Categories",
+          "type": "array"
+        },
+        "payload_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Payload Ref"
+        },
+        "platform": {
+          "default": "unknown",
+          "title": "Platform",
+          "type": "string"
+        },
+        "correlation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Correlation Id"
+        },
+        "active": {
+          "default": false,
+          "title": "Active",
+          "type": "boolean"
+        },
+        "first_grant": {
+          "default": false,
+          "title": "First Grant",
+          "type": "boolean"
+        }
+      },
+      "title": "ScreenCaptureEvent",
+      "type": "object"
+    },
+    "StartupRegistrationEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        },
+        "event_type": {
+          "const": "startup_registration",
+          "default": "startup_registration",
+          "title": "Event Type",
+          "type": "string"
+        },
+        "source": {
+          "default": "browser",
+          "enum": [
+            "browser",
+            "os",
+            "clipboard",
+            "manual"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "requester": {
+          "$ref": "#/$defs/Requester"
+        },
+        "data_categories": {
+          "items": {
+            "$ref": "#/$defs/DataCategory"
+          },
+          "title": "Data Categories",
+          "type": "array"
+        },
+        "payload_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Payload Ref"
+        },
+        "platform": {
+          "default": "unknown",
+          "title": "Platform",
+          "type": "string"
+        },
+        "correlation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Correlation Id"
+        },
+        "mechanism": {
+          "default": "",
+          "title": "Mechanism",
+          "type": "string"
+        },
+        "modified": {
+          "default": false,
+          "title": "Modified",
+          "type": "boolean"
+        }
+      },
+      "title": "StartupRegistrationEvent",
+      "type": "object"
+    },
+    "SystemAccessEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        },
+        "event_type": {
+          "const": "system_access",
+          "default": "system_access",
+          "title": "Event Type",
+          "type": "string"
+        },
+        "source": {
+          "default": "browser",
+          "enum": [
+            "browser",
+            "os",
+            "clipboard",
+            "manual"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "requester": {
+          "$ref": "#/$defs/Requester"
+        },
+        "data_categories": {
+          "items": {
+            "$ref": "#/$defs/DataCategory"
+          },
+          "title": "Data Categories",
+          "type": "array"
+        },
+        "payload_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Payload Ref"
+        },
+        "platform": {
+          "default": "unknown",
+          "title": "Platform",
+          "type": "string"
+        },
+        "correlation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Correlation Id"
+        },
+        "accesses": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Accesses",
+          "type": "array"
+        },
+        "breadth": {
+          "default": 0,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Breadth",
+          "type": "number"
+        }
+      },
+      "title": "SystemAccessEvent",
+      "type": "object"
+    },
+    "TrackingEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        },
+        "event_type": {
+          "const": "tracking",
+          "default": "tracking",
+          "title": "Event Type",
+          "type": "string"
+        },
+        "source": {
+          "default": "browser",
+          "enum": [
+            "browser",
+            "os",
+            "clipboard",
+            "manual"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "requester": {
+          "$ref": "#/$defs/Requester"
+        },
+        "data_categories": {
+          "items": {
+            "$ref": "#/$defs/DataCategory"
+          },
+          "title": "Data Categories",
+          "type": "array"
+        },
+        "payload_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Payload Ref"
+        },
+        "platform": {
+          "default": "unknown",
+          "title": "Platform",
+          "type": "string"
+        },
+        "correlation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Correlation Id"
+        },
+        "tracker_domains": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tracker Domains",
+          "type": "array"
+        },
+        "fingerprinting": {
+          "default": false,
+          "title": "Fingerprinting",
+          "type": "boolean"
+        },
+        "confidence": {
+          "default": 0,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "signals": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Signals",
+          "type": "array"
+        }
+      },
+      "title": "TrackingEvent",
+      "type": "object"
+    }
+  },
+  "discriminator": {
+    "mapping": {
+      "clipboard_read": "#/$defs/ClipboardReadEvent",
+      "consent_banner": "#/$defs/ConsentBannerEvent",
+      "deep_check": "#/$defs/DeepCheckRequestEvent",
+      "file_upload": "#/$defs/FileUploadEvent",
+      "form_observed": "#/$defs/FormObservedEvent",
+      "form_submit": "#/$defs/FormSubmitEvent",
+      "permission_request": "#/$defs/PermissionRequestEvent",
+      "policy_document": "#/$defs/PolicyDocumentEvent",
+      "screen_capture": "#/$defs/ScreenCaptureEvent",
+      "startup_registration": "#/$defs/StartupRegistrationEvent",
+      "system_access": "#/$defs/SystemAccessEvent",
+      "tracking": "#/$defs/TrackingEvent"
+    },
+    "propertyName": "event_type"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/FileUploadEvent"
+    },
+    {
+      "$ref": "#/$defs/FormObservedEvent"
+    },
+    {
+      "$ref": "#/$defs/FormSubmitEvent"
+    },
+    {
+      "$ref": "#/$defs/ConsentBannerEvent"
+    },
+    {
+      "$ref": "#/$defs/PolicyDocumentEvent"
+    },
+    {
+      "$ref": "#/$defs/TrackingEvent"
+    },
+    {
+      "$ref": "#/$defs/PermissionRequestEvent"
+    },
+    {
+      "$ref": "#/$defs/SystemAccessEvent"
+    },
+    {
+      "$ref": "#/$defs/ClipboardReadEvent"
+    },
+    {
+      "$ref": "#/$defs/ScreenCaptureEvent"
+    },
+    {
+      "$ref": "#/$defs/StartupRegistrationEvent"
+    },
+    {
+      "$ref": "#/$defs/DeepCheckRequestEvent"
+    }
+  ]
+}

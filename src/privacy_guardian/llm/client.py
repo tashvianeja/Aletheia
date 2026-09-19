@@ -87,13 +87,16 @@ class LLMClient:
         started = time.monotonic()
         reason: str | None = None
         tokens = 0
+        input_tokens = 0
+        output_tokens = 0
         try:
             clean = sanitize_outbound(payload)
-            prefix = sanitize_outbound(SYSTEM_PROMPT)
+            prefix = sanitize_outbound(SYSTEM_PROMPT, use_ner=False)
             if self._client is None:
                 key = self._key_provider()
                 if not key:
-                    return CompletionResult(value=fallback, fallback_reason="key_unavailable")
+                    reason = "key_unavailable"
+                    return CompletionResult(value=fallback, fallback_reason=reason)
                 # Never read OPENAI_API_KEY or a configurable base URL; the keychain is authoritative.
                 self._client = OpenAI(
                     api_key=key, base_url="https://api.openai.com/v1", timeout=20, max_retries=0
@@ -128,6 +131,8 @@ class LLMClient:
                     reason = "refusal"
             if response.usage is not None:
                 tokens = int(response.usage.total_tokens)
+                input_tokens = int(getattr(response.usage, "input_tokens", 0))
+                output_tokens = int(getattr(response.usage, "output_tokens", 0))
             parsed = response.output_parsed
             if reason or parsed is None:
                 return CompletionResult(value=fallback, fallback_reason=reason or "unparsed")
@@ -152,6 +157,9 @@ class LLMClient:
                 extra={
                     "purpose": use,
                     "token_count": tokens,
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                    "error_type": reason,
                     "latency_ms": round((time.monotonic() - started) * 1000),
                     "fallback_reason": reason,
                 },

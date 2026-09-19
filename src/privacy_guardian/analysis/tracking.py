@@ -43,6 +43,7 @@ class TrackingSnapshot(BaseModel):
     storage_shared_identifiers: int = 0
     cname_hosts: list[str] = Field(default_factory=list)
     pixel_beacons: int = 0
+    pixel_hosts: list[str] = Field(default_factory=list)
     identity_sync: bool = False
 
 
@@ -73,6 +74,22 @@ def analyze_tracking(snapshot: TrackingSnapshot | dict[str, object]) -> Tracking
     hosts = set(snapshot.request_hosts + snapshot.cname_hosts)
     hosts.update(urlsplit(url).hostname or "" for url in snapshot.urls)
     trackers = {host.lower().lstrip(".") for host in hosts if is_tracker(host)}
+    origin_host = urlsplit(snapshot.origin).hostname or ""
+    for host in snapshot.pixel_hosts:
+        if (
+            host
+            and host != origin_host
+            and not host.endswith("." + origin_host)
+            and any(
+                (urlsplit(url).hostname or "") == host
+                and (
+                    "pixel" in urlsplit(url).path.lower()
+                    or set(parse_qs(urlsplit(url).query)) & {"uid", "id", "cid", "email_hash"}
+                )
+                for url in snapshot.urls
+            )
+        ):
+            trackers.add(host.lower())
     for cookie in snapshot.cookies:
         if cookie.third_party and cookie.lifetime_days >= 30 and is_tracker(cookie.domain):
             trackers.add(cookie.domain.lower().lstrip("."))

@@ -12,6 +12,7 @@ from privacy_guardian.core.events import (
     FormSubmitEvent,
     Outcome,
     PermissionRequestEvent,
+    PolicyDocumentEvent,
     PrivacyEvent,
     ScreenCaptureEvent,
     SystemAccessEvent,
@@ -113,6 +114,33 @@ def decide(
         risk = max(risk, 0.65)
         level = max(level, 2)
         notes.append("The breadth of system access exceeds what this task appears to need.")
+    if (
+        isinstance(event, SystemAccessEvent)
+        and event.requester.kind == "extension"
+        and event.breadth >= 0.6
+        and DataCategory.BROWSER_HISTORY in categories
+    ):
+        risk = max(risk, 0.7)
+        level = max(level, 2)
+        notes.append(
+            "This extension can access browsing history and broad website activity; review whether it needs that breadth of access."
+        )
+    if isinstance(event, PolicyDocumentEvent):
+        material = set(profile.clauses)
+        if material:
+            risk = max(risk, 0.6)
+            level = max(level, 2)
+            notes.append(
+                "The agreement contains: "
+                + ", ".join(clause.replace("_", " ") for clause in sorted(material))
+                + "."
+            )
+        elif event.missing or profile.policy_missing:
+            risk = max(risk, 0.3)
+            level = max(level, 1)
+            notes.append(
+                "No privacy policy found; collection and retention terms could not be checked."
+            )
     if isinstance(event, ScreenCaptureEvent) and event.active and not event.first_grant:
         level = max(minimum, 1)
         notes.append("Screen capture is now active.")
@@ -120,11 +148,21 @@ def decide(
         level = 0
     if isinstance(event, FormObservedEvent) and event.event_type == "form_observed":
         level = min(level, 1)
-    if isinstance(event, ClipboardReadEvent) and (
-        event.writer_key == event.requester.key
-        or event.requester.key in preferences.clipboard_allowlist
+    if (
+        isinstance(event, ClipboardReadEvent)
+        and not event.cloud_sync
+        and (
+            event.writer_key == event.requester.key
+            or event.requester.key in preferences.clipboard_allowlist
+        )
     ):
         level = 0
+    if isinstance(event, ClipboardReadEvent) and event.cloud_sync and categories:
+        risk = max(risk, 0.3)
+        level = max(level, 1)
+        notes.append(
+            "Operating-system clipboard cloud sync is enabled; sensitive clipboard content may be copied to other devices."
+        )
     expected = set(preferences.expected_permissions.get(event.requester.key, []))
     if categories and categories <= expected:
         level = 0 if not high_impact else min(level, 1)
@@ -149,6 +187,16 @@ def decide(
         )
     red_flags = {item.category for item in assessments if item.verdict == Necessity.RED_FLAG}
     for observation in profile.recent_observations:
+        if observation.event_class and observation.event_class != event.event_type:
+            continue
+        if isinstance(event, ConsentBannerEvent) and set(event.dark_patterns) - set(
+            observation.signals
+        ):
+            continue
+        if isinstance(event, PolicyDocumentEvent) and set(profile.clauses) - set(
+            observation.signals
+        ):
+            continue
         if set(observation.categories) != categories or not timedelta(
             0
         ) <= event.ts - observation.ts < timedelta(hours=24):
