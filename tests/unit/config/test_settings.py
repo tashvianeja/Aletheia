@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from privacy_guardian.config import Settings
@@ -49,4 +50,31 @@ def test_settings_save_and_load_round_trip(tmp_path: Path, monkeypatch) -> None:
 
 def test_settings_file_has_private_permissions(tmp_path: Path) -> None:
     Settings(data_dir=tmp_path).save()
-    assert (tmp_path / "settings.toml").stat().st_mode & 0o777 == 0o600
+    path = tmp_path / "settings.toml"
+    if sys.platform != "win32":
+        assert path.stat().st_mode & 0o777 == 0o600
+        return
+
+    import ntsecuritycon
+    import win32api
+    import win32security
+
+    token = win32security.OpenProcessToken(win32api.GetCurrentProcess(), 0x0008)
+    try:
+        current_user = win32security.GetTokenInformation(token, win32security.TokenUser)[0]
+    finally:
+        token.Close()
+    descriptor = win32security.GetFileSecurity(
+        str(path),
+        win32security.DACL_SECURITY_INFORMATION,
+    )
+    dacl = descriptor.GetSecurityDescriptorDacl()
+    control, _revision = descriptor.GetSecurityDescriptorControl()
+
+    assert dacl is not None and dacl.GetAceCount() == 1
+    header, access_mask, sid = dacl.GetAce(0)
+    assert header[0] == win32security.ACCESS_ALLOWED_ACE_TYPE
+    assert header[1] == 0
+    assert win32security.EqualSid(sid, current_user)
+    assert access_mask & ntsecuritycon.FILE_ALL_ACCESS == ntsecuritycon.FILE_ALL_ACCESS
+    assert control & 0x1000  # SE_DACL_PROTECTED

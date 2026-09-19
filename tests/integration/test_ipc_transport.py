@@ -3,19 +3,38 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import struct
 import sys
 import tempfile
 from pathlib import Path
 
 import pytest
 
-from privacy_guardian.core.ipc.protocol import MAX_MESSAGE_BYTES
+from privacy_guardian.core.ipc.protocol import MAX_MESSAGE_BYTES, decode_message, encode_message
 from privacy_guardian.core.ipc.transport import (
     ControlServer,
     endpoint,
     ensure_token,
     send_request,
 )
+
+
+class MemoryWriter:
+    def __init__(self) -> None:
+        self.data = bytearray()
+        self.closed = False
+
+    def write(self, data: bytes) -> None:
+        self.data.extend(data)
+
+    async def drain(self) -> None:
+        return None
+
+    def close(self) -> None:
+        self.closed = True
+
+    async def wait_closed(self) -> None:
+        return None
 
 
 def test_ipc_token_is_stable_random_and_private(tmp_path: Path) -> None:
@@ -47,6 +66,72 @@ async def test_dispatch_rejects_wrong_token_without_calling_handler(tmp_path: Pa
     assert response["ok"] is False
     assert response["error"]["code"] == "unauthorized"  # type: ignore[index]
     assert received == []
+
+
+@pytest.mark.asyncio
+async def test_stream_client_dispatches_authenticated_frame_portably(tmp_path: Path) -> None:
+    received: list[str] = []
+
+    async def handler(request: dict[str, object]) -> dict[str, object]:
+        received.append(str(request["id"]))
+        return {
+            "v": 1,
+            "id": str(request["id"]),
+            "ok": True,
+            "result": {"pong": True},
+            "error": None,
+        }
+
+    server = ControlServer(tmp_path, handler)  # type: ignore[arg-type]
+    reader = asyncio.StreamReader()
+    reader.feed_data(
+        encode_message(
+            {
+                "token": server.token,
+                "request": {"v": 1, "id": "portable-frame", "type": "ping", "payload": {}},
+            }
+        )
+    )
+    reader.feed_eof()
+    writer = MemoryWriter()
+
+    await server._client(reader, writer)  # type: ignore[arg-type]
+
+    size = struct.unpack("<I", writer.data[:4])[0]
+    response = decode_message(bytes(writer.data[4 : 4 + size]))
+    assert response["ok"] is True
+    assert response["result"] == {"pong": True}
+    assert received == ["portable-frame"]
+    assert writer.closed is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "invalid_frame",
+    [struct.pack("<I", MAX_MESSAGE_BYTES + 1), b"\x01\x00"],
+    ids=["oversized", "truncated-header"],
+)
+async def test_stream_client_rejects_invalid_or_incomplete_frames_portably(
+    tmp_path: Path, invalid_frame: bytes
+) -> None:
+    called = False
+
+    async def handler(_request: dict[str, object]) -> dict[str, object]:
+        nonlocal called
+        called = True
+        return {}
+
+    server = ControlServer(tmp_path, handler)  # type: ignore[arg-type]
+    reader = asyncio.StreamReader()
+    reader.feed_data(invalid_frame)
+    reader.feed_eof()
+    writer = MemoryWriter()
+
+    await server._client(reader, writer)  # type: ignore[arg-type]
+
+    assert called is False
+    assert writer.data == b""
+    assert writer.closed is True
 
 
 @pytest.mark.asyncio

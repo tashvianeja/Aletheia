@@ -7,6 +7,7 @@ import os
 import shutil
 import stat
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -112,10 +113,11 @@ async def stop_process_tree(process: asyncio.subprocess.Process) -> None:
     except psutil.NoSuchProcess:
         members = []
     for member in reversed(members):
-        with contextlib.suppress(psutil.NoSuchProcess):
+        with contextlib.suppress(psutil.NoSuchProcess, psutil.AccessDenied):
             member.terminate()
     if process.returncode is None:
-        process.terminate()
+        with contextlib.suppress(ProcessLookupError):
+            process.terminate()
     _, alive = psutil.wait_procs(members, timeout=3)
     for member in alive:
         with contextlib.suppress(psutil.NoSuchProcess):
@@ -123,13 +125,30 @@ async def stop_process_tree(process: asyncio.subprocess.Process) -> None:
     with contextlib.suppress(TimeoutError):
         await asyncio.wait_for(process.wait(), 3)
     if process.returncode is None:
-        process.kill()
-        await process.wait()
+        with contextlib.suppress(ProcessLookupError):
+            process.kill()
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(process.wait(), 3)
+
+
+def stop_process_tree_now(pid: int) -> None:
+    try:
+        root = psutil.Process(pid)
+        owned = [*root.children(recursive=True), root]
+    except psutil.NoSuchProcess:
+        return
+    for process in reversed(owned):
+        with contextlib.suppress(psutil.NoSuchProcess, psutil.AccessDenied):
+            process.terminate()
+    _, alive = psutil.wait_procs(owned, timeout=3)
+    for process in alive:
+        with contextlib.suppress(psutil.NoSuchProcess, psutil.AccessDenied):
+            process.kill()
 
 
 @pytest.mark.asyncio
 async def test_firefox_fixed_id_performs_real_native_host_ping(
-    tmp_path: Path, unused_tcp_port: int
+    tmp_path: Path, unused_tcp_port: int, request: pytest.FixtureRequest
 ) -> None:
     binary = firefox_binary()
     node = shutil.which("node")
@@ -139,27 +158,48 @@ async def test_firefox_fixed_id_performs_real_native_host_ping(
     Settings(data_dir=data_dir, autostart=False, onboarding_complete=True).save()
     environment = os.environ.copy()
     environment["PRIVACY_GUARDIAN_DATA_DIR"] = str(data_dir)
-    service = await asyncio.create_subprocess_exec(
-        sys.executable,
-        "-m",
-        "privacy_guardian",
-        "--headless",
-        cwd=ROOT,
-        env=environment,
-        stdout=asyncio.subprocess.DEVNULL,
-        stderr=asyncio.subprocess.PIPE,
-    )
-    for _attempt in range(200):
+    service_log_path = tmp_path / "service-stderr.log"
+    service_log = service_log_path.open("wb")
+    try:
+        service = await asyncio.create_subprocess_exec(
+            sys.executable,
+            "-m",
+            "privacy_guardian",
+            "--headless",
+            cwd=ROOT,
+            env=environment,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=service_log,
+        )
+    except BaseException:
+        service_log.close()
+        raise
+
+    def final_service_cleanup() -> None:
+        stop_process_tree_now(service.pid)
+        service_log.close()
+
+    request.addfinalizer(final_service_cleanup)
+    readiness_deadline = time.monotonic() + 10
+    while time.monotonic() < readiness_deadline:
+        if service.returncode is not None:
+            service_log.flush()
+            diagnostics = service_log_path.read_text(encoding="utf-8", errors="replace")[-4000:]
+            pytest.fail(f"service exited before Firefox readiness: {diagnostics}")
         try:
             ready = await send_request(
-                data_dir, {"v": 1, "id": "firefox-ready", "type": "ping", "payload": {}}
+                data_dir,
+                {"v": 1, "id": "firefox-ready", "type": "ping", "payload": {}},
+                timeout=0.25,
             )
             if ready.get("ok"):
                 break
         except (OSError, TimeoutError, ConnectionError):
             await asyncio.sleep(0.025)
     else:
-        pytest.fail("service did not become ready for Firefox")
+        service_log.flush()
+        diagnostics = service_log_path.read_text(encoding="utf-8", errors="replace")[-4000:]
+        pytest.fail(f"service did not become ready for Firefox: {diagnostics}")
 
     response_future: asyncio.Future[dict[str, Any]] = asyncio.get_running_loop().create_future()
 
@@ -186,6 +226,8 @@ async def test_firefox_fixed_id_performs_real_native_host_ping(
             "{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({error:String(error)})}));\n"
         )
     browser: asyncio.subprocess.Process | None = None
+    browser_log_path = tmp_path / "firefox-web-ext.log"
+    browser_log = browser_log_path.open("wb")
     try:
         with registered_firefox_host(data_dir):
             browser = await asyncio.create_subprocess_exec(
@@ -204,15 +246,16 @@ async def test_firefox_fixed_id_performs_real_native_host_ping(
                 "--no-input",
                 "--args=-headless",
                 env=environment,
-                stdout=asyncio.subprocess.PIPE,
+                stdout=browser_log,
                 stderr=asyncio.subprocess.STDOUT,
             )
             try:
                 response = await asyncio.wait_for(response_future, 20)
             except TimeoutError:
                 await stop_process_tree(browser)
-                output = await asyncio.wait_for(browser.stdout.read(), 1) if browser.stdout else b""
-                pytest.fail(f"Firefox native ping timed out: {output.decode(errors='replace')}")
+                browser_log.flush()
+                output = browser_log_path.read_text(encoding="utf-8", errors="replace")[-4000:]
+                pytest.fail(f"Firefox native ping timed out: {output}")
             assert response == {
                 "version": "0.1.0",
                 "protocol": 1,
@@ -222,6 +265,8 @@ async def test_firefox_fixed_id_performs_real_native_host_ping(
     finally:
         if browser is not None and browser.returncode is None:
             await stop_process_tree(browser)
-        await runner.cleanup()
-        service.terminate()
-        await service.wait()
+        browser_log.close()
+        with contextlib.suppress(TimeoutError):
+            await asyncio.wait_for(runner.cleanup(), 3)
+        await stop_process_tree(service)
+        service_log.close()
