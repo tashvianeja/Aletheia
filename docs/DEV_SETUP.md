@@ -49,6 +49,32 @@ The data directory defaults to `~/Library/Application Support/PrivacyGuardian` o
 
 Optional OpenAI credentials are stored through the operating-system keychain only, using service `PrivacyGuardian` and account `openai_api_key`. The UI/API rejects unsupported keyring backends. Do not put keys in `.env`, `settings.toml`, or test fixtures.
 
+## Fresh-clone verification procedure
+
+This is the literal macOS procedure for the independent fresh-clone worker. It is a **TODO** until that worker records outputs, commit SHA, and elapsed times in `docs/PLAN.md`.
+
+```sh
+git clone https://github.com/tashvianeja/Privacy-Guardian.git
+cd Privacy-Guardian
+git checkout develop
+xcode-select --install
+brew install uv tesseract create-dmg cmake autoconf automake libtool pkg-config
+uv sync
+make setup
+export PRIVACY_GUARDIAN_DATA_DIR="$(mktemp -d)"
+uv run privacy-guardian --diagnose
+QT_QPA_PLATFORM=offscreen uv run privacy-guardian --smoke-test
+make lint
+make typecheck
+make test
+make build-extension
+make e2e
+make build-mac
+make uninstall-mac
+```
+
+The worker must record command exit codes, test/coverage totals, generated extension/archive and app/DMG paths, and whether the `make e2e` and packaging stages completed. Run the browser E2E only after installing Playwright’s required browser under the environment’s documented process. Do not configure an OpenAI key: the default path must remain offline. A corresponding Windows fresh-clone/installer procedure is pending a green Windows runner.
+
 ## Useful commands
 
 | Command | Declared purpose | Verification status |
