@@ -60,12 +60,19 @@ def cmp_body(name: str, hidden_reject: bool = False, symmetric: bool = False) ->
         if symmetric
         else "font-size:20px;background:#084;color:white;padding:16px"
     )
+    manage = (
+        '<button id="manage" data-action="manage">Manage preferences</button>'
+        if hidden_reject
+        else ""
+    )
+    reject_text = "Reject all" if hidden_reject else "Reject optional"
     return f"""
 <div id="{banner_id}" class="cmp {banner_class}" role="dialog" aria-label="Cookie consent" style="position:fixed;bottom:0;background:white;color:black">
  <p>We use necessary, analytics, and advertising cookies.</p>
  <label><input id="analytics" type="checkbox" {"" if symmetric else "checked"}> Analytics</label>
  <label><input id="advertising" type="checkbox" {"" if symmetric else "checked"}> Advertising</label>
- <button id="{reject_id}" data-action="reject" style="{reject_style}">Reject optional</button>
+ <button id="{reject_id}" data-action="reject" style="{reject_style}">{reject_text}</button>
+ {manage}
  <button id="accept" style="{accept_style}">Accept all</button>
 </div>
 """
@@ -79,6 +86,9 @@ document.querySelector('#accept')?.addEventListener('click', () => {
 document.querySelector('[data-action="reject"]')?.addEventListener('click', () => {
  document.cookie='necessary=yes; SameSite=Lax';
  document.querySelector('.cmp').remove(); window.consentResult='rejected';
+});
+document.querySelector('[data-action="manage"]')?.addEventListener('click', () => {
+ const reject=document.querySelector('[data-action="reject"]'); if(reject) reject.style.display='inline-block';
 });
 """
 
@@ -112,8 +122,11 @@ setTimeout(() => {
 """
 
 SHADOW_SCRIPT = """
-const host=document.querySelector('#shadow-host'); const root=host.attachShadow({mode:'open'});
-root.innerHTML='<form id="shadow-form"><label>Date of birth <input name="dob" autocomplete="bday"></label></form>';
+setTimeout(() => {
+ const host=document.querySelector('#shadow-host'); const root=host.attachShadow({mode:'open'});
+ root.innerHTML='<form id="shadow-form"><label>Date of birth <input name="dob" autocomplete="bday"></label></form>';
+ window.shadowAttachedAt=performance.now();
+}, 100);
 """
 
 
@@ -151,7 +164,11 @@ PAGES: Mapping[str, str] = {
     ),
     "heuristic-banner-three": page("Cookies Settings", cmp_body("cookies-panel"), CMP_SCRIPT),
     "spa-dynamic-form": page("Single Page Signup", "<div id='app'></div>", SPA_SCRIPT),
-    "shadow-dom-form": page("Shadow DOM Signup", "<div id='shadow-host'></div>", SHADOW_SCRIPT),
+    "shadow-dom-form": page(
+        "Shadow DOM Free PDF Download",
+        "<p>Download a free guide.</p><div id='shadow-host'></div>",
+        SHADOW_SCRIPT,
+    ),
     "recipe-location-policy": page(
         "Weeknight Recipes",
         "<p>Quick dinner recipes.</p><a rel='privacy-policy' href='/privacy'>Privacy policy</a>",

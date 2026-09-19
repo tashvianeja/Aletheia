@@ -43,7 +43,9 @@ def tree_cpu_snapshot(process: psutil.Process) -> dict[int, float]:
 
 
 def main(duration: float = 300.0) -> int:
-    with tempfile.TemporaryDirectory(prefix="pg-perf-", dir="/tmp") as data_dir:
+    with tempfile.TemporaryDirectory(
+        prefix="pg-perf-", dir="/tmp" if sys.platform != "win32" else None
+    ) as data_dir:
         Settings(data_dir=Path(data_dir), autostart=False, onboarding_complete=True).save()
         environment = os.environ.copy()
         environment["PRIVACY_GUARDIAN_DATA_DIR"] = data_dir

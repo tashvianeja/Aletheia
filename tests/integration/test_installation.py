@@ -5,7 +5,9 @@ import json
 import os
 import struct
 import subprocess
+import sys
 import tempfile
+from contextlib import AbstractContextManager
 from pathlib import Path
 
 import pytest
@@ -20,24 +22,79 @@ def isolated_locations(root: Path) -> dict[str, Path]:
     return {name: root / name for name in ("chrome", "edge", "brave", "firefox")}
 
 
+class FakeRegistryKey(AbstractContextManager["FakeRegistryKey"]):
+    def __init__(self, path: str) -> None:
+        self.path = path
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+
+class FakeWinreg:
+    HKEY_CURRENT_USER = object()
+    REG_SZ = 1
+
+    def __init__(self) -> None:
+        self.values: dict[str, str] = {}
+        self.deleted: list[str] = []
+
+    def CreateKey(self, _root: object, path: str) -> FakeRegistryKey:
+        return FakeRegistryKey(path)
+
+    def SetValueEx(
+        self, key: FakeRegistryKey, _name: str, _reserved: int, _kind: int, value: str
+    ) -> None:
+        self.values[key.path] = value
+
+    def DeleteKey(self, _root: object, path: str) -> None:
+        if path not in self.values:
+            raise FileNotFoundError(path)
+        self.deleted.append(path)
+        del self.values[path]
+
+
+def isolate_windows_registry(monkeypatch: pytest.MonkeyPatch) -> FakeWinreg | None:
+    if sys.platform != "win32":
+        return None
+    registry = FakeWinreg()
+    real_import = installation.importlib.import_module
+    monkeypatch.setattr(
+        installation.importlib,
+        "import_module",
+        lambda name: registry if name == "winreg" else real_import(name),
+    )
+    return registry
+
+
 def test_install_writes_least_privilege_browser_manifests(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     locations = isolated_locations(tmp_path / "browser-config")
     monkeypatch.setattr(installation, "manifest_locations", lambda: locations)
+    registry = isolate_windows_registry(monkeypatch)
     settings = Settings(data_dir=tmp_path / "data", autostart=False)
 
     installed = installation.install(settings)
 
     host = settings.data_dir / "privacy-guardian-host"
-    assert host in installed
-    assert host.stat().st_mode & 0o777 == 0o700
-    for browser, folder in locations.items():
+    if sys.platform == "win32":
+        assert host not in installed
+        assert registry is not None and len(registry.values) == 4
+        expected_locations = isolated_locations(settings.data_dir)
+    else:
+        assert host in installed
+        assert host.stat().st_mode & 0o777 == 0o700
+        expected_locations = locations
+    for browser, folder in expected_locations.items():
         manifest_path = folder / f"{installation.HOST_NAME}.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        assert manifest["path"] == str(host)
+        if sys.platform == "win32":
+            assert manifest["path"].endswith("privacy-guardian-host.exe")
+        else:
+            assert manifest["path"] == str(host)
         assert manifest["type"] == "stdio"
-        assert manifest_path.stat().st_mode & 0o777 == 0o600
+        if os.name != "nt":
+            assert manifest_path.stat().st_mode & 0o777 == 0o600
         if browser == "firefox":
             assert manifest["allowed_extensions"] == [installation.FIREFOX_ID]
             assert "allowed_origins" not in manifest
@@ -47,12 +104,17 @@ def test_install_writes_least_privilege_browser_manifests(
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(
+    os.name == "nt", reason="POSIX host wrapper; packaged Windows host has its own smoke test"
+)
 async def test_installed_native_host_performs_real_stdio_to_authenticated_service_handshake(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     locations = isolated_locations(tmp_path / "browser-config")
     monkeypatch.setattr(installation, "manifest_locations", lambda: locations)
-    short_root = tempfile.TemporaryDirectory(prefix="pg-host-", dir="/tmp")
+    short_root = tempfile.TemporaryDirectory(
+        prefix="pg-host-", dir="/tmp" if sys.platform != "win32" else None
+    )
     settings = Settings(data_dir=Path(short_root.name), autostart=False)
     installation.install(settings)
 
@@ -102,12 +164,20 @@ def test_uninstall_removes_only_known_product_files(
 ) -> None:
     locations = isolated_locations(tmp_path / "browser-config")
     monkeypatch.setattr(installation, "manifest_locations", lambda: locations)
+    registry = isolate_windows_registry(monkeypatch)
+    if sys.platform == "win32":
+        from privacy_guardian.sensors.platform import windows
+
+        monkeypatch.setattr(windows.WindowsRegistry, "set_autostart", lambda *_args: None)
     monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: None)
     settings = Settings(data_dir=tmp_path / "data", autostart=False)
     installation.install(settings)
+    actual_locations = (
+        isolated_locations(settings.data_dir) if sys.platform == "win32" else locations
+    )
     unrelated_data = settings.data_dir / "keep-me.txt"
     unrelated_data.write_text("unrelated user data", encoding="utf-8")
-    unrelated_browser = locations["chrome"] / "other.vendor.host.json"
+    unrelated_browser = actual_locations["chrome"] / "other.vendor.host.json"
     unrelated_browser.write_text("{}", encoding="utf-8")
 
     installation.uninstall(settings)
@@ -115,5 +185,9 @@ def test_uninstall_removes_only_known_product_files(
     assert unrelated_data.read_text(encoding="utf-8") == "unrelated user data"
     assert unrelated_browser.exists()
     assert all(
-        not (folder / f"{installation.HOST_NAME}.json").exists() for folder in locations.values()
+        not (folder / f"{installation.HOST_NAME}.json").exists()
+        for folder in actual_locations.values()
     )
+    if registry is not None:
+        assert not registry.values
+        assert len(registry.deleted) == 4

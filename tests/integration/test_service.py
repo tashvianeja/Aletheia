@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,18 @@ class InlinePool:
 
     def close(self) -> None:
         return None
+
+
+class GatePool(InlinePool):
+    def __init__(self) -> None:
+        self.started = asyncio.Event()
+        self.release = asyncio.Event()
+
+    async def run(self, function: Any, *args: Any) -> Any:
+        if function.__name__ == "analyze_payload":
+            self.started.set()
+            await asyncio.wait_for(self.release.wait(), 2)
+        return function(*args)
 
 
 @pytest.fixture
@@ -149,6 +162,60 @@ async def test_deep_check_uses_cached_real_analyses_and_reports_all_risks(servic
         "policy",
     ]
     assert response["result"]["context_available"] is True
+
+
+@pytest.mark.asyncio
+async def test_overlapping_context_updates_preserve_each_analysis(service: Service) -> None:
+    pool = GatePool()
+    service.pool = pool  # type: ignore[assignment]
+    origin = "https://concurrent.example"
+    policy = request(
+        "policy",
+        "context",
+        {
+            "origin": origin,
+            "policy": {"text": "We share email addresses with service providers."},
+        },
+    )
+    tracking = request(
+        "tracking",
+        "context",
+        {
+            "origin": origin,
+            "tracking": {
+                "snapshot": {
+                    "origin": origin,
+                    "request_hosts": ["doubleclick.net"],
+                    "urls": ["https://doubleclick.net/pixel?uid=synthetic"],
+                }
+            },
+        },
+    )
+
+    policy_task = asyncio.create_task(service.handle_message(policy))
+    await asyncio.wait_for(pool.started.wait(), 2)
+    tracking_response = await service.handle_message(tracking)
+    pool.release.set()
+    responses = [await policy_task, tracking_response]
+
+    assert all(response["ok"] for response in responses), responses
+    assert service.contexts[origin]["analyses"].keys() >= {"policy", "tracking"}
+
+
+@pytest.mark.asyncio
+async def test_policy_and_terms_cache_are_separated_for_identical_text(service: Service) -> None:
+    origin = "https://same-document.example"
+    text = "We collect email for service delivery. Disputes use binding arbitration."
+    policy = await service.handle_message(
+        request("policy", "context", {"origin": origin, "policy": {"text": text}})
+    )
+    terms = await service.handle_message(
+        request("terms", "context", {"origin": origin, "terms": {"text": text}})
+    )
+
+    assert "collects" in policy["result"]["policy"]["profile"]
+    assert "nothing_unusual" in terms["result"]["terms"]["profile"]
+    assert "collects" not in terms["result"]["terms"]["profile"]
 
 
 @pytest.mark.asyncio

@@ -8,6 +8,7 @@ from typing import Any
 CORE_PREFIXES = (
     "privacy_guardian/core/",
     "privacy_guardian/analysis/pii/",
+    "privacy_guardian/detectors/",
     "privacy_guardian/engine/",
     "privacy_guardian/storage/",
 )
@@ -27,7 +28,9 @@ def line_counts(files: dict[str, Any], prefixes: tuple[str, ...] | None = None) 
 
 def percentage(counts: tuple[int, int]) -> float:
     covered, total = counts
-    return 100.0 if total == 0 else covered * 100.0 / total
+    if total == 0:
+        raise ValueError("coverage report did not contain any matching statements")
+    return covered * 100.0 / total
 
 
 def main() -> int:
@@ -40,8 +43,12 @@ def main() -> int:
     files = report.get("files", {})
     core_counts = line_counts(files, CORE_PREFIXES)
     overall_counts = line_counts(files)
-    core = percentage(core_counts)
-    overall = percentage(overall_counts)
+    try:
+        core = percentage(core_counts)
+        overall = percentage(overall_counts)
+    except ValueError as error:
+        print(f"coverage gate error: {error}")
+        return 2
     print(
         f"core/detectors/engine/storage: {core:.2f}% "
         f"({core_counts[0]}/{core_counts[1]} lines; required {arguments.core_min:.2f}%)"

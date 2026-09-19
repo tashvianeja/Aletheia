@@ -9,7 +9,13 @@ from openai import APIConnectionError, APITimeoutError
 
 from privacy_guardian.config import LLMSettings
 from privacy_guardian.llm.client import LLMClient
-from privacy_guardian.llm.schemas import PolishedExplanation
+from privacy_guardian.llm.schemas import (
+    DeepCheckNarrative,
+    PolishedExplanation,
+    RefinedClause,
+    RefinedPolicy,
+    RefinedPurpose,
+)
 
 
 def fallback() -> PolishedExplanation:
@@ -127,3 +133,54 @@ def test_invalid_or_sensitive_model_output_falls_back() -> None:
     assert result.assisted is True
     assert "4111111111111111" not in result.value.explanation
     assert "morgan.testperson" not in result.value.explanation
+
+
+@pytest.mark.parametrize(
+    ("use", "schema", "value"),
+    [
+        (
+            "policy_refinement",
+            RefinedPolicy,
+            RefinedPolicy(
+                clauses=[
+                    RefinedClause(
+                        category="arbitration_or_class_waiver",
+                        confidence=0.9,
+                        citation="Synthetic clause",
+                    )
+                ],
+                summary="One unusual clause.",
+            ),
+        ),
+        (
+            "purpose_refinement",
+            RefinedPurpose,
+            RefinedPurpose(purpose="ecommerce", confidence=0.9, rationale="Purpose evidence"),
+        ),
+        (
+            "explanation_polishing",
+            PolishedExplanation,
+            PolishedExplanation(
+                explanation="A contact category is requested.", rationale=["Account contact"]
+            ),
+        ),
+        (
+            "deep_check_narrative",
+            DeepCheckNarrative,
+            DeepCheckNarrative(
+                summary="One finding.", findings=["Optional tracking"], clean_checks=["Uploads"]
+            ),
+        ),
+    ],
+)
+def test_all_four_llm_uses_accept_typed_responses(use: str, schema: type[Any], value: Any) -> None:
+    provider = FakeClient(response(value))
+    result = LLMClient(enabled_settings(), client=provider).complete(
+        use,
+        {"categories": ["email"], "purpose": "account_creation"},
+        schema,
+        value,
+    )
+    assert result.assisted is True
+    assert result.value == value
+    assert provider.responses.calls[0]["text_format"] is schema

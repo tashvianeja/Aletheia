@@ -103,3 +103,12 @@ def test_multiline_private_key_and_spaced_card_are_detected_without_serializing_
     serialized = "".join(finding.model_dump_json() for finding in findings)
     assert "SYNTHETICONLY" not in serialized
     assert card not in serialized
+
+
+def test_ner_finds_unlabelled_person_late_in_large_text_and_across_chunk_boundary() -> None:
+    prefix = "ordinary synthetic narrative " * 9000
+    boundary_prefix = "x" * (8192 - 8)
+    source = prefix + "\n" + boundary_prefix + " Alice Testperson attended the synthetic meeting."
+    findings = detect_pii(source, use_ner=True)
+    assert any(finding.category == DataCategory.FULL_NAME for finding in findings)
+    assert "Alice Testperson" not in "".join(finding.model_dump_json() for finding in findings)

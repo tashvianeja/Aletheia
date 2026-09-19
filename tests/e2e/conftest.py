@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import sys
 import tempfile
@@ -44,7 +45,9 @@ async def fixture_site(unused_tcp_port: int) -> AsyncIterator[tuple[str, Fixture
 
 @pytest.fixture
 def installed_native_host(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[Settings]:
-    short_root = tempfile.TemporaryDirectory(prefix="pg-e2e-", dir="/tmp")
+    short_root = tempfile.TemporaryDirectory(
+        prefix="pg-e2e-", dir="/tmp" if sys.platform != "win32" else None
+    )
     data_dir = Path(short_root.name) / "data"
     browser_root = tmp_path / "browser-config"
     chrome_profile_hosts = tmp_path / "chromium-profile/NativeMessagingHosts"
@@ -61,10 +64,36 @@ def installed_native_host(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> It
         onboarding_complete=True,
         analysis_timeout_seconds=20,
     )
+    registry_backup: dict[str, str | None] = {}
+    if sys.platform == "win32":
+        import winreg
+
+        vendors = (
+            r"Google\Chrome",
+            r"Microsoft\Edge",
+            r"BraveSoftware\Brave-Browser",
+            "Mozilla",
+        )
+        for vendor in vendors:
+            key_path = rf"Software\{vendor}\NativeMessagingHosts\{installation.HOST_NAME}"
+            try:
+                with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path) as key:
+                    registry_backup[key_path] = str(winreg.QueryValueEx(key, "")[0])
+            except FileNotFoundError:
+                registry_backup[key_path] = None
     try:
         installation.install(settings)
         yield settings
     finally:
+        if sys.platform == "win32":
+            import winreg
+
+            for key_path, previous in registry_backup.items():
+                with contextlib.suppress(FileNotFoundError):
+                    winreg.DeleteKey(winreg.HKEY_CURRENT_USER, key_path)
+                if previous is not None:
+                    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path) as key:
+                        winreg.SetValueEx(key, "", 0, winreg.REG_SZ, previous)
         short_root.cleanup()
 
 
@@ -110,7 +139,7 @@ async def real_browser(
     context = await playwright.chromium.launch_persistent_context(
         str(tmp_path / "chromium-profile"),
         channel="chromium",
-        headless=True,
+        headless=os.getenv("PRIVACY_GUARDIAN_E2E_HEADED") != "1",
         args=[
             f"--disable-extensions-except={extension}",
             f"--load-extension={extension}",

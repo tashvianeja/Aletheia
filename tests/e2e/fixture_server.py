@@ -10,6 +10,7 @@ from tests.e2e.site_content import PAGES, PRIVACY_POLICY, TERMS_DOCUMENT
 @dataclass
 class FixtureState:
     submissions: list[dict[str, str]] = field(default_factory=list)
+    uploads: list[tuple[str, str, bytes]] = field(default_factory=list)
 
 
 def create_fixture_app(state: FixtureState | None = None) -> web.Application:
@@ -29,6 +30,10 @@ def create_fixture_app(state: FixtureState | None = None) -> web.Application:
         for key, value in data.items():
             if hasattr(value, "filename"):
                 safe_record[key] = str(value.filename)
+                content = value.file.read(16 * 1024**2)
+                fixture_state.uploads.append(
+                    (str(value.filename), str(value.content_type), content)
+                )
             else:
                 safe_record[key] = "present"
         fixture_state.submissions.append(safe_record)
