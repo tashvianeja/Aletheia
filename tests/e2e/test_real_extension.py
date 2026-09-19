@@ -34,7 +34,9 @@ async def native_ping(browser: RealBrowser) -> dict[str, object]:
 async def latest_decision(browser: RealBrowser, event_type: str) -> tuple[str, str] | None:
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline:
-        with sqlite3.connect(browser.data_dir / "guardian.sqlite3") as connection:
+        with contextlib.closing(
+            sqlite3.connect(browser.data_dir / "guardian.sqlite3")
+        ) as connection:
             row = connection.execute(
                 "SELECT e.id,d.outcome FROM events e JOIN decisions d ON d.event_id=e.id "
                 "WHERE e.event_type=? ORDER BY d.id DESC LIMIT 1",
@@ -47,7 +49,7 @@ async def latest_decision(browser: RealBrowser, event_type: str) -> tuple[str, s
 
 
 def decision_count(browser: RealBrowser, event_type: str) -> int:
-    with sqlite3.connect(browser.data_dir / "guardian.sqlite3") as connection:
+    with contextlib.closing(sqlite3.connect(browser.data_dir / "guardian.sqlite3")) as connection:
         return int(
             connection.execute(
                 "SELECT COUNT(*) FROM events WHERE event_type=?", (event_type,)
@@ -336,7 +338,9 @@ async def test_free_download_continue_submits_without_persisting_values(
             "home_address": "present",
         }
     ]
-    with sqlite3.connect(real_browser.data_dir / "guardian.sqlite3") as connection:
+    with contextlib.closing(
+        sqlite3.connect(real_browser.data_dir / "guardian.sqlite3")
+    ) as connection:
         dump = "\n".join(connection.iterdump())
     assert "Morgan Synthetic" not in dump
     assert "morgan@example.test" not in dump
@@ -686,7 +690,9 @@ async def test_browser_disconnect_aborts_pending_upload_and_reconnects_within_fi
     deadline = time.monotonic() + 5
     status: str | None = None
     while time.monotonic() < deadline:
-        with sqlite3.connect(real_browser.data_dir / "guardian.sqlite3") as connection:
+        with contextlib.closing(
+            sqlite3.connect(real_browser.data_dir / "guardian.sqlite3")
+        ) as connection:
             row = connection.execute(
                 "SELECT status FROM events WHERE id=?", (decision[0],)
             ).fetchone()
@@ -830,7 +836,9 @@ async def test_abrupt_browser_kill_during_worker_analysis_persists_aborted_event
     aborted: dict[str, str] | None = None
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline:
-        with sqlite3.connect(real_browser.data_dir / "guardian.sqlite3") as connection:
+        with contextlib.closing(
+            sqlite3.connect(real_browser.data_dir / "guardian.sqlite3")
+        ) as connection:
             row = connection.execute(
                 "SELECT id,status FROM events WHERE event_type='file_upload' ORDER BY ts DESC LIMIT 1"
             ).fetchone()

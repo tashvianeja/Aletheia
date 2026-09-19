@@ -219,3 +219,19 @@ def test_profile_lookup_and_log_view_redact_sensitive_text(qtbot, ui_controller)
     assert json.loads(dashboard.profile_detail.toPlainText()) == {"purpose": "news"}
     assert "alice@example.com" not in dashboard.log_view.toPlainText()
     assert "4111111111111111" not in dashboard.log_view.toPlainText()
+
+
+def test_refresh_timer_follows_dashboard_visibility(qtbot, ui_controller) -> None:
+    dashboard = Dashboard(ui_controller)
+    qtbot.addWidget(dashboard)
+    assert dashboard.timer.isActive() is False
+
+    dashboard.show()
+    qtbot.waitUntil(dashboard.timer.isActive)
+    dashboard.hide()
+    qtbot.waitUntil(lambda: not dashboard.timer.isActive())
+
+    dashboard.show()
+    qtbot.waitUntil(dashboard.timer.isActive)
+    dashboard.close()
+    qtbot.waitUntil(lambda: not dashboard.timer.isActive())

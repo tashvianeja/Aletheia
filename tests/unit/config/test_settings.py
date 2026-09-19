@@ -75,6 +75,8 @@ def test_settings_file_has_private_permissions(tmp_path: Path) -> None:
     header, access_mask, sid = dacl.GetAce(0)
     assert header[0] == win32security.ACCESS_ALLOWED_ACE_TYPE
     assert header[1] == 0
-    assert win32security.EqualSid(sid, current_user)
+    assert win32security.ConvertSidToStringSid(sid) == win32security.ConvertSidToStringSid(
+        current_user
+    )
     assert access_mask & ntsecuritycon.FILE_ALL_ACCESS == ntsecuritycon.FILE_ALL_ACCESS
     assert control & 0x1000  # SE_DACL_PROTECTED

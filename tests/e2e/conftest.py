@@ -38,6 +38,14 @@ class RealBrowser:
 
 
 async def stop_subprocess(process: asyncio.subprocess.Process, timeout: float = 5) -> None:
+    try:
+        root = psutil.Process(process.pid)
+        descendants = root.children(recursive=True)
+    except psutil.NoSuchProcess:
+        descendants = []
+    for descendant in reversed(descendants):
+        with contextlib.suppress(psutil.NoSuchProcess, psutil.AccessDenied):
+            descendant.terminate()
     if process.returncode is None:
         with contextlib.suppress(ProcessLookupError):
             process.terminate()
@@ -47,9 +55,18 @@ async def stop_subprocess(process: asyncio.subprocess.Process, timeout: float = 
         with contextlib.suppress(ProcessLookupError):
             process.kill()
         await asyncio.wait_for(process.wait(), timeout)
+    _, alive = psutil.wait_procs(descendants, timeout=timeout)
+    for descendant in alive:
+        with contextlib.suppress(psutil.NoSuchProcess, psutil.AccessDenied):
+            descendant.kill()
+    _, survivors = psutil.wait_procs(alive, timeout=timeout)
+    if survivors:
+        raise RuntimeError(
+            f"service descendants survived cleanup: {[child.pid for child in survivors]}"
+        )
 
 
-def kill_profile_processes(profile_dir: Path) -> None:
+def profile_processes(profile_dir: Path) -> list[psutil.Process]:
     matching: list[psutil.Process] = []
     for process in psutil.Process().children(recursive=True):
         with contextlib.suppress(psutil.NoSuchProcess, psutil.AccessDenied):
@@ -66,11 +83,25 @@ def kill_profile_processes(profile_dir: Path) -> None:
         with contextlib.suppress(psutil.NoSuchProcess, psutil.AccessDenied):
             for descendant in root.children(recursive=True):
                 owned_by_pid[descendant.pid] = descendant
+    return list(owned_by_pid.values())
+
+
+def kill_profile_processes(profile_dir: Path, captured: list[psutil.Process] | None = None) -> None:
+    owned_by_pid = {process.pid: process for process in captured or []}
+    owned_by_pid.update({process.pid: process for process in profile_processes(profile_dir)})
     owned = list(owned_by_pid.values())
     for process in reversed(owned):
         with contextlib.suppress(psutil.NoSuchProcess, psutil.AccessDenied):
+            process.terminate()
+    _, alive = psutil.wait_procs(owned, timeout=3)
+    for process in alive:
+        with contextlib.suppress(psutil.NoSuchProcess, psutil.AccessDenied):
             process.kill()
-    psutil.wait_procs(owned, timeout=3)
+    _, survivors = psutil.wait_procs(alive, timeout=3)
+    if survivors:
+        raise RuntimeError(
+            f"browser descendants survived cleanup: {[child.pid for child in survivors]}"
+        )
 
 
 @pytest_asyncio.fixture
@@ -148,7 +179,7 @@ def installed_native_host(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> It
                             winreg.SetValueEx(key, name, 0, value_type, value)
         database = settings.data_dir / "guardian.sqlite3"
         if database.exists():
-            with sqlite3.connect(database) as connection:
+            with contextlib.closing(sqlite3.connect(database)) as connection:
                 prefixes = {
                     str(row[0])[:8] + "-"
                     for row in connection.execute(
@@ -242,10 +273,11 @@ async def real_browser(
             bridge_ready_seconds=bridge_ready_seconds,
         )
     finally:
+        captured_browser_processes = profile_processes(profile_dir)
         if context is not None:
             with contextlib.suppress(Exception, asyncio.CancelledError):
                 await asyncio.wait_for(context.close(), 5)
-        kill_profile_processes(profile_dir)
+        kill_profile_processes(profile_dir, captured_browser_processes)
         if playwright is not None:
             with contextlib.suppress(Exception, asyncio.CancelledError):
                 await asyncio.wait_for(playwright.stop(), 5)
