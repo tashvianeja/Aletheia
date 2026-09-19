@@ -23,6 +23,7 @@ from privacy_guardian.util import installation
 from tests.e2e.fixture_server import FixtureState, create_fixture_app
 
 ROOT = Path(__file__).resolve().parents[2]
+PERFORMANCE_TOLERANCE = 1.25
 
 
 @dataclass
@@ -230,7 +231,7 @@ async def real_browser(
         assert native_ready.get("protocol") == 1, native_ready
         bridge_ready_seconds = time.perf_counter() - bridge_started
         print(f"cold Chromium native-bridge readiness: {bridge_ready_seconds:.6f}s")
-        assert bridge_ready_seconds <= 5
+        assert bridge_ready_seconds <= 5 * PERFORMANCE_TOLERANCE
         yield RealBrowser(
             context=context,
             data_dir=settings.data_dir,

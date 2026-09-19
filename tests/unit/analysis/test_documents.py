@@ -61,3 +61,21 @@ def test_gps_jpeg_metadata_is_detected_and_strip_action_removes_it() -> None:
     assert stripped.verified
     rescanned = extract_document(stripped.content, stripped.filename)
     assert DataCategory.LOCATION_PRECISE not in rescanned.metadata_categories
+
+
+def test_five_mib_plain_text_scans_pii_near_end_without_partial_result() -> None:
+    size = 5 * 1024**2
+    record = b"Synthetic ordinary service record with no personal details.\n"
+    late_pii = b"Final contact: lateperson@example.test\n"
+    content = (record * (size // len(record) + 1))[: size - len(late_pii)] + late_pii
+    assert len(content) == size
+
+    analysis = analyze_payload(
+        {"kind": "document", "filename": "synthetic-records.txt", "data": content}
+    )
+
+    emails = [finding for finding in analysis.findings if finding.category == DataCategory.EMAIL]
+    assert len(emails) == 1
+    _start, end = map(int, emails[0].span_ref.split(":"))
+    assert end > size - 100
+    assert analysis.partial is False

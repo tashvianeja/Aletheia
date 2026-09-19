@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import plistlib
@@ -15,9 +16,10 @@ from typing import Any
 import pytest
 
 from privacy_guardian.core.events import DataCategory, PermissionRequestEvent, Requester
+from privacy_guardian.engine.decision import decide
 from privacy_guardian.sensors.platform.base import scan_extension_manifests
 from privacy_guardian.sensors.platform.macos import MacOSAdapter
-from privacy_guardian.sensors.platform.windows import WindowsAdapter
+from privacy_guardian.sensors.platform.windows import WindowsAdapter, WindowsRegistry
 
 
 class MacBackend:
@@ -354,14 +356,56 @@ print(json.dumps({'before': before, 'status': status, 'after': after}))
 
 @pytest.mark.windows
 @pytest.mark.skipif(sys.platform != "win32", reason="real Windows isolated HKCU fixture")
-def test_real_windows_can_round_trip_isolated_hkcu_fixture() -> None:
+def test_real_windows_registry_camera_grant_reaches_engine_as_intervention(monkeypatch) -> None:
     import winreg
 
-    path = rf"Software\PrivacyGuardianTests\{uuid.uuid4()}"
+    import privacy_guardian.sensors.platform.windows as windows_platform
+
+    base = r"Software\PrivacyGuardianTests"
+    root = rf"{base}\{uuid.uuid4()}"
+    consent_root = root + r"\ConsentStore"
+    leaf = consent_root + r"\webcam\NonPackaged\C:#Apps#PDFConverter.exe"
     try:
-        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, path) as key:
-            winreg.SetValueEx(key, "Consent", 0, winreg.REG_SZ, "Allow")
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, path) as key:
-            assert winreg.QueryValueEx(key, "Consent")[0] == "Allow"
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, base):
+            base_existed = True
+    except FileNotFoundError:
+        base_existed = False
+    try:
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, leaf) as key:
+            winreg.SetValueEx(key, "Value", 0, winreg.REG_SZ, "Allow")
+            winreg.SetValueEx(key, "LastUsedTimeStart", 0, winreg.REG_QWORD, 10)
+            winreg.SetValueEx(key, "LastUsedTimeStop", 0, winreg.REG_QWORD, 0)
+        monkeypatch.setattr(windows_platform, "CONSENT_ROOT", consent_root)
+        adapter = WindowsAdapter(
+            registry=WindowsRegistry(),
+            clipboard=WindowsBackend(),
+            scheduler=Scheduler(),
+            watch_paths=[],
+        )
+
+        events = adapter.poll_registry()
+        permission = next(
+            event
+            for event in events
+            if isinstance(event, PermissionRequestEvent)
+            and event.requester.exe_path.endswith(r"\pdfconverter.exe")
+        )
+        decision = decide(permission)
+
+        assert permission.permission == "camera"
+        assert permission.state == "active"
+        assert permission.data_categories == [DataCategory.CAMERA]
+        assert decision.outcome.value == "INTERVENE"
     finally:
-        winreg.DeleteKey(winreg.HKEY_CURRENT_USER, path)
+        for path in (
+            leaf,
+            consent_root + r"\webcam\NonPackaged",
+            consent_root + r"\webcam",
+            consent_root,
+            root,
+        ):
+            with contextlib.suppress(FileNotFoundError):
+                winreg.DeleteKey(winreg.HKEY_CURRENT_USER, path)
+        if not base_existed:
+            with contextlib.suppress(FileNotFoundError):
+                winreg.DeleteKey(winreg.HKEY_CURRENT_USER, base)

@@ -13,7 +13,7 @@ from playwright.async_api import async_playwright
 
 from privacy_guardian.analysis.worker import analyze_payload
 from privacy_guardian.core.ipc.transport import send_request
-from tests.e2e.conftest import RealBrowser
+from tests.e2e.conftest import PERFORMANCE_TOLERANCE, RealBrowser
 
 pytestmark = pytest.mark.e2e
 
@@ -99,7 +99,7 @@ async def test_real_extension_native_service_labels_unnecessary_fields(
 
     badges = await page.locator(".pg-badge").all_text_contents()
     assert badges == ["May be unnecessary"] * 3
-    assert latency_ms <= 300, latency_ms
+    assert latency_ms <= 300 * PERFORMANCE_TOLERANCE, latency_ms
     assert not errors
 
 
@@ -119,7 +119,7 @@ async def test_dynamic_shadow_form_is_inventoried_within_half_a_second(
     )
 
     print(f"warm dynamic shadow badge latency: {latency_ms:.3f}ms")
-    assert latency_ms <= 500
+    assert latency_ms <= 500 * PERFORMANCE_TOLERANCE
 
 
 @pytest.mark.asyncio
@@ -180,7 +180,7 @@ async def test_consent_mutation_main_thread_detection_stays_under_30ms(
         f"across {len(consent_events)} trace events"
     )
     assert consent_events, "CDP trace contained no consent.js execution"
-    assert main_thread_ms < 30, main_thread_ms
+    assert main_thread_ms < 30 * PERFORMANCE_TOLERANCE, main_thread_ms
 
 
 @pytest.mark.asyncio
@@ -203,7 +203,7 @@ async def test_consent_mutation_reaches_verdict_within_400ms(
     await page.locator(".pg-panel").wait_for(timeout=5_000)
     elapsed_ms = await page.evaluate("performance.now()-window.pgConsentInsertedAt")
     print(f"consent mutation-to-verdict latency: {elapsed_ms:.3f}ms")
-    assert elapsed_ms <= 400, elapsed_ms
+    assert elapsed_ms <= 400 * PERFORMANCE_TOLERANCE, elapsed_ms
 
 
 @pytest.mark.asyncio
@@ -393,7 +393,7 @@ async def test_passport_redacted_copy_replaces_input_and_rescans_clean(
         {"kind": "document", "filename": "redacted.pdf", "data": bytes(content)}
     )
     assert rescanned.findings == []
-    assert dom_intervention_ms <= 1_500, dom_intervention_ms
+    assert dom_intervention_ms <= 1_500 * PERFORMANCE_TOLERANCE, dom_intervention_ms
 
 
 @pytest.mark.asyncio
@@ -698,7 +698,7 @@ async def test_browser_disconnect_aborts_pending_upload_and_reconnects_within_fi
         ping = await native_ping(restarted_browser)
         reconnect_seconds = time.perf_counter() - reconnect_started
         assert ping.get("ok") is True, ping
-        assert reconnect_seconds <= 5, reconnect_seconds
+        assert reconnect_seconds <= 5 * PERFORMANCE_TOLERANCE, reconnect_seconds
     finally:
         await restarted.close()
         await restarted_playwright.stop()

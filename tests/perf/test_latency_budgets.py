@@ -76,12 +76,13 @@ def test_200kb_policy_offline_latency_budget() -> None:
 @pytest.mark.perf
 @pytest.mark.parametrize(("size", "budget"), [(5 * 1024**2, 1.5)])
 def test_representative_text_document_analyzer_latency(size: int, budget: float) -> None:
-    header = b"Synthetic service export for test@example.test.\n"
     record = (
         b"Ordinary synthetic invoice narrative describing product delivery and account status "
         b"without personal details.\n"
     )
-    content = (header + record * (size // len(record) + 1))[:size]
+    late_pii = b"Final contact: lateperson@example.test\n"
+    content = (record * (size // len(record) + 1))[: size - len(late_pii)] + late_pii
+    assert len(content) == size
     result, seconds = elapsed(
         analyze_payload,
         {"kind": "document", "filename": "synthetic-records.txt", "data": content},
@@ -89,7 +90,10 @@ def test_representative_text_document_analyzer_latency(size: int, budget: float)
     print(f"{size / 1024**2:.0f}MiB text analyzer latency: {seconds:.6f}s")
     assert result.document_type == "generic"  # type: ignore[union-attr]
     assert len(result.findings) == 1  # type: ignore[union-attr]
-    assert result.partial is True  # type: ignore[union-attr]
+    assert result.findings[0].category.value == "email"  # type: ignore[union-attr]
+    _start, end = map(int, result.findings[0].span_ref.split(":"))  # type: ignore[union-attr]
+    assert end > size - 100
+    assert result.partial is False  # type: ignore[union-attr]
     assert seconds <= budget * TOLERANCE
 
 
