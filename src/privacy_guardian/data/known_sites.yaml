@@ -1,0 +1,2057 @@
+{
+  "1password.com": {
+    "confidence": 0.95,
+    "purpose": "password_manager",
+    "trust_tier": "unknown"
+  },
+  "aa.com": {
+    "confidence": 0.95,
+    "purpose": "airline",
+    "trust_tier": "unknown"
+  },
+  "accuweather.com": {
+    "confidence": 0.95,
+    "purpose": "weather",
+    "trust_tier": "unknown"
+  },
+  "acronis.com": {
+    "confidence": 0.95,
+    "purpose": "backup",
+    "trust_tier": "unknown"
+  },
+  "agoda.com": {
+    "confidence": 0.95,
+    "purpose": "travel_booking",
+    "trust_tier": "unknown"
+  },
+  "airbnb.com": {
+    "confidence": 0.95,
+    "purpose": "travel_booking",
+    "trust_tier": "unknown"
+  },
+  "airindia.com": {
+    "confidence": 0.95,
+    "purpose": "airline",
+    "trust_tier": "unknown"
+  },
+  "airtable.com": {
+    "confidence": 0.95,
+    "purpose": "saas_b2b",
+    "trust_tier": "unknown"
+  },
+  "aliexpress.com": {
+    "confidence": 0.95,
+    "purpose": "ecommerce",
+    "trust_tier": "unknown"
+  },
+  "aljazeera.com": {
+    "confidence": 0.95,
+    "purpose": "news",
+    "trust_tier": "unknown"
+  },
+  "allianz.com": {
+    "confidence": 0.95,
+    "purpose": "insurance",
+    "trust_tier": "unknown"
+  },
+  "allrecipes.com": {
+    "confidence": 0.95,
+    "purpose": "recipe",
+    "trust_tier": "unknown"
+  },
+  "allstate.com": {
+    "confidence": 0.95,
+    "purpose": "insurance",
+    "trust_tier": "unknown"
+  },
+  "alltrails.com": {
+    "confidence": 0.95,
+    "purpose": "maps_navigation",
+    "trust_tier": "unknown"
+  },
+  "amazon.com": {
+    "confidence": 0.95,
+    "purpose": "ecommerce",
+    "trust_tier": "unknown"
+  },
+  "apnews.com": {
+    "confidence": 0.95,
+    "purpose": "news",
+    "trust_tier": "unknown"
+  },
+  "archive.org": {
+    "confidence": 0.95,
+    "purpose": "free_download",
+    "trust_tier": "unknown"
+  },
+  "arqbackup.com": {
+    "confidence": 0.95,
+    "purpose": "backup",
+    "trust_tier": "unknown"
+  },
+  "asana.com": {
+    "confidence": 0.95,
+    "purpose": "saas_b2b",
+    "trust_tier": "unknown"
+  },
+  "ashbyhq.com": {
+    "confidence": 0.95,
+    "purpose": "recruitment",
+    "trust_tier": "unknown"
+  },
+  "atlassian.com": {
+    "confidence": 0.95,
+    "purpose": "saas_b2b",
+    "trust_tier": "unknown"
+  },
+  "australia.gov.au": {
+    "confidence": 0.95,
+    "purpose": "government",
+    "trust_tier": "unknown"
+  },
+  "avast.com": {
+    "confidence": 0.95,
+    "purpose": "antivirus",
+    "trust_tier": "unknown"
+  },
+  "avg.com": {
+    "confidence": 0.95,
+    "purpose": "antivirus",
+    "trust_tier": "unknown"
+  },
+  "aviva.co.uk": {
+    "confidence": 0.95,
+    "purpose": "insurance",
+    "trust_tier": "unknown"
+  },
+  "avvo.com": {
+    "confidence": 0.95,
+    "purpose": "legal_services",
+    "trust_tier": "unknown"
+  },
+  "axa.com": {
+    "confidence": 0.95,
+    "purpose": "insurance",
+    "trust_tier": "unknown"
+  },
+  "backblaze.com": {
+    "confidence": 0.95,
+    "purpose": "backup",
+    "trust_tier": "unknown"
+  },
+  "bamboohr.com": {
+    "confidence": 0.95,
+    "purpose": "recruitment",
+    "trust_tier": "unknown"
+  },
+  "bandcamp.com": {
+    "confidence": 0.95,
+    "purpose": "music_streaming",
+    "trust_tier": "unknown"
+  },
+  "bandicam.com": {
+    "confidence": 0.95,
+    "purpose": "screen_recorder",
+    "trust_tier": "unknown"
+  },
+  "bankofamerica.com": {
+    "confidence": 0.95,
+    "purpose": "banking",
+    "trust_tier": "unknown"
+  },
+  "barclays.co.uk": {
+    "confidence": 0.95,
+    "purpose": "banking",
+    "trust_tier": "unknown"
+  },
+  "battle.net": {
+    "confidence": 0.95,
+    "purpose": "gaming",
+    "trust_tier": "unknown"
+  },
+  "bbc.com": {
+    "confidence": 0.95,
+    "purpose": "news",
+    "trust_tier": "unknown"
+  },
+  "bbcgoodfood.com": {
+    "confidence": 0.95,
+    "purpose": "recipe",
+    "trust_tier": "unknown"
+  },
+  "befunky.com": {
+    "confidence": 0.95,
+    "purpose": "photo_editor",
+    "trust_tier": "unknown"
+  },
+  "bestbuy.com": {
+    "confidence": 0.95,
+    "purpose": "ecommerce",
+    "trust_tier": "unknown"
+  },
+  "bigbluebutton.org": {
+    "confidence": 0.95,
+    "purpose": "video_conference",
+    "trust_tier": "unknown"
+  },
+  "bing.com": {
+    "confidence": 0.95,
+    "purpose": "search",
+    "trust_tier": "unknown"
+  },
+  "bitbucket.org": {
+    "confidence": 0.95,
+    "purpose": "developer_tool",
+    "trust_tier": "unknown"
+  },
+  "bitdefender.com": {
+    "confidence": 0.95,
+    "purpose": "antivirus",
+    "trust_tier": "unknown"
+  },
+  "bitwarden.com": {
+    "confidence": 0.95,
+    "purpose": "password_manager",
+    "trust_tier": "unknown"
+  },
+  "bolt.eu": {
+    "confidence": 0.95,
+    "purpose": "ride_hailing",
+    "trust_tier": "unknown"
+  },
+  "bonappetit.com": {
+    "confidence": 0.95,
+    "purpose": "recipe",
+    "trust_tier": "unknown"
+  },
+  "booking.com": {
+    "confidence": 0.95,
+    "purpose": "travel_booking",
+    "trust_tier": "unknown"
+  },
+  "borgbackup.org": {
+    "confidence": 0.95,
+    "purpose": "backup",
+    "trust_tier": "unknown"
+  },
+  "box.com": {
+    "confidence": 0.95,
+    "purpose": "cloud_storage",
+    "trust_tier": "unknown"
+  },
+  "brave.com": {
+    "confidence": 0.95,
+    "purpose": "search",
+    "trust_tier": "unknown"
+  },
+  "brilliant.org": {
+    "confidence": 0.95,
+    "purpose": "education",
+    "trust_tier": "unknown"
+  },
+  "britishairways.com": {
+    "confidence": 0.95,
+    "purpose": "airline",
+    "trust_tier": "unknown"
+  },
+  "budgetbytes.com": {
+    "confidence": 0.95,
+    "purpose": "recipe",
+    "trust_tier": "unknown"
+  },
+  "bumble.com": {
+    "confidence": 0.95,
+    "purpose": "dating",
+    "trust_tier": "unknown"
+  },
+  "bund.de": {
+    "confidence": 0.95,
+    "purpose": "government",
+    "trust_tier": "unknown"
+  },
+  "cal.com": {
+    "confidence": 0.95,
+    "purpose": "calendar",
+    "trust_tier": "unknown"
+  },
+  "calendly.com": {
+    "confidence": 0.95,
+    "purpose": "calendar",
+    "trust_tier": "unknown"
+  },
+  "camelcamelcamel.com": {
+    "confidence": 0.95,
+    "purpose": "shopping_comparison",
+    "trust_tier": "unknown"
+  },
+  "canada.ca": {
+    "confidence": 0.95,
+    "purpose": "government",
+    "trust_tier": "unknown"
+  },
+  "canva.com": {
+    "confidence": 0.95,
+    "purpose": "photo_editor",
+    "trust_tier": "unknown"
+  },
+  "capitalone.com": {
+    "confidence": 0.95,
+    "purpose": "banking",
+    "trust_tier": "unknown"
+  },
+  "carbonite.com": {
+    "confidence": 0.95,
+    "purpose": "backup",
+    "trust_tier": "unknown"
+  },
+  "careem.com": {
+    "confidence": 0.95,
+    "purpose": "ride_hailing",
+    "trust_tier": "unknown"
+  },
+  "charitywater.org": {
+    "confidence": 0.95,
+    "purpose": "charity",
+    "trust_tier": "unknown"
+  },
+  "chase.com": {
+    "confidence": 0.95,
+    "purpose": "banking",
+    "trust_tier": "unknown"
+  },
+  "citi.com": {
+    "confidence": 0.95,
+    "purpose": "banking",
+    "trust_tier": "unknown"
+  },
+  "clevelandclinic.org": {
+    "confidence": 0.95,
+    "purpose": "healthcare_provider",
+    "trust_tier": "unknown"
+  },
+  "clickup.com": {
+    "confidence": 0.95,
+    "purpose": "saas_b2b",
+    "trust_tier": "unknown"
+  },
+  "cloudconvert.com": {
+    "confidence": 0.95,
+    "purpose": "file_converter",
+    "trust_tier": "unknown"
+  },
+  "codecademy.com": {
+    "confidence": 0.95,
+    "purpose": "education",
+    "trust_tier": "unknown"
+  },
+  "coffeemeetsbagel.com": {
+    "confidence": 0.95,
+    "purpose": "dating",
+    "trust_tier": "unknown"
+  },
+  "compressor.io": {
+    "confidence": 0.95,
+    "purpose": "image_tool",
+    "trust_tier": "unknown"
+  },
+  "convertio.co": {
+    "confidence": 0.95,
+    "purpose": "file_converter",
+    "trust_tier": "unknown"
+  },
+  "costco.com": {
+    "confidence": 0.95,
+    "purpose": "ecommerce",
+    "trust_tier": "unknown"
+  },
+  "coursera.org": {
+    "confidence": 0.95,
+    "purpose": "education",
+    "trust_tier": "unknown"
+  },
+  "crashplan.com": {
+    "confidence": 0.95,
+    "purpose": "backup",
+    "trust_tier": "unknown"
+  },
+  "crates.io": {
+    "confidence": 0.95,
+    "purpose": "developer_tool",
+    "trust_tier": "unknown"
+  },
+  "crunchyroll.com": {
+    "confidence": 0.95,
+    "purpose": "video_streaming",
+    "trust_tier": "unknown"
+  },
+  "dashlane.com": {
+    "confidence": 0.95,
+    "purpose": "password_manager",
+    "trust_tier": "unknown"
+  },
+  "deezer.com": {
+    "confidence": 0.95,
+    "purpose": "music_streaming",
+    "trust_tier": "unknown"
+  },
+  "degiro.com": {
+    "confidence": 0.95,
+    "purpose": "finance_investing",
+    "trust_tier": "unknown"
+  },
+  "deliveroo.co.uk": {
+    "confidence": 0.95,
+    "purpose": "food_delivery",
+    "trust_tier": "unknown"
+  },
+  "delta.com": {
+    "confidence": 0.95,
+    "purpose": "airline",
+    "trust_tier": "unknown"
+  },
+  "desktopnexus.com": {
+    "confidence": 0.95,
+    "purpose": "wallpaper_utility",
+    "trust_tier": "unknown"
+  },
+  "dice.com": {
+    "confidence": 0.95,
+    "purpose": "job_board",
+    "trust_tier": "unknown"
+  },
+  "discord.com": {
+    "confidence": 0.95,
+    "purpose": "messaging",
+    "trust_tier": "unknown"
+  },
+  "disneyplus.com": {
+    "confidence": 0.95,
+    "purpose": "video_streaming",
+    "trust_tier": "unknown"
+  },
+  "docker.com": {
+    "confidence": 0.95,
+    "purpose": "developer_tool",
+    "trust_tier": "unknown"
+  },
+  "doctorswithoutborders.org": {
+    "confidence": 0.95,
+    "purpose": "charity",
+    "trust_tier": "unknown"
+  },
+  "doodle.com": {
+    "confidence": 0.95,
+    "purpose": "calendar",
+    "trust_tier": "unknown"
+  },
+  "doordash.com": {
+    "confidence": 0.95,
+    "purpose": "food_delivery",
+    "trust_tier": "unknown"
+  },
+  "drive.google.com": {
+    "confidence": 0.95,
+    "purpose": "cloud_storage",
+    "trust_tier": "unknown"
+  },
+  "dropbox.com": {
+    "confidence": 0.95,
+    "purpose": "cloud_storage",
+    "trust_tier": "unknown"
+  },
+  "duckduckgo.com": {
+    "confidence": 0.95,
+    "purpose": "search",
+    "trust_tier": "unknown"
+  },
+  "duolingo.com": {
+    "confidence": 0.95,
+    "purpose": "education",
+    "trust_tier": "unknown"
+  },
+  "duplicati.com": {
+    "confidence": 0.95,
+    "purpose": "backup",
+    "trust_tier": "unknown"
+  },
+  "dw.com": {
+    "confidence": 0.95,
+    "purpose": "news",
+    "trust_tier": "unknown"
+  },
+  "ea.com": {
+    "confidence": 0.95,
+    "purpose": "gaming",
+    "trust_tier": "unknown"
+  },
+  "ebay.com": {
+    "confidence": 0.95,
+    "purpose": "ecommerce",
+    "trust_tier": "unknown"
+  },
+  "ecosia.org": {
+    "confidence": 0.95,
+    "purpose": "search",
+    "trust_tier": "unknown"
+  },
+  "edx.org": {
+    "confidence": 0.95,
+    "purpose": "education",
+    "trust_tier": "unknown"
+  },
+  "eharmony.com": {
+    "confidence": 0.95,
+    "purpose": "dating",
+    "trust_tier": "unknown"
+  },
+  "element.io": {
+    "confidence": 0.95,
+    "purpose": "messaging",
+    "trust_tier": "unknown"
+  },
+  "emirates.com": {
+    "confidence": 0.95,
+    "purpose": "airline",
+    "trust_tier": "unknown"
+  },
+  "enpass.io": {
+    "confidence": 0.95,
+    "purpose": "password_manager",
+    "trust_tier": "unknown"
+  },
+  "epicgames.com": {
+    "confidence": 0.95,
+    "purpose": "gaming",
+    "trust_tier": "unknown"
+  },
+  "epicurious.com": {
+    "confidence": 0.95,
+    "purpose": "recipe",
+    "trust_tier": "unknown"
+  },
+  "eset.com": {
+    "confidence": 0.95,
+    "purpose": "antivirus",
+    "trust_tier": "unknown"
+  },
+  "etrade.com": {
+    "confidence": 0.95,
+    "purpose": "finance_investing",
+    "trust_tier": "unknown"
+  },
+  "etsy.com": {
+    "confidence": 0.95,
+    "purpose": "ecommerce",
+    "trust_tier": "unknown"
+  },
+  "evernote.com": {
+    "confidence": 0.95,
+    "purpose": "productivity",
+    "trust_tier": "unknown"
+  },
+  "expedia.com": {
+    "confidence": 0.95,
+    "purpose": "travel_booking",
+    "trust_tier": "unknown"
+  },
+  "expressvpn.com": {
+    "confidence": 0.95,
+    "purpose": "vpn",
+    "trust_tier": "unknown"
+  },
+  "facebook.com": {
+    "confidence": 0.95,
+    "purpose": "social",
+    "trust_tier": "unknown"
+  },
+  "fastmail.com": {
+    "confidence": 0.95,
+    "purpose": "email",
+    "trust_tier": "unknown"
+  },
+  "fidelity.com": {
+    "confidence": 0.95,
+    "purpose": "finance_investing",
+    "trust_tier": "unknown"
+  },
+  "findlaw.com": {
+    "confidence": 0.95,
+    "purpose": "legal_services",
+    "trust_tier": "unknown"
+  },
+  "fitbit.com": {
+    "confidence": 0.95,
+    "purpose": "fitness",
+    "trust_tier": "unknown"
+  },
+  "flipkart.com": {
+    "confidence": 0.95,
+    "purpose": "ecommerce",
+    "trust_tier": "unknown"
+  },
+  "food.com": {
+    "confidence": 0.95,
+    "purpose": "recipe",
+    "trust_tier": "unknown"
+  },
+  "foodnetwork.com": {
+    "confidence": 0.95,
+    "purpose": "recipe",
+    "trust_tier": "unknown"
+  },
+  "foodpanda.com": {
+    "confidence": 0.95,
+    "purpose": "food_delivery",
+    "trust_tier": "unknown"
+  },
+  "fotor.com": {
+    "confidence": 0.95,
+    "purpose": "photo_editor",
+    "trust_tier": "unknown"
+  },
+  "foundit.in": {
+    "confidence": 0.95,
+    "purpose": "job_board",
+    "trust_tier": "unknown"
+  },
+  "france24.com": {
+    "confidence": 0.95,
+    "purpose": "news",
+    "trust_tier": "unknown"
+  },
+  "free-ebooks.net": {
+    "confidence": 0.95,
+    "purpose": "free_download",
+    "trust_tier": "unknown"
+  },
+  "freeconvert.com": {
+    "confidence": 0.95,
+    "purpose": "file_converter",
+    "trust_tier": "unknown"
+  },
+  "freedomscientific.com": {
+    "confidence": 0.95,
+    "purpose": "accessibility_tool",
+    "trust_tier": "unknown"
+  },
+  "freeletics.com": {
+    "confidence": 0.95,
+    "purpose": "fitness",
+    "trust_tier": "unknown"
+  },
+  "freshworks.com": {
+    "confidence": 0.95,
+    "purpose": "saas_b2b",
+    "trust_tier": "unknown"
+  },
+  "futurelearn.com": {
+    "confidence": 0.95,
+    "purpose": "education",
+    "trust_tier": "unknown"
+  },
+  "garmin.com": {
+    "confidence": 0.95,
+    "purpose": "fitness",
+    "trust_tier": "unknown"
+  },
+  "geico.com": {
+    "confidence": 0.95,
+    "purpose": "insurance",
+    "trust_tier": "unknown"
+  },
+  "getsharex.com": {
+    "confidence": 0.95,
+    "purpose": "screen_recorder",
+    "trust_tier": "unknown"
+  },
+  "github.com": {
+    "confidence": 0.95,
+    "purpose": "developer_tool",
+    "trust_tier": "unknown"
+  },
+  "gitlab.com": {
+    "confidence": 0.95,
+    "purpose": "developer_tool",
+    "trust_tier": "unknown"
+  },
+  "givewell.org": {
+    "confidence": 0.95,
+    "purpose": "charity",
+    "trust_tier": "unknown"
+  },
+  "glassdoor.com": {
+    "confidence": 0.95,
+    "purpose": "job_board",
+    "trust_tier": "unknown"
+  },
+  "gmail.com": {
+    "confidence": 0.95,
+    "purpose": "email",
+    "trust_tier": "unknown"
+  },
+  "gmx.com": {
+    "confidence": 0.95,
+    "purpose": "email",
+    "trust_tier": "unknown"
+  },
+  "gog.com": {
+    "confidence": 0.95,
+    "purpose": "gaming",
+    "trust_tier": "unknown"
+  },
+  "gojek.com": {
+    "confidence": 0.95,
+    "purpose": "ride_hailing",
+    "trust_tier": "unknown"
+  },
+  "google.com": {
+    "confidence": 0.95,
+    "purpose": "search",
+    "trust_tier": "unknown"
+  },
+  "goto.com": {
+    "confidence": 0.95,
+    "purpose": "video_conference",
+    "trust_tier": "unknown"
+  },
+  "gov.sg": {
+    "confidence": 0.95,
+    "purpose": "government",
+    "trust_tier": "unknown"
+  },
+  "gov.uk": {
+    "confidence": 0.95,
+    "purpose": "government",
+    "trust_tier": "unknown"
+  },
+  "grab.com": {
+    "confidence": 0.95,
+    "purpose": "ride_hailing",
+    "trust_tier": "unknown"
+  },
+  "greenhouse.io": {
+    "confidence": 0.95,
+    "purpose": "recruitment",
+    "trust_tier": "unknown"
+  },
+  "grindr.com": {
+    "confidence": 0.95,
+    "purpose": "dating",
+    "trust_tier": "unknown"
+  },
+  "groww.in": {
+    "confidence": 0.95,
+    "purpose": "finance_investing",
+    "trust_tier": "unknown"
+  },
+  "grubhub.com": {
+    "confidence": 0.95,
+    "purpose": "food_delivery",
+    "trust_tier": "unknown"
+  },
+  "gutenberg.org": {
+    "confidence": 0.95,
+    "purpose": "free_download",
+    "trust_tier": "unknown"
+  },
+  "happn.com": {
+    "confidence": 0.95,
+    "purpose": "dating",
+    "trust_tier": "unknown"
+  },
+  "hdfcbank.com": {
+    "confidence": 0.95,
+    "purpose": "banking",
+    "trust_tier": "unknown"
+  },
+  "hdqwalls.com": {
+    "confidence": 0.95,
+    "purpose": "wallpaper_utility",
+    "trust_tier": "unknown"
+  },
+  "here.com": {
+    "confidence": 0.95,
+    "purpose": "maps_navigation",
+    "trust_tier": "unknown"
+  },
+  "hey.com": {
+    "confidence": 0.95,
+    "purpose": "email",
+    "trust_tier": "unknown"
+  },
+  "hide.me": {
+    "confidence": 0.95,
+    "purpose": "vpn",
+    "trust_tier": "unknown"
+  },
+  "hinge.co": {
+    "confidence": 0.95,
+    "purpose": "dating",
+    "trust_tier": "unknown"
+  },
+  "hopkinsmedicine.org": {
+    "confidence": 0.95,
+    "purpose": "healthcare_provider",
+    "trust_tier": "unknown"
+  },
+  "hotels.com": {
+    "confidence": 0.95,
+    "purpose": "travel_booking",
+    "trust_tier": "unknown"
+  },
+  "hsbc.com": {
+    "confidence": 0.95,
+    "purpose": "banking",
+    "trust_tier": "unknown"
+  },
+  "hubspot.com": {
+    "confidence": 0.95,
+    "purpose": "saas_b2b",
+    "trust_tier": "unknown"
+  },
+  "hulu.com": {
+    "confidence": 0.95,
+    "purpose": "video_streaming",
+    "trust_tier": "unknown"
+  },
+  "icedrive.net": {
+    "confidence": 0.95,
+    "purpose": "cloud_storage",
+    "trust_tier": "unknown"
+  },
+  "icicibank.com": {
+    "confidence": 0.95,
+    "purpose": "banking",
+    "trust_tier": "unknown"
+  },
+  "idealo.de": {
+    "confidence": 0.95,
+    "purpose": "shopping_comparison",
+    "trust_tier": "unknown"
+  },
+  "idrive.com": {
+    "confidence": 0.95,
+    "purpose": "backup",
+    "trust_tier": "unknown"
+  },
+  "ikea.com": {
+    "confidence": 0.95,
+    "purpose": "ecommerce",
+    "trust_tier": "unknown"
+  },
+  "iloveimg.com": {
+    "confidence": 0.95,
+    "purpose": "image_tool",
+    "trust_tier": "unknown"
+  },
+  "ilovepdf.com": {
+    "confidence": 0.95,
+    "purpose": "file_converter",
+    "trust_tier": "unknown"
+  },
+  "imagecompressor.com": {
+    "confidence": 0.95,
+    "purpose": "image_tool",
+    "trust_tier": "unknown"
+  },
+  "indeed.com": {
+    "confidence": 0.95,
+    "purpose": "job_board",
+    "trust_tier": "unknown"
+  },
+  "india.gov.in": {
+    "confidence": 0.95,
+    "purpose": "government",
+    "trust_tier": "unknown"
+  },
+  "indrive.com": {
+    "confidence": 0.95,
+    "purpose": "ride_hailing",
+    "trust_tier": "unknown"
+  },
+  "instagram.com": {
+    "confidence": 0.95,
+    "purpose": "social",
+    "trust_tier": "unknown"
+  },
+  "interactivebrokers.com": {
+    "confidence": 0.95,
+    "purpose": "finance_investing",
+    "trust_tier": "unknown"
+  },
+  "interfacelift.com": {
+    "confidence": 0.95,
+    "purpose": "wallpaper_utility",
+    "trust_tier": "unknown"
+  },
+  "internxt.com": {
+    "confidence": 0.95,
+    "purpose": "cloud_storage",
+    "trust_tier": "unknown"
+  },
+  "irs.gov": {
+    "confidence": 0.95,
+    "purpose": "government",
+    "trust_tier": "unknown"
+  },
+  "itch.io": {
+    "confidence": 0.95,
+    "purpose": "gaming",
+    "trust_tier": "unknown"
+  },
+  "ivpn.net": {
+    "confidence": 0.95,
+    "purpose": "vpn",
+    "trust_tier": "unknown"
+  },
+  "jitsi.org": {
+    "confidence": 0.95,
+    "purpose": "video_conference",
+    "trust_tier": "unknown"
+  },
+  "jpeg.io": {
+    "confidence": 0.95,
+    "purpose": "image_tool",
+    "trust_tier": "unknown"
+  },
+  "justeat.co.uk": {
+    "confidence": 0.95,
+    "purpose": "food_delivery",
+    "trust_tier": "unknown"
+  },
+  "justia.com": {
+    "confidence": 0.95,
+    "purpose": "legal_services",
+    "trust_tier": "unknown"
+  },
+  "kaspersky.com": {
+    "confidence": 0.95,
+    "purpose": "antivirus",
+    "trust_tier": "unknown"
+  },
+  "kayak.com": {
+    "confidence": 0.95,
+    "purpose": "travel_booking",
+    "trust_tier": "unknown"
+  },
+  "keepass.info": {
+    "confidence": 0.95,
+    "purpose": "password_manager",
+    "trust_tier": "unknown"
+  },
+  "keepassxc.org": {
+    "confidence": 0.95,
+    "purpose": "password_manager",
+    "trust_tier": "unknown"
+  },
+  "keepersecurity.com": {
+    "confidence": 0.95,
+    "purpose": "password_manager",
+    "trust_tier": "unknown"
+  },
+  "kelkoo.com": {
+    "confidence": 0.95,
+    "purpose": "shopping_comparison",
+    "trust_tier": "unknown"
+  },
+  "khanacademy.org": {
+    "confidence": 0.95,
+    "purpose": "education",
+    "trust_tier": "unknown"
+  },
+  "kiva.org": {
+    "confidence": 0.95,
+    "purpose": "charity",
+    "trust_tier": "unknown"
+  },
+  "komoot.com": {
+    "confidence": 0.95,
+    "purpose": "maps_navigation",
+    "trust_tier": "unknown"
+  },
+  "kopia.io": {
+    "confidence": 0.95,
+    "purpose": "backup",
+    "trust_tier": "unknown"
+  },
+  "kp.org": {
+    "confidence": 0.95,
+    "purpose": "healthcare_provider",
+    "trust_tier": "unknown"
+  },
+  "kraken.io": {
+    "confidence": 0.95,
+    "purpose": "image_tool",
+    "trust_tier": "unknown"
+  },
+  "lastpass.com": {
+    "confidence": 0.95,
+    "purpose": "password_manager",
+    "trust_tier": "unknown"
+  },
+  "lawdepot.com": {
+    "confidence": 0.95,
+    "purpose": "legal_services",
+    "trust_tier": "unknown"
+  },
+  "legalzoom.com": {
+    "confidence": 0.95,
+    "purpose": "legal_services",
+    "trust_tier": "unknown"
+  },
+  "lemonade.com": {
+    "confidence": 0.95,
+    "purpose": "insurance",
+    "trust_tier": "unknown"
+  },
+  "lever.co": {
+    "confidence": 0.95,
+    "purpose": "recruitment",
+    "trust_tier": "unknown"
+  },
+  "libertymutual.com": {
+    "confidence": 0.95,
+    "purpose": "insurance",
+    "trust_tier": "unknown"
+  },
+  "lloydsbank.com": {
+    "confidence": 0.95,
+    "purpose": "banking",
+    "trust_tier": "unknown"
+  },
+  "loom.com": {
+    "confidence": 0.95,
+    "purpose": "screen_recorder",
+    "trust_tier": "unknown"
+  },
+  "lufthansa.com": {
+    "confidence": 0.95,
+    "purpose": "airline",
+    "trust_tier": "unknown"
+  },
+  "lunapic.com": {
+    "confidence": 0.95,
+    "purpose": "photo_editor",
+    "trust_tier": "unknown"
+  },
+  "lyft.com": {
+    "confidence": 0.95,
+    "purpose": "ride_hailing",
+    "trust_tier": "unknown"
+  },
+  "mail.com": {
+    "confidence": 0.95,
+    "purpose": "email",
+    "trust_tier": "unknown"
+  },
+  "malwarebytes.com": {
+    "confidence": 0.95,
+    "purpose": "antivirus",
+    "trust_tier": "unknown"
+  },
+  "manybooks.net": {
+    "confidence": 0.95,
+    "purpose": "free_download",
+    "trust_tier": "unknown"
+  },
+  "mapquest.com": {
+    "confidence": 0.95,
+    "purpose": "maps_navigation",
+    "trust_tier": "unknown"
+  },
+  "maps.google.com": {
+    "confidence": 0.95,
+    "purpose": "maps_navigation",
+    "trust_tier": "unknown"
+  },
+  "massgeneral.org": {
+    "confidence": 0.95,
+    "purpose": "healthcare_provider",
+    "trust_tier": "unknown"
+  },
+  "mastodon.social": {
+    "confidence": 0.95,
+    "purpose": "social",
+    "trust_tier": "unknown"
+  },
+  "match.com": {
+    "confidence": 0.95,
+    "purpose": "dating",
+    "trust_tier": "unknown"
+  },
+  "max.com": {
+    "confidence": 0.95,
+    "purpose": "video_streaming",
+    "trust_tier": "unknown"
+  },
+  "mayoclinic.org": {
+    "confidence": 0.95,
+    "purpose": "healthcare_provider",
+    "trust_tier": "unknown"
+  },
+  "meet.google.com": {
+    "confidence": 0.95,
+    "purpose": "video_conference",
+    "trust_tier": "unknown"
+  },
+  "mega.io": {
+    "confidence": 0.95,
+    "purpose": "cloud_storage",
+    "trust_tier": "unknown"
+  },
+  "messenger.com": {
+    "confidence": 0.95,
+    "purpose": "messaging",
+    "trust_tier": "unknown"
+  },
+  "metoffice.gov.uk": {
+    "confidence": 0.95,
+    "purpose": "weather",
+    "trust_tier": "unknown"
+  },
+  "minecraft.net": {
+    "confidence": 0.95,
+    "purpose": "gaming",
+    "trust_tier": "unknown"
+  },
+  "mojeek.com": {
+    "confidence": 0.95,
+    "purpose": "search",
+    "trust_tier": "unknown"
+  },
+  "monday.com": {
+    "confidence": 0.95,
+    "purpose": "saas_b2b",
+    "trust_tier": "unknown"
+  },
+  "monster.com": {
+    "confidence": 0.95,
+    "purpose": "job_board",
+    "trust_tier": "unknown"
+  },
+  "mountsinai.org": {
+    "confidence": 0.95,
+    "purpose": "healthcare_provider",
+    "trust_tier": "unknown"
+  },
+  "mullvad.net": {
+    "confidence": 0.95,
+    "purpose": "vpn",
+    "trust_tier": "unknown"
+  },
+  "music.apple.com": {
+    "confidence": 0.95,
+    "purpose": "music_streaming",
+    "trust_tier": "unknown"
+  },
+  "myfitnesspal.com": {
+    "confidence": 0.95,
+    "purpose": "fitness",
+    "trust_tier": "unknown"
+  },
+  "myntra.com": {
+    "confidence": 0.95,
+    "purpose": "ecommerce",
+    "trust_tier": "unknown"
+  },
+  "natwest.com": {
+    "confidence": 0.95,
+    "purpose": "banking",
+    "trust_tier": "unknown"
+  },
+  "naukri.com": {
+    "confidence": 0.95,
+    "purpose": "job_board",
+    "trust_tier": "unknown"
+  },
+  "netflix.com": {
+    "confidence": 0.95,
+    "purpose": "video_streaming",
+    "trust_tier": "unknown"
+  },
+  "netlify.com": {
+    "confidence": 0.95,
+    "purpose": "developer_tool",
+    "trust_tier": "unknown"
+  },
+  "nhs.uk": {
+    "confidence": 0.95,
+    "purpose": "healthcare_provider",
+    "trust_tier": "unknown"
+  },
+  "nike.com": {
+    "confidence": 0.95,
+    "purpose": "fitness",
+    "trust_tier": "unknown"
+  },
+  "nolo.com": {
+    "confidence": 0.95,
+    "purpose": "legal_services",
+    "trust_tier": "unknown"
+  },
+  "nordpass.com": {
+    "confidence": 0.95,
+    "purpose": "password_manager",
+    "trust_tier": "unknown"
+  },
+  "nordvpn.com": {
+    "confidence": 0.95,
+    "purpose": "vpn",
+    "trust_tier": "unknown"
+  },
+  "notion.so": {
+    "confidence": 0.95,
+    "purpose": "saas_b2b",
+    "trust_tier": "unknown"
+  },
+  "npmjs.com": {
+    "confidence": 0.95,
+    "purpose": "developer_tool",
+    "trust_tier": "unknown"
+  },
+  "npr.org": {
+    "confidence": 0.95,
+    "purpose": "news",
+    "trust_tier": "unknown"
+  },
+  "nvaccess.org": {
+    "confidence": 0.95,
+    "purpose": "accessibility_tool",
+    "trust_tier": "unknown"
+  },
+  "nytimes.com": {
+    "confidence": 0.95,
+    "purpose": "news",
+    "trust_tier": "unknown"
+  },
+  "obsidian.md": {
+    "confidence": 0.95,
+    "purpose": "productivity",
+    "trust_tier": "unknown"
+  },
+  "obsproject.com": {
+    "confidence": 0.95,
+    "purpose": "screen_recorder",
+    "trust_tier": "unknown"
+  },
+  "okcupid.com": {
+    "confidence": 0.95,
+    "purpose": "dating",
+    "trust_tier": "unknown"
+  },
+  "olacabs.com": {
+    "confidence": 0.95,
+    "purpose": "ride_hailing",
+    "trust_tier": "unknown"
+  },
+  "onedrive.live.com": {
+    "confidence": 0.95,
+    "purpose": "cloud_storage",
+    "trust_tier": "unknown"
+  },
+  "online-convert.com": {
+    "confidence": 0.95,
+    "purpose": "file_converter",
+    "trust_tier": "unknown"
+  },
+  "openlibrary.org": {
+    "confidence": 0.95,
+    "purpose": "free_download",
+    "trust_tier": "unknown"
+  },
+  "openstreetmap.org": {
+    "confidence": 0.95,
+    "purpose": "maps_navigation",
+    "trust_tier": "unknown"
+  },
+  "outlook.com": {
+    "confidence": 0.95,
+    "purpose": "email",
+    "trust_tier": "unknown"
+  },
+  "oxfam.org": {
+    "confidence": 0.95,
+    "purpose": "charity",
+    "trust_tier": "unknown"
+  },
+  "pandora.com": {
+    "confidence": 0.95,
+    "purpose": "music_streaming",
+    "trust_tier": "unknown"
+  },
+  "pcloud.com": {
+    "confidence": 0.95,
+    "purpose": "cloud_storage",
+    "trust_tier": "unknown"
+  },
+  "pdf2go.com": {
+    "confidence": 0.95,
+    "purpose": "file_converter",
+    "trust_tier": "unknown"
+  },
+  "pdfcandy.com": {
+    "confidence": 0.95,
+    "purpose": "file_converter",
+    "trust_tier": "unknown"
+  },
+  "peacocktv.com": {
+    "confidence": 0.95,
+    "purpose": "video_streaming",
+    "trust_tier": "unknown"
+  },
+  "peloton.com": {
+    "confidence": 0.95,
+    "purpose": "fitness",
+    "trust_tier": "unknown"
+  },
+  "pennmedicine.org": {
+    "confidence": 0.95,
+    "purpose": "healthcare_provider",
+    "trust_tier": "unknown"
+  },
+  "personio.com": {
+    "confidence": 0.95,
+    "purpose": "recruitment",
+    "trust_tier": "unknown"
+  },
+  "pexels.com": {
+    "confidence": 0.95,
+    "purpose": "wallpaper_utility",
+    "trust_tier": "unknown"
+  },
+  "photopea.com": {
+    "confidence": 0.95,
+    "purpose": "photo_editor",
+    "trust_tier": "unknown"
+  },
+  "picmonkey.com": {
+    "confidence": 0.95,
+    "purpose": "photo_editor",
+    "trust_tier": "unknown"
+  },
+  "picresize.com": {
+    "confidence": 0.95,
+    "purpose": "image_tool",
+    "trust_tier": "unknown"
+  },
+  "pinterest.com": {
+    "confidence": 0.95,
+    "purpose": "social",
+    "trust_tier": "unknown"
+  },
+  "pixlr.com": {
+    "confidence": 0.95,
+    "purpose": "photo_editor",
+    "trust_tier": "unknown"
+  },
+  "playstation.com": {
+    "confidence": 0.95,
+    "purpose": "gaming",
+    "trust_tier": "unknown"
+  },
+  "plentyoffish.com": {
+    "confidence": 0.95,
+    "purpose": "dating",
+    "trust_tier": "unknown"
+  },
+  "polarr.com": {
+    "confidence": 0.95,
+    "purpose": "photo_editor",
+    "trust_tier": "unknown"
+  },
+  "pricerunner.com": {
+    "confidence": 0.95,
+    "purpose": "shopping_comparison",
+    "trust_tier": "unknown"
+  },
+  "pricespy.co.uk": {
+    "confidence": 0.95,
+    "purpose": "shopping_comparison",
+    "trust_tier": "unknown"
+  },
+  "primevideo.com": {
+    "confidence": 0.95,
+    "purpose": "video_streaming",
+    "trust_tier": "unknown"
+  },
+  "privateinternetaccess.com": {
+    "confidence": 0.95,
+    "purpose": "vpn",
+    "trust_tier": "unknown"
+  },
+  "progressive.com": {
+    "confidence": 0.95,
+    "purpose": "insurance",
+    "trust_tier": "unknown"
+  },
+  "proton.me": {
+    "confidence": 0.95,
+    "purpose": "email",
+    "trust_tier": "unknown"
+  },
+  "protonvpn.com": {
+    "confidence": 0.95,
+    "purpose": "vpn",
+    "trust_tier": "unknown"
+  },
+  "pypi.org": {
+    "confidence": 0.95,
+    "purpose": "developer_tool",
+    "trust_tier": "unknown"
+  },
+  "qatarairways.com": {
+    "confidence": 0.95,
+    "purpose": "airline",
+    "trust_tier": "unknown"
+  },
+  "qobuz.com": {
+    "confidence": 0.95,
+    "purpose": "music_streaming",
+    "trust_tier": "unknown"
+  },
+  "qwant.com": {
+    "confidence": 0.95,
+    "purpose": "search",
+    "trust_tier": "unknown"
+  },
+  "redcross.org": {
+    "confidence": 0.95,
+    "purpose": "charity",
+    "trust_tier": "unknown"
+  },
+  "reddit.com": {
+    "confidence": 0.95,
+    "purpose": "social",
+    "trust_tier": "unknown"
+  },
+  "reed.co.uk": {
+    "confidence": 0.95,
+    "purpose": "job_board",
+    "trust_tier": "unknown"
+  },
+  "remove.bg": {
+    "confidence": 0.95,
+    "purpose": "image_tool",
+    "trust_tier": "unknown"
+  },
+  "restic.net": {
+    "confidence": 0.95,
+    "purpose": "backup",
+    "trust_tier": "unknown"
+  },
+  "reuters.com": {
+    "confidence": 0.95,
+    "purpose": "news",
+    "trust_tier": "unknown"
+  },
+  "ringcentral.com": {
+    "confidence": 0.95,
+    "purpose": "video_conference",
+    "trust_tier": "unknown"
+  },
+  "robinhood.com": {
+    "confidence": 0.95,
+    "purpose": "finance_investing",
+    "trust_tier": "unknown"
+  },
+  "roblox.com": {
+    "confidence": 0.95,
+    "purpose": "gaming",
+    "trust_tier": "unknown"
+  },
+  "roboform.com": {
+    "confidence": 0.95,
+    "purpose": "password_manager",
+    "trust_tier": "unknown"
+  },
+  "rocketlawyer.com": {
+    "confidence": 0.95,
+    "purpose": "legal_services",
+    "trust_tier": "unknown"
+  },
+  "runkeeper.com": {
+    "confidence": 0.95,
+    "purpose": "fitness",
+    "trust_tier": "unknown"
+  },
+  "salesforce.com": {
+    "confidence": 0.95,
+    "purpose": "saas_b2b",
+    "trust_tier": "unknown"
+  },
+  "schwab.com": {
+    "confidence": 0.95,
+    "purpose": "finance_investing",
+    "trust_tier": "unknown"
+  },
+  "screen.studio": {
+    "confidence": 0.95,
+    "purpose": "screen_recorder",
+    "trust_tier": "unknown"
+  },
+  "screencast-o-matic.com": {
+    "confidence": 0.95,
+    "purpose": "screen_recorder",
+    "trust_tier": "unknown"
+  },
+  "screencastify.com": {
+    "confidence": 0.95,
+    "purpose": "screen_recorder",
+    "trust_tier": "unknown"
+  },
+  "screenpal.com": {
+    "confidence": 0.95,
+    "purpose": "screen_recorder",
+    "trust_tier": "unknown"
+  },
+  "seamless.com": {
+    "confidence": 0.95,
+    "purpose": "food_delivery",
+    "trust_tier": "unknown"
+  },
+  "seek.com.au": {
+    "confidence": 0.95,
+    "purpose": "job_board",
+    "trust_tier": "unknown"
+  },
+  "seriouseats.com": {
+    "confidence": 0.95,
+    "purpose": "recipe",
+    "trust_tier": "unknown"
+  },
+  "service-public.fr": {
+    "confidence": 0.95,
+    "purpose": "government",
+    "trust_tier": "unknown"
+  },
+  "shopping.google.com": {
+    "confidence": 0.95,
+    "purpose": "shopping_comparison",
+    "trust_tier": "unknown"
+  },
+  "signal.org": {
+    "confidence": 0.95,
+    "purpose": "messaging",
+    "trust_tier": "unknown"
+  },
+  "simplyrecipes.com": {
+    "confidence": 0.95,
+    "purpose": "recipe",
+    "trust_tier": "unknown"
+  },
+  "singaporeair.com": {
+    "confidence": 0.95,
+    "purpose": "airline",
+    "trust_tier": "unknown"
+  },
+  "skillshare.com": {
+    "confidence": 0.95,
+    "purpose": "education",
+    "trust_tier": "unknown"
+  },
+  "skyscanner.com": {
+    "confidence": 0.95,
+    "purpose": "travel_booking",
+    "trust_tier": "unknown"
+  },
+  "slack.com": {
+    "confidence": 0.95,
+    "purpose": "messaging",
+    "trust_tier": "unknown"
+  },
+  "smallpdf.com": {
+    "confidence": 0.95,
+    "purpose": "file_converter",
+    "trust_tier": "unknown"
+  },
+  "smartrecruiters.com": {
+    "confidence": 0.95,
+    "purpose": "recruitment",
+    "trust_tier": "unknown"
+  },
+  "snapchat.com": {
+    "confidence": 0.95,
+    "purpose": "social",
+    "trust_tier": "unknown"
+  },
+  "sodapdf.com": {
+    "confidence": 0.95,
+    "purpose": "file_converter",
+    "trust_tier": "unknown"
+  },
+  "sophos.com": {
+    "confidence": 0.95,
+    "purpose": "antivirus",
+    "trust_tier": "unknown"
+  },
+  "soundcloud.com": {
+    "confidence": 0.95,
+    "purpose": "music_streaming",
+    "trust_tier": "unknown"
+  },
+  "southwest.com": {
+    "confidence": 0.95,
+    "purpose": "airline",
+    "trust_tier": "unknown"
+  },
+  "spotify.com": {
+    "confidence": 0.95,
+    "purpose": "music_streaming",
+    "trust_tier": "unknown"
+  },
+  "squoosh.app": {
+    "confidence": 0.95,
+    "purpose": "image_tool",
+    "trust_tier": "unknown"
+  },
+  "ssa.gov": {
+    "confidence": 0.95,
+    "purpose": "government",
+    "trust_tier": "unknown"
+  },
+  "stackoverflow.com": {
+    "confidence": 0.95,
+    "purpose": "developer_tool",
+    "trust_tier": "unknown"
+  },
+  "standardebooks.org": {
+    "confidence": 0.95,
+    "purpose": "free_download",
+    "trust_tier": "unknown"
+  },
+  "stanfordhealthcare.org": {
+    "confidence": 0.95,
+    "purpose": "healthcare_provider",
+    "trust_tier": "unknown"
+  },
+  "startpage.com": {
+    "confidence": 0.95,
+    "purpose": "search",
+    "trust_tier": "unknown"
+  },
+  "statefarm.com": {
+    "confidence": 0.95,
+    "purpose": "insurance",
+    "trust_tier": "unknown"
+  },
+  "steampowered.com": {
+    "confidence": 0.95,
+    "purpose": "gaming",
+    "trust_tier": "unknown"
+  },
+  "strava.com": {
+    "confidence": 0.95,
+    "purpose": "fitness",
+    "trust_tier": "unknown"
+  },
+  "surfshark.com": {
+    "confidence": 0.95,
+    "purpose": "vpn",
+    "trust_tier": "unknown"
+  },
+  "swiggy.com": {
+    "confidence": 0.95,
+    "purpose": "food_delivery",
+    "trust_tier": "unknown"
+  },
+  "sync.com": {
+    "confidence": 0.95,
+    "purpose": "cloud_storage",
+    "trust_tier": "unknown"
+  },
+  "takeaway.com": {
+    "confidence": 0.95,
+    "purpose": "food_delivery",
+    "trust_tier": "unknown"
+  },
+  "target.com": {
+    "confidence": 0.95,
+    "purpose": "ecommerce",
+    "trust_tier": "unknown"
+  },
+  "tasteofhome.com": {
+    "confidence": 0.95,
+    "purpose": "recipe",
+    "trust_tier": "unknown"
+  },
+  "teamup.com": {
+    "confidence": 0.95,
+    "purpose": "calendar",
+    "trust_tier": "unknown"
+  },
+  "telegram.org": {
+    "confidence": 0.95,
+    "purpose": "messaging",
+    "trust_tier": "unknown"
+  },
+  "theguardian.com": {
+    "confidence": 0.95,
+    "purpose": "news",
+    "trust_tier": "unknown"
+  },
+  "threads.net": {
+    "confidence": 0.95,
+    "purpose": "social",
+    "trust_tier": "unknown"
+  },
+  "threema.ch": {
+    "confidence": 0.95,
+    "purpose": "messaging",
+    "trust_tier": "unknown"
+  },
+  "ticktick.com": {
+    "confidence": 0.95,
+    "purpose": "productivity",
+    "trust_tier": "unknown"
+  },
+  "tidal.com": {
+    "confidence": 0.95,
+    "purpose": "music_streaming",
+    "trust_tier": "unknown"
+  },
+  "tiktok.com": {
+    "confidence": 0.95,
+    "purpose": "social",
+    "trust_tier": "unknown"
+  },
+  "timeanddate.com": {
+    "confidence": 0.95,
+    "purpose": "calendar",
+    "trust_tier": "unknown"
+  },
+  "tinder.com": {
+    "confidence": 0.95,
+    "purpose": "dating",
+    "trust_tier": "unknown"
+  },
+  "tinyjpg.com": {
+    "confidence": 0.95,
+    "purpose": "image_tool",
+    "trust_tier": "unknown"
+  },
+  "tinypng.com": {
+    "confidence": 0.95,
+    "purpose": "image_tool",
+    "trust_tier": "unknown"
+  },
+  "todoist.com": {
+    "confidence": 0.95,
+    "purpose": "productivity",
+    "trust_tier": "unknown"
+  },
+  "tomtom.com": {
+    "confidence": 0.95,
+    "purpose": "maps_navigation",
+    "trust_tier": "unknown"
+  },
+  "totaljobs.com": {
+    "confidence": 0.95,
+    "purpose": "job_board",
+    "trust_tier": "unknown"
+  },
+  "trading212.com": {
+    "confidence": 0.95,
+    "purpose": "finance_investing",
+    "trust_tier": "unknown"
+  },
+  "trainingpeaks.com": {
+    "confidence": 0.95,
+    "purpose": "fitness",
+    "trust_tier": "unknown"
+  },
+  "travel.state.gov": {
+    "confidence": 0.95,
+    "purpose": "government",
+    "trust_tier": "unknown"
+  },
+  "travelocity.com": {
+    "confidence": 0.95,
+    "purpose": "travel_booking",
+    "trust_tier": "unknown"
+  },
+  "trello.com": {
+    "confidence": 0.95,
+    "purpose": "productivity",
+    "trust_tier": "unknown"
+  },
+  "tresorit.com": {
+    "confidence": 0.95,
+    "purpose": "cloud_storage",
+    "trust_tier": "unknown"
+  },
+  "tripadvisor.com": {
+    "confidence": 0.95,
+    "purpose": "travel_booking",
+    "trust_tier": "unknown"
+  },
+  "trivago.com": {
+    "confidence": 0.95,
+    "purpose": "travel_booking",
+    "trust_tier": "unknown"
+  },
+  "tubitv.com": {
+    "confidence": 0.95,
+    "purpose": "video_streaming",
+    "trust_tier": "unknown"
+  },
+  "tumblr.com": {
+    "confidence": 0.95,
+    "purpose": "social",
+    "trust_tier": "unknown"
+  },
+  "tunnelbear.com": {
+    "confidence": 0.95,
+    "purpose": "vpn",
+    "trust_tier": "unknown"
+  },
+  "tuta.com": {
+    "confidence": 0.95,
+    "purpose": "email",
+    "trust_tier": "unknown"
+  },
+  "tutanota.com": {
+    "confidence": 0.95,
+    "purpose": "email",
+    "trust_tier": "unknown"
+  },
+  "uber.com": {
+    "confidence": 0.95,
+    "purpose": "ride_hailing",
+    "trust_tier": "unknown"
+  },
+  "ubereats.com": {
+    "confidence": 0.95,
+    "purpose": "food_delivery",
+    "trust_tier": "unknown"
+  },
+  "ubisoft.com": {
+    "confidence": 0.95,
+    "purpose": "gaming",
+    "trust_tier": "unknown"
+  },
+  "uclahealth.org": {
+    "confidence": 0.95,
+    "purpose": "healthcare_provider",
+    "trust_tier": "unknown"
+  },
+  "udacity.com": {
+    "confidence": 0.95,
+    "purpose": "education",
+    "trust_tier": "unknown"
+  },
+  "udemy.com": {
+    "confidence": 0.95,
+    "purpose": "education",
+    "trust_tier": "unknown"
+  },
+  "unicef.org": {
+    "confidence": 0.95,
+    "purpose": "charity",
+    "trust_tier": "unknown"
+  },
+  "united.com": {
+    "confidence": 0.95,
+    "purpose": "airline",
+    "trust_tier": "unknown"
+  },
+  "unsplash.com": {
+    "confidence": 0.95,
+    "purpose": "wallpaper_utility",
+    "trust_tier": "unknown"
+  },
+  "usa.gov": {
+    "confidence": 0.95,
+    "purpose": "government",
+    "trust_tier": "unknown"
+  },
+  "usaa.com": {
+    "confidence": 0.95,
+    "purpose": "insurance",
+    "trust_tier": "unknown"
+  },
+  "usbank.com": {
+    "confidence": 0.95,
+    "purpose": "banking",
+    "trust_tier": "unknown"
+  },
+  "uscis.gov": {
+    "confidence": 0.95,
+    "purpose": "government",
+    "trust_tier": "unknown"
+  },
+  "vanguard.com": {
+    "confidence": 0.95,
+    "purpose": "finance_investing",
+    "trust_tier": "unknown"
+  },
+  "vercel.com": {
+    "confidence": 0.95,
+    "purpose": "developer_tool",
+    "trust_tier": "unknown"
+  },
+  "viber.com": {
+    "confidence": 0.95,
+    "purpose": "messaging",
+    "trust_tier": "unknown"
+  },
+  "vimeo.com": {
+    "confidence": 0.95,
+    "purpose": "video_streaming",
+    "trust_tier": "unknown"
+  },
+  "wallhaven.cc": {
+    "confidence": 0.95,
+    "purpose": "wallpaper_utility",
+    "trust_tier": "unknown"
+  },
+  "wallpaperengine.io": {
+    "confidence": 0.95,
+    "purpose": "wallpaper_utility",
+    "trust_tier": "unknown"
+  },
+  "wallpaperscraft.com": {
+    "confidence": 0.95,
+    "purpose": "wallpaper_utility",
+    "trust_tier": "unknown"
+  },
+  "walmart.com": {
+    "confidence": 0.95,
+    "purpose": "ecommerce",
+    "trust_tier": "unknown"
+  },
+  "washingtonpost.com": {
+    "confidence": 0.95,
+    "purpose": "news",
+    "trust_tier": "unknown"
+  },
+  "wayfair.com": {
+    "confidence": 0.95,
+    "purpose": "ecommerce",
+    "trust_tier": "unknown"
+  },
+  "waze.com": {
+    "confidence": 0.95,
+    "purpose": "maps_navigation",
+    "trust_tier": "unknown"
+  },
+  "weather.com": {
+    "confidence": 0.95,
+    "purpose": "weather",
+    "trust_tier": "unknown"
+  },
+  "weather.gov": {
+    "confidence": 0.95,
+    "purpose": "weather",
+    "trust_tier": "unknown"
+  },
+  "webex.com": {
+    "confidence": 0.95,
+    "purpose": "video_conference",
+    "trust_tier": "unknown"
+  },
+  "wellsfargo.com": {
+    "confidence": 0.95,
+    "purpose": "banking",
+    "trust_tier": "unknown"
+  },
+  "whatsapp.com": {
+    "confidence": 0.95,
+    "purpose": "messaging",
+    "trust_tier": "unknown"
+  },
+  "whereby.com": {
+    "confidence": 0.95,
+    "purpose": "video_conference",
+    "trust_tier": "unknown"
+  },
+  "windscribe.com": {
+    "confidence": 0.95,
+    "purpose": "vpn",
+    "trust_tier": "unknown"
+  },
+  "windy.com": {
+    "confidence": 0.95,
+    "purpose": "weather",
+    "trust_tier": "unknown"
+  },
+  "wire.com": {
+    "confidence": 0.95,
+    "purpose": "messaging",
+    "trust_tier": "unknown"
+  },
+  "workable.com": {
+    "confidence": 0.95,
+    "purpose": "recruitment",
+    "trust_tier": "unknown"
+  },
+  "workday.com": {
+    "confidence": 0.95,
+    "purpose": "recruitment",
+    "trust_tier": "unknown"
+  },
+  "workflowy.com": {
+    "confidence": 0.95,
+    "purpose": "productivity",
+    "trust_tier": "unknown"
+  },
+  "wunderground.com": {
+    "confidence": 0.95,
+    "purpose": "weather",
+    "trust_tier": "unknown"
+  },
+  "x.com": {
+    "confidence": 0.95,
+    "purpose": "social",
+    "trust_tier": "unknown"
+  },
+  "youtube.com": {
+    "confidence": 0.95,
+    "purpose": "video_streaming",
+    "trust_tier": "unknown"
+  },
+  "yr.no": {
+    "confidence": 0.95,
+    "purpose": "weather",
+    "trust_tier": "unknown"
+  },
+  "zamzar.com": {
+    "confidence": 0.95,
+    "purpose": "file_converter",
+    "trust_tier": "unknown"
+  },
+  "zendesk.com": {
+    "confidence": 0.95,
+    "purpose": "saas_b2b",
+    "trust_tier": "unknown"
+  },
+  "zerodha.com": {
+    "confidence": 0.95,
+    "purpose": "finance_investing",
+    "trust_tier": "unknown"
+  },
+  "ziprecruiter.com": {
+    "confidence": 0.95,
+    "purpose": "job_board",
+    "trust_tier": "unknown"
+  },
+  "zoho.com": {
+    "confidence": 0.95,
+    "purpose": "email",
+    "trust_tier": "unknown"
+  },
+  "zomato.com": {
+    "confidence": 0.95,
+    "purpose": "food_delivery",
+    "trust_tier": "unknown"
+  },
+  "zoom.us": {
+    "confidence": 0.95,
+    "purpose": "video_conference",
+    "trust_tier": "unknown"
+  },
+  "zoomtext.com": {
+    "confidence": 0.95,
+    "purpose": "accessibility_tool",
+    "trust_tier": "unknown"
+  }
+}

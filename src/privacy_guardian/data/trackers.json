@@ -1,0 +1,8 @@
+{
+  "source": "DuckDuckGo Tracker Radar",
+  "source_url": "https://github.com/duckduckgo/tracker-radar/tree/main/domains/US",
+  "license": "CC-BY-NC-SA-4.0",
+  "copyright": "Copyright 2020 Duck Duck Go, Inc.",
+  "description": "Small domain-only seed derived from the publicly documented Tracker Radar domain catalogue. Runtime never refreshes this automatically. Domain presence is a signal, not proof of tracking on every request.",
+  "domains": ["doubleclick.net", "google-analytics.com", "googlesyndication.com", "googletagmanager.com", "googleadservices.com", "facebook.net", "connect.facebook.net", "adsrvr.org", "adnxs.com", "criteo.com", "criteo.net", "taboola.com", "outbrain.com", "scorecardresearch.com", "quantserve.com", "demdex.net", "omtrdc.net", "2mdn.net", "rubiconproject.com", "pubmatic.com", "openx.net", "casalemedia.com", "advertising.com", "rlcdn.com", "bluekai.com", "mathtag.com", "smartadserver.com", "moatads.com", "hotjar.com", "clarity.ms", "segment.io", "mixpanel.com"]
+}

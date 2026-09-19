@@ -1,0 +1,13 @@
+{
+ "onetrust":{"selectors":["#onetrust-banner-sdk"],"reject":["#onetrust-reject-all-handler"],"manage":["#onetrust-pc-btn-handler"]},
+ "cookiebot":{"selectors":["#CybotCookiebotDialog"],"reject":["#CybotCookiebotDialogBodyButtonDecline"],"manage":["#CybotCookiebotDialogBodyLevelButtonCustomize"]},
+ "quantcast":{"selectors":[".qc-cmp2-container"],"reject":["button[mode='secondary']"],"manage":[".qc-cmp2-summary-buttons button:first-child"]},
+ "trustarc":{"selectors":["#truste-consent-track",".truste_overlay"],"reject":["#truste-consent-required"],"manage":["#truste-consent-button"]},
+ "didomi":{"selectors":["#didomi-host"],"reject":["#didomi-notice-disagree-button"],"manage":["#didomi-notice-learn-more-button"]},
+ "sourcepoint":{"selectors":["[id^='sp_message_container']"],"reject":["[title='Reject All']"],"manage":["[title='Manage preferences']"]},
+ "usercentrics":{"selectors":["#usercentrics-root"],"reject":["[data-testid='uc-deny-all-button']"],"manage":["[data-testid='uc-more-button']"]},
+ "osano":{"selectors":[".osano-cm-window"],"reject":[".osano-cm-denyAll"],"manage":[".osano-cm-manage"]},
+ "klaro":{"selectors":[".klaro"],"reject":[".cm-btn-decline"],"manage":[".cm-btn-info"]},
+ "complianz":{"selectors":[".cmplz-cookiebanner"],"reject":[".cmplz-deny"],"manage":[".cmplz-view-preferences"]},
+ "cookieyes":{"selectors":[".cky-consent-container"],"reject":[".cky-btn-reject"],"manage":[".cky-btn-customize"]}
+}
