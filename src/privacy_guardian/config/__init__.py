@@ -6,7 +6,7 @@ import tomllib
 from pathlib import Path
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,6 +22,7 @@ def data_directory() -> Path:
 
 
 class LLMSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid", validate_assignment=True)
     enabled: bool = False
     model: str = "gpt-6-astra"
     policy_refinement: bool = True
@@ -45,9 +46,21 @@ class Settings(BaseSettings):
     reject_optional_cookies: bool = True
     llm: LLMSettings = Field(default_factory=LLMSettings)
     allowed_extension_ids: list[str] = Field(
-        default_factory=lambda: ["privacy-guardian@privacyguardian.local", "bfdjphkbgihhbonhnmjbbfhckdddonob"]
+        default_factory=lambda: [
+            "privacy-guardian@privacyguardian.local",
+            "bfdjphkbgihhbonhnmjbbfhckdddonob",
+        ]
     )
     clipboard_allowlist: list[str] = Field(default_factory=list)
+
+    @field_validator("hotkey")
+    @classmethod
+    def valid_hotkey(cls, value: str) -> str:
+        import re
+
+        if not re.fullmatch(r"(?:(?:Ctrl|Control|Cmd|Alt|Shift|Win)\+)+[A-Za-z0-9]", value, re.I):
+            raise ValueError("Use modifiers plus one letter or digit, such as Ctrl+Shift+P")
+        return value
 
     @classmethod
     def load(cls, path: Path | None = None) -> Settings:

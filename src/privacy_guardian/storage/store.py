@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from privacy_guardian.core.events import Decision, PrivacyEvent, UserResponse
-from privacy_guardian.util.privacy import safe_origin, sanitize
+from privacy_guardian.util.privacy import public_identity, safe_origin, sanitize
 
 
 class Store:
@@ -173,7 +173,7 @@ class Store:
                     "site_profiles": "INSERT OR REPLACE INTO site_profiles VALUES (?,?,?)",
                     "app_profiles": "INSERT OR REPLACE INTO app_profiles VALUES (?,?,?)",
                 }[table],
-                (safe_origin(key), datetime.now(UTC).isoformat(), self._json(profile)),
+                (public_identity(key), datetime.now(UTC).isoformat(), self._json(profile)),
             )
 
     def get_profile(self, kind: str, key: str) -> dict[str, Any] | None:
@@ -184,7 +184,7 @@ class Store:
                     "site_profiles": "SELECT profile_json FROM site_profiles WHERE key=?",
                     "app_profiles": "SELECT profile_json FROM app_profiles WHERE key=?",
                 }[table],
-                (safe_origin(key),),
+                (public_identity(key),),
             ).fetchone()
         return json.loads(row[0]) if row else None
 
@@ -239,7 +239,18 @@ class Store:
     def diagnostics(self) -> dict[str, int]:
         with self._lock:
             return {
-                table: self.connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                table: self.connection.execute(
+                    {
+                        "events": "SELECT COUNT(*) FROM events",
+                        "decisions": "SELECT COUNT(*) FROM decisions",
+                        "user_responses": "SELECT COUNT(*) FROM user_responses",
+                        "site_profiles": "SELECT COUNT(*) FROM site_profiles",
+                        "app_profiles": "SELECT COUNT(*) FROM app_profiles",
+                        "preferences": "SELECT COUNT(*) FROM preferences",
+                        "learned_rules": "SELECT COUNT(*) FROM learned_rules",
+                        "document_cache": "SELECT COUNT(*) FROM document_cache",
+                    }[table]
+                ).fetchone()[0]
                 for table in (
                     "events",
                     "decisions",

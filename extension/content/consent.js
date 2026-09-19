@@ -23,7 +23,7 @@
   };
   async function analyze(){try{const value=await snapshot();if(!value)return;const fingerprint=JSON.stringify(value);if(last===fingerprint)return;last=fingerprint;const result=await PG.request('context',{consent:{snapshot:value}});if(result.consent?.decision)PG.showDecision(result.consent.decision,async action=>{if(action.action==='reject_optional')await PG.rejectConsent();});}catch(_){}}
   function schedule(){clearTimeout(timer);timer=setTimeout(analyze,150);}
-  PG.collectors.push(async()=>{const value=await snapshot();return value?{consent:{snapshot:value}}:{};});
+  PG.collectors.push(async()=>{const value=await snapshot();return {consent:{snapshot:value||{text:"",cmp:"none",buttons:[],toggles:[],fixed_or_sticky:false}}};});
   const start=()=>{new MutationObserver(records=>{if(records.some(record=>!record.target.closest?.('.pg-panel')))schedule();}).observe(document.documentElement,{childList:true,subtree:true});schedule();};
   if(document.documentElement)start();else document.addEventListener('DOMContentLoaded',start,{once:true});
 })();

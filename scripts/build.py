@@ -12,6 +12,15 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def bundle_ocr() -> None:
+    if sys.platform == "darwin":
+        compatible = ROOT / "build/tesseract13"
+        if not (compatible / "tesseract").exists():
+            subprocess.run([sys.executable, str(ROOT / "scripts/build_ocr.py")], check=True)
+        target = ROOT / "build/tesseract"
+        if target.exists():
+            shutil.rmtree(target)
+        shutil.copytree(compatible, target)
+        return
     binary = shutil.which("tesseract")
     if not binary and sys.platform == "win32":
         candidate = (

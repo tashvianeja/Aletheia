@@ -37,7 +37,15 @@ def diagnose(settings: Settings) -> dict[str, Any]:
                     "learned_rules",
                 ):
                     counts[table] = int(
-                        connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                        connection.execute(
+                            {
+                                "events": "SELECT COUNT(*) FROM events",
+                                "decisions": "SELECT COUNT(*) FROM decisions",
+                                "user_responses": "SELECT COUNT(*) FROM user_responses",
+                                "preferences": "SELECT COUNT(*) FROM preferences",
+                                "learned_rules": "SELECT COUNT(*) FROM learned_rules",
+                            }[table]
+                        ).fetchone()[0]
                     )
         except sqlite3.Error:
             counts = {}
@@ -176,6 +184,7 @@ def main() -> int:
         deep_check_requested = Signal()
         error = Signal(str)
         update_ready = Signal(str)
+        action_ready = Signal(str, str)
 
     class Controller:
         def __init__(self) -> None:
@@ -190,8 +199,11 @@ def main() -> int:
             self.deepcheck_window: DeepCheckWindow | None = None
             self.onboarding: Onboarding | None = None
             self.clipboard: Any = None
+            self._closing = False
             self.core.decision_listeners.append(self.bridge.decision_ready.emit)
             self.core.focus_listeners.append(self.bridge.focus_requested.emit)
+            self.core.action_listeners.append(self.bridge.action_ready.emit)
+            self.bridge.action_ready.connect(self.actuate)
             self.bridge.decision_ready.connect(self.show_decision)
             self.bridge.report_ready.connect(self.show_report)
             self.bridge.update_ready.connect(
@@ -212,6 +224,9 @@ def main() -> int:
             self.popups.anchor = self.tray.geometry()
             self.thread.start()
             self.submit(self._start())
+            self.supervisor = QTimer(self.bridge)
+            self.supervisor.timeout.connect(self.supervise)
+            self.supervisor.start(2000)
 
         def _run_loop(self) -> None:
             asyncio.set_event_loop(self.loop)
@@ -260,18 +275,55 @@ def main() -> int:
             self.tray.set_state("attention")
             self.popups.enqueue(decision)
 
-        def submit_response(self, event_id: str, action: str, remember: bool) -> None:
-            self.submit(
+        def submit_response(self, event_id: str, action: str, remember: bool) -> Future[Any]:
+            future = self.submit(
                 self.core.respond(UserResponse(event_id=event_id, action=action, remember=remember))
             )
+
+            def action_finished(value: Future[Any]) -> None:
+                if not value.cancelled() and value.exception():
+                    self.bridge.error.emit(tr("action_failed"))
+                    if event_id in self.core.decisions and event_id not in self.core.actions:
+                        self.bridge.decision_ready.emit(self.core.decisions[event_id])
+
+            future.add_done_callback(action_finished)
+            return future
+
+        def actuate(self, event_id: str, action: str) -> None:
             if action == "open_settings":
-                event = self.core.events.get(event_id)
-                self.open_settings(getattr(event, "permission", "full_disk"))
+                self.open_settings(
+                    getattr(self.core.events.get(event_id), "permission", "full_disk")
+                )
             elif action == "clear_clipboard" and self.core.adapter:
                 self.core.adapter.backend.clear_clipboard()
             elif action in {"learn_more", "view_details"}:
                 self.show_dashboard()
             self.tray.set_state("idle")
+
+        def supervise(self) -> None:
+            if self._closing:
+                return
+            if self.thread.is_alive():
+                return
+            old = self.core
+            if old.adapter:
+                old.adapter.stop()
+            old.pool.close()
+            old._close_cloud()
+            with contextlib.suppress(Exception):
+                old.store.close()
+            self.loop = asyncio.new_event_loop()
+            self.core = Service(settings)
+            self.core.decision_listeners.append(self.bridge.decision_ready.emit)
+            self.core.focus_listeners.append(self.bridge.focus_requested.emit)
+            self.core.action_listeners.append(self.bridge.action_ready.emit)
+            self.thread = threading.Thread(
+                target=self._run_loop, daemon=True, name="guardian-service"
+            )
+            self.thread.start()
+            self.submit(self._start())
+            self.tray.set_state("attention")
+            self.tray.showMessage(tr("app_name"), tr("service_restarted"))
 
         def deep_check(self) -> None:
             self.deepcheck_window = DeepCheckWindow(self)
@@ -384,6 +436,8 @@ def main() -> int:
             app.quit()
 
         def shutdown(self) -> None:
+            self._closing = True
+            self.supervisor.stop()
             self.hotkey.stop()
 
             async def stop() -> None:
@@ -404,6 +458,7 @@ def main() -> int:
     app.setOrganizationName("PrivacyGuardian")
     app.setQuitOnLastWindowClosed(False)
     controller = Controller()
+    (settings.data_dir / "tray-ready").write_text("ready", encoding="ascii")
     app.aboutToQuit.connect(controller.shutdown)
     sys.excepthook = lambda error_type, _error, _traceback: logging.getLogger(__name__).error(
         "ui operation failed", extra={"error_type": error_type.__name__}

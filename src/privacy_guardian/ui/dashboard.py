@@ -245,6 +245,11 @@ class Dashboard(QWidget):
         self.service.core.store.import_preferences(payload)
         self.service.core.preferences = preferences
         self.service.core.learned_rules = learned
+        self.service.settings.reject_optional_cookies = preferences.reject_optional_cookies
+        self.service.settings.clipboard_allowlist = preferences.clipboard_allowlist
+        self.service.settings.save()
+        if getattr(self.service, "clipboard", None):
+            self.service.clipboard.allowlist = preferences.clipboard_allowlist
         for category, combo in self.category_controls.items():
             preference = preferences.categories.get(
                 category, preferences.categories.get(category.split(".")[0], Preference.ASK)
@@ -292,6 +297,18 @@ class Dashboard(QWidget):
         self.refresh()
 
     def save_settings(self) -> None:
+        from privacy_guardian.config import Settings
+
+        try:
+            Settings.valid_hotkey(self.hotkey.text())
+            if self.api_key.text():
+                from privacy_guardian.llm.client import set_api_key
+
+                set_api_key(self.api_key.text())
+                self.api_key.clear()
+        except Exception:
+            QMessageBox.warning(self, tr("app_name"), tr("settings_failed"))
+            return
         settings = self.service.settings
         settings.retention_days = self.retention.value()
         settings.autostart = self.autostart.isChecked()
@@ -300,6 +317,10 @@ class Dashboard(QWidget):
         settings.hotkey = self.hotkey.text()
         settings.log_level = self.log_level.currentText()
         settings.reject_optional_cookies = self.reject_optional.isChecked()
+        self.service.core.preferences.reject_optional_cookies = settings.reject_optional_cookies
+        self.service.core.store.set_preference(
+            "user", self.service.core.preferences.model_dump(mode="json")
+        )
         for key, toggle in self.llm_toggles.items():
             setattr(settings.llm, key, toggle.isChecked())
         self.service.hotkey.stop()
@@ -309,11 +330,6 @@ class Dashboard(QWidget):
             settings.hotkey, self.service.bridge.deep_check_requested.emit
         )
         self.service.hotkey.start()
-        if self.api_key.text():
-            from privacy_guardian.llm.client import set_api_key
-
-            set_api_key(self.api_key.text())
-            self.api_key.clear()
         settings.save()
         if self.service.core.adapter:
             self.service.core.adapter.set_autostart(settings.autostart)

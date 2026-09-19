@@ -30,7 +30,11 @@ def parse_browser_event(payload: dict[str, Any]) -> PrivacyEvent:
     event = EVENT_ADAPTER.validate_python(payload.get("event", payload))
     event.requester = enrich_browser_requester(event.requester, payload.get("signals", {}))
     if isinstance(event, FormObservedEvent):
-        event.fields = [label_field(field) for field in event.fields]
+        event.fields = [
+            label_field(field.model_copy(update={"category": None, "confidence": 0.0}))
+            for field in event.fields
+        ]
+        event.data_categories = []
     return event
 
 

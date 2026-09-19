@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-import contextlib
+import time
 from typing import Any
 
 from privacy_guardian.core.events import Outcome
@@ -10,6 +10,8 @@ from privacy_guardian.util.i18n import tr
 
 async def run_deep_check(service: Any, payload: dict[str, Any] | None = None) -> dict[str, Any]:
     payload = payload or {}
+    started = time.monotonic()
+    fresh = True
     for callback in service.progress_listeners:
         callback(tr("checking"))
     if service.connected_browsers and not payload.get("cached_only"):
@@ -20,16 +22,18 @@ async def run_deep_check(service: Any, payload: dict[str, Any] | None = None) ->
         service.browser_commands.append(
             {"id": service.pending_context_id, "type": "collect_context"}
         )
-        with contextlib.suppress(TimeoutError):
+        try:
             await asyncio.wait_for(service.context_updated.wait(), timeout=3.0)
+        except TimeoutError:
+            fresh = False
     origin = str(payload.get("origin", "")) or service.focused_origin
-    context: dict[str, Any] = service.contexts.get(origin) or next(
-        reversed(service.contexts.values()), {}
+    context: dict[str, Any] = (
+        service.contexts.get(origin, {}) if (fresh or payload.get("cached_only")) else {}
     )
     findings: list[dict[str, Any]] = []
     checked: list[dict[str, Any]] = []
     analyses = context.get("analyses", {})
-    for name in ("tracking", "consent", "policy", "forms", "uploads"):
+    for name in ("tracking", "consent", "policy", "terms", "forms", "uploads"):
         analysis = analyses.get(name, {})
         profile = analysis.get("profile", {})
         if name == "tracking" and (
@@ -82,6 +86,28 @@ async def run_deep_check(service: Any, payload: dict[str, Any] | None = None) ->
                             "summary": category.replace("_", " ").capitalize(),
                         }
                     )
+        elif name == "terms":
+            for clause in profile.get("clauses", []):
+                category = clause.get("category", "") if isinstance(clause, dict) else str(clause)
+                if category and not any(
+                    category.replace("_", " ").lower() in item["summary"].lower()
+                    for item in findings
+                ):
+                    findings.append(
+                        {
+                            "kind": "terms",
+                            "severity": "INFORM",
+                            "summary": category.replace("_", " ").capitalize(),
+                        }
+                    )
+        elif name == "uploads" and profile.get("in_progress", 0):
+            findings.append(
+                {
+                    "kind": "uploads",
+                    "severity": "INFORM",
+                    "summary": "Files are selected for sharing; review their upload decisions",
+                }
+            )
         elif name == "forms":
             for field in analysis.get("fields", []):
                 if (field.get("necessity") or {}).get("verdict") in {"unnecessary", "red_flag"}:
@@ -132,6 +158,7 @@ async def run_deep_check(service: Any, payload: dict[str, Any] | None = None) ->
         "checked": checked,
         "summary": tr("check_summary", count=len(findings)),
         "context_available": bool(context) or service.adapter is not None,
+        "fresh": fresh,
     }
 
     if service.settings.llm.enabled and service.settings.llm.deep_check_narrative:
@@ -139,23 +166,27 @@ async def run_deep_check(service: Any, payload: dict[str, Any] | None = None) ->
 
         from privacy_guardian.core.worker_dispatch import refine_context
 
-        narrative = await asyncio.wait_for(
-            asyncio.get_running_loop().run_in_executor(
-                service.llm_executor,
-                partial(
-                    refine_context,
-                    "deep_check_narrative",
-                    {"findings": findings, "checked": checked},
-                    service.settings.llm.model_dump(),
-                    "deep_check",
-                    {
-                        "summary": report["summary"],
-                        "findings": [item["summary"] for item in findings],
-                        "clean_checks": [item["kind"] for item in checked if item["clean"]],
-                    },
+        try:
+            narrative = await asyncio.wait_for(
+                asyncio.get_running_loop().run_in_executor(
+                    service.llm_executor,
+                    partial(
+                        refine_context,
+                        "deep_check_narrative",
+                        {"findings": findings, "checked": checked},
+                        service.settings.llm.model_dump(),
+                        "deep_check",
+                        {
+                            "summary": report["summary"],
+                            "findings": [item["summary"] for item in findings],
+                            "clean_checks": [item["kind"] for item in checked if item["clean"]],
+                        },
+                    ),
                 ),
-            ),
-            timeout=22,
-        )
-        report["summary"] = narrative["summary"]
+                timeout=max(0.1, 24 - time.monotonic() + started),
+            )
+            report["summary"] = narrative["summary"]
+        except (TimeoutError, RuntimeError):
+            pass
+
     return report

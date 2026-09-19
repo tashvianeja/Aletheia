@@ -44,6 +44,7 @@ class InterventionPopup(QWidget):
         layout.addWidget(explanation)
         self.why_button = QPushButton(tr("why"))
         self.why_button.setCheckable(True)
+        self.why_button.installEventFilter(self)
         self.rationale = QLabel("\n".join(decision.rationale))
         self.rationale.setWordWrap(True)
         self.rationale.hide()
@@ -51,6 +52,7 @@ class InterventionPopup(QWidget):
         layout.addWidget(self.why_button)
         layout.addWidget(self.rationale)
         self.remember = QCheckBox(tr("remember"))
+        self.remember.installEventFilter(self)
         layout.addWidget(self.remember)
         self.buttons: dict[str, QPushButton] = {}
         for start in range(0, len(decision.actions), 2):
@@ -94,15 +96,19 @@ class InterventionPopup(QWidget):
             self.closed.emit()
 
     def eventFilter(self, watched: Any, event: QEvent) -> bool:
-        if (
-            event.type() == QEvent.Type.MouseButtonPress
-            and self.windowFlags() & Qt.WindowType.WindowDoesNotAcceptFocus
-        ):
+        if event.type() == QEvent.Type.MouseButtonRelease:
+            QTimer.singleShot(0, lambda: self._enable_focus(watched))
+        return super().eventFilter(watched, event)
+
+    def _enable_focus(self, watched: Any = None) -> None:
+        if self._resolved or not self.isVisible():
+            return
+        if self.windowFlags() & Qt.WindowType.WindowDoesNotAcceptFocus:
             self.setWindowFlag(Qt.WindowType.WindowDoesNotAcceptFocus, False)
             self.show()
             self.activateWindow()
+        if watched is not None:
             watched.setFocus()
-        return super().eventFilter(watched, event)
 
     def mousePressEvent(self, event: Any) -> None:
         self.setWindowFlag(Qt.WindowType.WindowDoesNotAcceptFocus, False)

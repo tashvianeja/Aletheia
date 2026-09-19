@@ -101,7 +101,10 @@ def _ocr(image: Any, number: int, remaining: float) -> Page:
     import pytesseract
 
     data = pytesseract.image_to_data(
-        image, output_type=pytesseract.Output.DICT, timeout=max(0.1, remaining), config="--psm 6"
+        image.convert("RGB"),
+        output_type=pytesseract.Output.DICT,
+        timeout=max(0.1, remaining),
+        config="--psm 6",
     )
     text = ""
     boxes = []

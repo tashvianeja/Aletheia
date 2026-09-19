@@ -91,6 +91,30 @@ class WindowsRegistry:
                 r"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\RunOnce",
             ):
                 visit(root, path, name)
+        try:
+            with winreg.OpenKey(
+                winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Services"
+            ) as root:
+                index = 0
+                while True:
+                    try:
+                        name = winreg.EnumKey(root, index)
+                        index += 1
+                    except OSError:
+                        break
+                    try:
+                        with winreg.OpenKey(root, name) as key:
+                            kind = winreg.QueryValueEx(key, "Type")[0]
+                            if int(kind) & 3:
+                                image = winreg.QueryValueEx(key, "ImagePath")[0]
+                                values["HKLM\\SYSTEM\\CurrentControlSet\\Services\\" + name] = {
+                                    "Type": kind,
+                                    "ImagePath": image,
+                                }
+                    except OSError:
+                        continue
+        except OSError:
+            pass
         return values
 
     def wait_for_change(self, stop: threading.Event, timeout: float = 1.0) -> bool:
@@ -104,7 +128,7 @@ class WindowsRegistry:
         keys = []
         try:
             for root in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
-                for path in (CONSENT_ROOT, RUN_ROOT):
+                for path in (CONSENT_ROOT, RUN_ROOT, r"SYSTEM\CurrentControlSet\Services"):
                     try:
                         key = winreg.OpenKey(root, path, 0, winreg.KEY_NOTIFY)
                         event = win32event.CreateEvent(None, False, False, None)
@@ -162,6 +186,9 @@ class WindowsClipboard:
         import win32clipboard
 
         sequence = win32clipboard.GetClipboardSequenceNumber()
+        if sequence == getattr(self, "_clipboard_count", -1):
+            return int(sequence), ""
+        self._clipboard_count = sequence
         text = ""
         try:
             win32clipboard.OpenClipboard()
@@ -262,6 +289,28 @@ class WindowsAdapter(PlatformAdapter):
         self, previous: dict[str, dict[str, Any]], current: dict[str, dict[str, Any]]
     ) -> list[PrivacyEvent]:
         events: list[PrivacyEvent] = []
+        for removed_path in previous.keys() - current.keys():
+            parts = removed_path.split("\\")
+            if "ConsentStore" in parts:
+                index = parts.index("ConsentStore")
+                if len(parts) > index + 2:
+                    capability = CAPABILITIES.get(parts[index + 1])
+                    app = "\\".join(parts[index + 2 :])
+                    identity = (
+                        ntpath.normcase(app.removeprefix("NonPackaged\\").replace("#", "\\"))
+                        if app.startswith("NonPackaged")
+                        else app
+                    )
+                    if capability:
+                        self._access.setdefault(identity, set()).discard(
+                            PERMISSION_CATEGORIES[capability]
+                        )
+            elif parts[-1] in {"Run", "RunOnce"}:
+                for command in previous[removed_path].values():
+                    identity = self.command_executable(str(command))
+                    self._access.setdefault(identity, set()).difference_update(
+                        {DataCategory.STARTUP, DataCategory.BACKGROUND_EXECUTION}
+                    )
         for path, values in current.items():
             old = previous.get(path, {})
             if old == values:
@@ -325,7 +374,28 @@ class WindowsAdapter(PlatformAdapter):
                     self._access.setdefault(requester.key, set()).add(category)
                     if category == DataCategory.FILES_BROAD:
                         events.append(self._breadth(requester))
+            elif "Services" in parts and int(values.get("Type", 0)) & 3:
+                requester = Requester(
+                    kind="application",
+                    exe_path=self.command_executable(str(values.get("ImagePath", ""))),
+                    display_name=parts[-1],
+                )
+                events.append(
+                    SystemAccessEvent(
+                        source="os",
+                        platform="windows",
+                        requester=requester,
+                        data_categories=[DataCategory.FILES_BROAD, DataCategory.AUTOMATION],
+                        accesses=["kernel_driver"],
+                        breadth=1.0,
+                    )
+                )
             elif parts[-1] in {"Run", "RunOnce"}:
+                for removed_name in old.keys() - values.keys():
+                    identity = self.command_executable(str(old[removed_name]))
+                    self._access.setdefault(identity, set()).difference_update(
+                        {DataCategory.STARTUP, DataCategory.BACKGROUND_EXECUTION}
+                    )
                 for name, command in values.items():
                     if old.get(name) == command:
                         continue
@@ -416,14 +486,19 @@ class WindowsAdapter(PlatformAdapter):
 
     def _loop(self) -> None:
         last_tasks = 0.0
+        last_registry = 0.0
         while not self._stop.is_set():
             try:
                 if hasattr(self.registry, "wait_for_change"):
-                    self.registry.wait_for_change(self._stop, 0.5)
+                    changed = self.registry.wait_for_change(self._stop, 1.0)
                 else:
                     self._stop.wait(0.5)
-                events = self.poll_registry()
-                if time.monotonic() - last_tasks >= 2:
+                    changed = True
+                events = []
+                if changed or time.monotonic() - last_registry >= 10:
+                    events = self.poll_registry()
+                    last_registry = time.monotonic()
+                if time.monotonic() - last_tasks >= 5:
                     events.extend(self.poll_tasks())
                     last_tasks = time.monotonic()
                     base = Path(os.getenv("LOCALAPPDATA", ""))

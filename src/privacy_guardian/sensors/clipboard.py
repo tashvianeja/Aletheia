@@ -31,8 +31,11 @@ class ClipboardMonitor:
             self.writer_key = requester.key
             from privacy_guardian.analysis.worker import analyze_payload
 
-            result = await self.pool.run(analyze_payload, {"kind": "text", "text": text})
-            self.categories = sorted({finding.category for finding in result.findings}, key=str)
+            if text:
+                result = await self.pool.run(analyze_payload, {"kind": "text", "text": text})
+                self.categories = sorted({finding.category for finding in result.findings}, key=str)
+            else:
+                self.categories = []
             text = ""
             cloud = (
                 bool(self.backend.cloud_sync()) if hasattr(self.backend, "cloud_sync") else False
@@ -71,7 +74,11 @@ class ClipboardMonitor:
         while True:
             with contextlib.suppress(Exception):
                 await self.tick()
-            await asyncio.sleep(0.25)
+            try:
+                await asyncio.wait_for(self.changed.wait(), timeout=0.25)
+                self.changed.clear()
+            except TimeoutError:
+                pass
 
     def start(self) -> None:
         import sys

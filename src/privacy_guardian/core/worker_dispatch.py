@@ -64,7 +64,7 @@ def append_upload(upload_id: str, sequence: int, data: bytes) -> None:
     upload.touched = time.monotonic()
 
 
-def finish_upload(upload_id: str) -> Any:
+def finish_upload(upload_id: str, timeout: float = 20) -> Any:
     from privacy_guardian.analysis.worker import analyze_payload
 
     _expire()
@@ -80,6 +80,7 @@ def finish_upload(upload_id: str) -> Any:
             "data": bytes(upload.first + upload.tail),
             "partial": partial,
             "original_size": upload.size,
+            "timeout": timeout,
         }
     )
 

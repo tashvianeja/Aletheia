@@ -222,6 +222,10 @@ def decide(
     if event.event_type == "file_upload" and DataCategory.LOCATION_PRECISE in categories:
         actions.insert(0, "strip_metadata")
     explanation, rationale = explain(event, assessments, profile, notes)
+    if isinstance(event, PermissionRequestEvent) and event.state in {"denied", "stopped"}:
+        level = 0
+        explanation = "Access was denied or stopped; no active grant was detected."
+        rationale.append(explanation)
     return Decision(
         event_id=event.id,
         outcome=_LEVELS[level],

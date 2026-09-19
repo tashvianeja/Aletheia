@@ -17,7 +17,7 @@ Three worker slots: two Astra implementation workers and one Sol verification wo
 
 ## Acceptance status
 
-P0: in progress. All functional requirements and numeric targets unverified until independently tested. No omitted feature is accepted. Record commands, counts, coverage, artifacts, commit IDs, platform gaps and elapsed time below at each checkpoint.
+P0: contracts complete and baseline accepted. All functional requirements and numeric targets unverified until independently tested. No omitted feature is accepted. Record commands, counts, coverage, artifacts, commit IDs, platform gaps and elapsed time below at each checkpoint.
 
 ## Task register
 
@@ -25,13 +25,13 @@ P0: in progress. All functional requirements and numeric targets unverified unti
 |---|---|---|---|---|
 |P0-A1|Astra core|PLAN/ARCHITECTURE/contracts|none|Published 11:53 UTC; review accepted baseline|
 |P1-A1|Astra core|pyproject/uv/Makefile/CI|P0|Python3.12.13 +153 packages installed 11:56 UTC|
-|P1-A2|Astra core|core/config/storage/IPC|P0|Implemented; independent tests pending|
+|P1-A2|Astra core|core/config/storage/IPC|P0|Accepted foundational tests; IPC 3 passed; ongoing integration hardening|
 |P1-S1/S2|Sol|tests/fixtures/scaffolding/browser harness|P0|In progress|
 |P2-A3/A4/A5/A10|Astra analysis|analysis/engine/data/llm|P0|In progress|
-|P2-A6|Astra worker TBD|extension/browser bridge|P1-A2|Pending dispatch|
-|P3-A7/A8/A9|Astra core|platform/UI/deepcheck|P1|Pending dispatch|
-|P4-A11/A12|Astra core|service integration/packaging|P2/P3|Pending|
-|P1–P5-T1|Tera|documentation|contracts + available slot|Pending|
+|P2-A6|Astra analysis|extension/browser bridge|P1-A2|Implemented 98f952c; browser E2E pending|
+|P3-A7/A8/A9|Astra core|platform/UI/deepcheck|P1|Implemented 775abab; independent tests in progress|
+|P4-A11/A12|Astra core|service integration/packaging|P2/P3|First Mac app+DMG verified; final rebuild/Windows installer pending|
+|P1–P5-T1|Tera|documentation|contracts + available slot|Initial docs committed; follow-up verification updates pending|
 
 ### P1 interim evidence (12:00 UTC)
 
@@ -46,3 +46,11 @@ Installed: uv-managed CPython3.12.13; 154 project/dev packages including spaCy m
 First macOS package built at `dist/PrivacyGuardian.app` and `dist/PrivacyGuardian-0.1.0.dmg` (145,079,029 compressed bytes; app268MiB). Root verified deep strict codesign, UDZO imageinfo, isolated offscreen packaged smoke exit0. Bundled OCR runs successfully, non-system libraries rewritten to loader-relative paths. This artifact predates subsequent source changes and must be rebuilt at final acceptance.
 
 Service/UI/platform implementations now present; independent Sol tests being added. Mandatory local analysis remains separate from bounded background cloud I/O, so cloud latency cannot delay native upload/form decisions. Raw worker payloads release on continue/cancel/redaction and expire through idle pool recycle. Remaining review work: full platform native monitoring/revocation, supervisor lifecycle, complete dashboard/settings, CI gates, browser E2E, live platform checks, perf and installer smoke. No feature is accepted merely for existing.
+
+### Review checkpoint (12:25 UTC, T+0:36)
+
+Root independent unit/integration evidence: 157 passed, one logging token-format regression identified; redaction marker corrected to `<redacted:category>` for retest. Source strict mypy70 modules clean. Bandit `-r src -ll -q` clean after replacing whitelist SQL interpolation with fixed statement maps. Coverage from partial suites: 48.04% overall line, 70.91% scoped line; not final and below target, independent UI/platform/E2E/coverage tests are being expanded. Analysis corpus evidence accepted earlier: termsF1=1.0, policy purposesF1=.9048, sharingF1=.9444.
+
+Compatibility audit found Homebrew OCR bottle requires macOS27. Replaced packaging path with a source-built static Tesseract5.5.3 + Leptonica1.87.0 + libpng1.6.58 targeting macOS13. `vtool` verifies minos13.0; `otool` only system libSystem/libz/libc++ dependencies. Qt6.11.2 binary inspected for arm64+x86_64: minos13.0. First DMG remains superseded until rebuilt with static OCR.
+
+Remaining acceptance: full browser E2E (including native host and actions), actual platform/native lifecycle tests, full-app five-minute idle measurement, final coverage gates and both installer smoke tests. Windows CI has not passed beyond lint yet; no Windows native verification is claimed.

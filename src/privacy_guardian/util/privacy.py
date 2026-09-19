@@ -22,6 +22,12 @@ _PATTERNS = (
 
 
 def redact_text(value: str) -> str:
+    from privacy_guardian.analysis.pii import redact_text as redact_pii
+
+    value = redact_pii(value, use_ner=False)
+    value = re.sub(
+        r"<([A-Z_]+(?:\.[A-Z_]+)*)>", lambda match: "<redacted:" + match[1].lower() + ">", value
+    )
     value = re.sub(
         r"(?i)(?:full[ _-]?name|patient[ _-]?name|name)\s*[:=]\s*[A-Z][a-z]+(?:[ \t]+[A-Z][a-z]+){1,3}",
         "<redacted:full_name>",
@@ -35,6 +41,15 @@ def redact_text(value: str) -> str:
     for category, pattern in _PATTERNS:
         value = pattern.sub(f"<redacted:{category}>", value)
     return value
+
+
+def public_identity(value: str) -> str:
+    if value.startswith(("/", "\\\\")) or re.match(r"^[A-Za-z]:[\\/]", value):
+        import hashlib
+
+        normalized = value.replace("\\", "/").casefold()
+        return "app:" + hashlib.sha256(normalized.encode()).hexdigest()[:24]
+    return safe_origin(value)
 
 
 def safe_origin(value: str) -> str:
@@ -75,7 +90,7 @@ def sanitize(value: Any) -> Any:
         return redact_text(value)
     if isinstance(value, dict):
         return {
-            str(k): (v if _safe_identifier(str(k), v) else sanitize(v))
+            public_identity(str(k)): (v if _safe_identifier(str(k), v) else sanitize(v))
             for k, v in value.items()
             if k
             not in {

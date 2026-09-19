@@ -130,6 +130,7 @@ def uninstall(settings: Settings, remove_data: bool = True) -> None:
             "settings.toml",
             "ipc.token",
             "guardian.lock",
+            "tray-ready",
             "control.sock",
             "guardian.sqlite3",
             "guardian.sqlite3-wal",

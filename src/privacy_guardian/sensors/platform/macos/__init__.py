@@ -80,7 +80,11 @@ class MacBackend:
         from AppKit import NSPasteboard, NSPasteboardTypeString
 
         board = NSPasteboard.generalPasteboard()
-        return int(board.changeCount()), str(board.stringForType_(NSPasteboardTypeString) or "")
+        count = int(board.changeCount())
+        if count == getattr(self, "_clipboard_count", -1):
+            return count, ""
+        self._clipboard_count = count
+        return count, str(board.stringForType_(NSPasteboardTypeString) or "")
 
     def clear_clipboard(self) -> None:
         from AppKit import NSPasteboard
@@ -396,9 +400,13 @@ class MacOSAdapter(PlatformAdapter):
     def _loop(self) -> None:
         last_tcc = 0.0
         last_extensions = 0.0
-        while not self._stop.wait(0.5):
+        while not self._stop.is_set():
+            changed = self._fs_changed.wait(1.0)
+            self._fs_changed.clear()
+            if self._stop.is_set():
+                break
             try:
-                events = self.poll_files()
+                events = self.poll_files() if changed else []
                 if time.monotonic() - last_tcc >= 10:
                     events.extend(self.poll_tcc())
                     last_tcc = time.monotonic()
@@ -444,6 +452,7 @@ class MacOSAdapter(PlatformAdapter):
 
     def stop(self) -> None:
         self._stop.set()
+        self._fs_changed.set()
         if self._path_monitor:
             self._path_monitor.stop()
         if self._log_process:

@@ -3,6 +3,9 @@ from __future__ import annotations
 from typing import Any
 
 EN: dict[str, str] = {
+    "settings_failed": "Settings could not be saved. Check the shortcut format and system keychain access.",
+    "action_failed": "That action could not finish. The sharing request is still held; try again or cancel.",
+    "service_restarted": "Privacy monitoring restarted after an interruption.",
     "policy_refinement": "Refine public policy and terms clauses",
     "purpose_refinement": "Refine site and app purpose",
     "explanation_polishing": "Improve category-only explanations",

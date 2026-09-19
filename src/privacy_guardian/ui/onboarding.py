@@ -7,6 +7,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QVBoxLayout,
     QWizard,
@@ -70,8 +71,12 @@ class Onboarding(QWizard):
         if self.key_input.text():
             from privacy_guardian.llm.client import set_api_key
 
-            set_api_key(self.key_input.text())
-            self.key_input.clear()
+            try:
+                set_api_key(self.key_input.text())
+                self.key_input.clear()
+            except Exception:
+                QMessageBox.warning(self, tr("app_name"), tr("settings_failed"))
+                return
         self.service.settings.autostart = self.autostart.isChecked()
         from privacy_guardian.util.installation import install
 

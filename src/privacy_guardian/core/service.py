@@ -5,10 +5,12 @@ import base64
 import binascii
 import contextlib
 import hashlib
+import multiprocessing
 import time
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
 from datetime import UTC, datetime, timedelta
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -39,7 +41,7 @@ from privacy_guardian.engine.context import Observation, SiteOrAppProfile
 from privacy_guardian.engine.decision import decide
 from privacy_guardian.engine.preferences import LearnedRules, UserPreferences
 from privacy_guardian.storage import Store
-from privacy_guardian.util.privacy import safe_origin, sanitize
+from privacy_guardian.util.privacy import public_identity, safe_origin, sanitize
 
 
 class Service:
@@ -52,16 +54,24 @@ class Service:
         self.preferences = UserPreferences.model_validate(
             self.store.get_preferences().get("user", {})
         )
+        self.preferences.reject_optional_cookies = settings.reject_optional_cookies
+        self.preferences.clipboard_allowlist = list(
+            dict.fromkeys([*self.preferences.clipboard_allowlist, *settings.clipboard_allowlist])
+        )
         self.learned_rules = LearnedRules.model_validate(
             self.store.get_learned_rules().get("user", {})
         )
         self.decision_listeners: list[Callable[[Decision], None]] = []
         self.focus_listeners: list[Callable[[], None]] = []
+        self.action_listeners: list[Callable[[str, str], None]] = []
         self.progress_listeners: list[Callable[[str], None]] = []
         self.events: dict[str, PrivacyEvent] = {}
         self.decisions: dict[str, Decision] = {}
         self.actions: dict[str, dict[str, Any]] = {}
         self.pending_since: dict[str, float] = {}
+        self.event_owners: dict[str, str] = {}
+        self.response_locks: dict[str, asyncio.Lock] = {}
+        self.cloud_keys: set[str] = set()
         self.uploads: dict[str, dict[str, Any]] = {}
         self.contexts: dict[str, dict[str, Any]] = {}
         self.browser_commands: list[dict[str, Any]] = []
@@ -71,22 +81,54 @@ class Service:
         self.connected_browsers: dict[str, float] = {}
         self.paused_until: datetime | None = None
         self.adapter: Any = None
-        self.llm_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="guardian-cloud")
+        self._llm_executor: ProcessPoolExecutor | None = None
+        self.cloud_last_used = time.monotonic()
         self.background_tasks: set[asyncio.Task[None]] = set()
         self._sweeper: asyncio.Task[None] | None = None
+
+    @property
+    def llm_executor(self) -> ProcessPoolExecutor:
+        if self._llm_executor is None:
+            self._llm_executor = ProcessPoolExecutor(
+                max_workers=1, mp_context=multiprocessing.get_context("spawn")
+            )
+        self.cloud_last_used = time.monotonic()
+        return self._llm_executor
+
+    def _close_cloud(self) -> None:
+        executor, self._llm_executor = self._llm_executor, None
+        if executor:
+            for process in (getattr(executor, "_processes", {}) or {}).values():
+                if process.is_alive():
+                    process.terminate()
+            executor.shutdown(wait=False, cancel_futures=True)
+
+    def _schedule_cloud(self, key: str, factory: Callable[[], Any]) -> None:
+        if (
+            not self.settings.llm.enabled
+            or key in self.cloud_keys
+            or len(self.background_tasks) >= 4
+        ):
+            return
+        self.cloud_keys.add(key)
+
+        async def run() -> None:
+            try:
+                if self.settings.llm.enabled:
+                    await factory()
+            finally:
+                self.cloud_keys.discard(key)
+                self.cloud_last_used = time.monotonic()
+
+        task = asyncio.create_task(run())
+        self.background_tasks.add(task)
+        task.add_done_callback(self.background_tasks.discard)
 
     async def start(self) -> None:
         await self.control.start()
         self.bus.subscribe(self._on_event)
         self.store.purge(self.settings.retention_days)
         self._sweeper = asyncio.create_task(self._maintenance())
-        from privacy_guardian.analysis.worker import warm_analysis
-
-        async def warm() -> None:
-            with contextlib.suppress(RuntimeError):
-                await self.pool.run(warm_analysis)
-
-        asyncio.create_task(warm())
 
     async def stop(self) -> None:
         if self._sweeper:
@@ -99,7 +141,7 @@ class Service:
             task.cancel()
         if self.background_tasks:
             await asyncio.gather(*self.background_tasks, return_exceptions=True)
-        self.llm_executor.shutdown(wait=False, cancel_futures=True)
+        self._close_cloud()
         self.pool.close()
         self.store.close()
 
@@ -110,11 +152,18 @@ class Service:
         while True:
             await asyncio.sleep(1)
             now = time.monotonic()
+            if not self.settings.llm.enabled:
+                for task in tuple(self.background_tasks):
+                    task.cancel()
+                self._close_cloud()
+            elif not self.background_tasks and now - self.cloud_last_used > 30:
+                self._close_cloud()
             if (
                 self.pool._pool is not None
                 and not self.pool.active
                 and not self.uploads
-                and now - self.pool.last_used > 120
+                and now - self.pool.last_used
+                > (120 if any(event.payload_ref for event in self.events.values()) else 10)
             ):
                 self.pool.recycle()
             for event_id, since in list(self.pending_since.items()):
@@ -141,6 +190,19 @@ class Service:
         kind = "site" if requester.kind == "website" else "app"
         return SiteOrAppProfile.model_validate(self.store.get_profile(kind, requester.key) or {})
 
+    def preferences_for(self, requester: Requester) -> UserPreferences:
+        preferences = self.preferences.model_copy(deep=True)
+        public_key = public_identity(requester.key)
+        if public_key in preferences.requester_overrides:
+            preferences.requester_overrides[requester.key] = preferences.requester_overrides[
+                public_key
+            ]
+        if public_key in preferences.expected_permissions:
+            preferences.expected_permissions[requester.key] = preferences.expected_permissions[
+                public_key
+            ]
+        return preferences
+
     async def process_event(
         self, event: PrivacyEvent, findings: list[Finding] | None = None
     ) -> Decision:
@@ -166,7 +228,9 @@ class Service:
                 set(event.data_categories) | {f.category for f in findings}, key=str
             )
         profile = self._profile(event.requester)
-        decision = decide(event, findings, profile, self.preferences, self.learned_rules)
+        decision = decide(
+            event, findings, profile, self.preferences_for(event.requester), self.learned_rules
+        )
         if self.paused_until and datetime.now(UTC) < self.paused_until:
             decision = decision.model_copy(
                 update={
@@ -175,6 +239,23 @@ class Service:
                     "actions": ["continue"],
                     "default_action": "continue",
                 }
+            )
+        if event.event_type == "policy_document":
+            kind = "terms" if getattr(event, "kind", "") == "terms" else "policy"
+            document = (
+                self.contexts.get(event.requester.origin, {})
+                .get("analyses", {})
+                .get(kind, {})
+                .get("profile", {})
+            )
+            for clause in document.get("clauses", []):
+                if isinstance(clause, dict):
+                    title = str(clause.get("category", "")).replace("_", " ").capitalize()
+                    citation = str(clause.get("citation", ""))
+                    decision.rationale.append(title + (": " + citation if citation else ""))
+            decision.rationale.extend(
+                "✓ Nothing unusual about " + str(item).replace("_", " ")
+                for item in document.get("nothing_unusual", [])
             )
         self.events[event.id] = event
         self.decisions[event.id] = decision
@@ -214,10 +295,11 @@ class Service:
                 except Exception:
                     # User interface failures cannot escape the service boundary.
                     continue
-        if self.settings.llm.enabled:
-            task = asyncio.create_task(self._refine_decision(event, decision))
-            self.background_tasks.add(task)
-            task.add_done_callback(self.background_tasks.discard)
+        if self.settings.llm.enabled and event.event_type != "form_observed":
+            self._schedule_cloud(
+                event.requester.key + ":" + event.event_type,
+                lambda: self._refine_decision(event, decision),
+            )
         return decision
 
     async def _refine_decision(self, event: PrivacyEvent, decision: Decision) -> None:
@@ -248,6 +330,17 @@ class Service:
                 )
                 event.requester.purpose = str(refined["purpose"])
                 event.requester.purpose_confidence = float(str(refined["confidence"]))
+                reassessed = decide(
+                    event,
+                    profile=self._profile(event.requester),
+                    preferences=self.preferences,
+                    learned_rules=self.learned_rules,
+                )
+                levels = {Outcome.IGNORE: 0, Outcome.INFORM: 1, Outcome.INTERVENE: 2}
+                if levels[reassessed.outcome] >= levels[decision.outcome]:
+                    decision = reassessed
+                    self.decisions[event.id] = decision
+                self.store.save_event(event)
             if self.settings.llm.explanation_polishing and decision.outcome != Outcome.IGNORE:
                 polished = await asyncio.get_running_loop().run_in_executor(
                     self.llm_executor,
@@ -295,6 +388,11 @@ class Service:
             return
 
     async def respond(self, response: UserResponse) -> dict[str, Any]:
+        lock = self.response_locks.setdefault(response.event_id, asyncio.Lock())
+        async with lock:
+            return await self._respond_once(response)
+
+    async def _respond_once(self, response: UserResponse) -> dict[str, Any]:
         if response.event_id not in self.decisions:
             raise ValueError("Unknown decision")
         decision = self.decisions[response.event_id]
@@ -331,12 +429,16 @@ class Service:
             # Native message cap: extension fetches sanitized artifact in chunks.
             self.actions[event.id] = result
         if response.action == "mark_expected":
-            self.preferences.expected_permissions[event.requester.key] = list(
-                set(self.preferences.expected_permissions.get(event.requester.key, []))
+            self.preferences.expected_permissions[public_identity(event.requester.key)] = list(
+                set(
+                    self.preferences.expected_permissions.get(
+                        public_identity(event.requester.key), []
+                    )
+                )
                 | set(event.data_categories)
             )
         if response.remember:
-            self.preferences.requester_overrides[event.requester.key] = (
+            self.preferences.requester_overrides[public_identity(event.requester.key)] = (
                 "allow" if response.action == "continue" else "ask"
             )
         for category in event.data_categories:
@@ -357,6 +459,8 @@ class Service:
             event.payload_ref = None
         self.actions[event.id] = result
         self.pending_since.pop(event.id, None)
+        for callback in self.action_listeners:
+            callback(event.id, response.action)
         return result
 
     async def handle_message(self, message: dict[str, Any]) -> dict[str, Any]:
@@ -386,12 +490,15 @@ class Service:
             }
 
     async def _route(self, request: Request) -> dict[str, Any]:
-        payload = request.payload
+        payload = dict(request.payload)
+        session = str(payload.pop("_session", ""))[:128]
         if request.type == "ping":
             browser = str(payload.get("browser", "browser"))[:40]
             self.connected_browsers[browser] = time.monotonic()
             commands, self.browser_commands = self.browser_commands, []
-            return {"version": "0.1.0", "protocol": 1, "status": "ready", "commands": commands}
+            from privacy_guardian import __version__
+
+            return {"version": __version__, "protocol": 1, "status": "ready", "commands": commands}
         if request.type == "focus":
             for callback in self.focus_listeners:
                 callback()
@@ -401,6 +508,7 @@ class Service:
 
             event = parse_browser_event(payload)
             decision = await self.process_event(event)
+            self.event_owners[event.id] = session
             return {"decision": decision.model_dump(mode="json")}
         if request.type == "file_start":
             upload_id = str(payload["upload_id"])
@@ -421,12 +529,13 @@ class Service:
                 "touched": time.monotonic(),
                 "size": int(payload["size"]),
                 "generation": self.pool.generation,
+                "session": session,
             }
             return {"upload_id": upload_id}
         if request.type == "file_chunk":
             upload_id = str(payload["upload_id"])
             meta = self.uploads[upload_id]
-            if meta["generation"] != self.pool.generation:
+            if meta["session"] != session or meta["generation"] != self.pool.generation:
                 raise ValueError("Worker recycled")
             data = base64.b64decode(str(payload["data"]), validate=True)
             await self.pool.run(append_upload, upload_id, int(payload["sequence"]), data)
@@ -434,8 +543,13 @@ class Service:
             return {"received": len(data)}
         if request.type == "file_finish":
             upload_id = str(payload["upload_id"])
-            meta = self.uploads.pop(upload_id)
-            analysis = await self.pool.run(finish_upload, upload_id)
+            meta = self.uploads[upload_id]
+            if meta["session"] != session or meta["generation"] != self.pool.generation:
+                raise ValueError("Upload session is no longer valid")
+            self.uploads.pop(upload_id)
+            analysis = await self.pool.run(
+                finish_upload, upload_id, self.settings.analysis_timeout_seconds
+            )
             event = FileUploadEvent(
                 requester=meta["requester"],
                 payload_ref=analysis.payload_ref,
@@ -444,6 +558,7 @@ class Service:
                 size_bytes=meta["size"],
             )
             decision = await self.process_event(event, analysis.findings)
+            self.event_owners[event.id] = session
             return {
                 "decision": decision.model_dump(mode="json"),
                 "findings": [
@@ -454,9 +569,13 @@ class Service:
                 "warnings": analysis.warnings,
             }
         if request.type == "action":
+            if session and self.event_owners.get(str(payload.get("event_id", ""))) != session:
+                raise ValueError("Decision belongs to a different session")
             return await self.respond(UserResponse.model_validate(payload))
         if request.type == "action_poll":
             event_id = str(payload["event_id"])
+            if session and self.event_owners.get(event_id) != session:
+                raise ValueError("Decision belongs to a different session")
             action = self.actions.get(event_id)
             if action and "artifact_offset" in payload and "path" in action:
                 offset = int(payload["artifact_offset"])
@@ -491,7 +610,18 @@ class Service:
                 worker_payload.update(
                     {"kind": kind, "purpose": str(payload.get("purpose", "unknown"))}
                 )
-                analyzed = await self.pool.run(analyze_payload, worker_payload)
+                from privacy_guardian.analysis.worker import AnalysisResult
+
+                digest = (
+                    hashlib.sha256(str(worker_payload.get("text", "")).encode()).hexdigest()
+                    if kind in {"policy", "terms"}
+                    else ""
+                )
+                cached = self.store.get_cached_document(origin, digest) if digest else None
+                if cached is not None:
+                    analyzed = AnalysisResult(profile=cached)
+                else:
+                    analyzed = await self.pool.run(analyze_payload, worker_payload)
                 result[kind] = analyzed.model_dump(mode="json", exclude={"payload_ref"})
                 if kind in {"policy", "terms"}:
                     digest = hashlib.sha256(
@@ -499,17 +629,17 @@ class Service:
                     ).hexdigest()
                     self.store.cache_document(origin, digest, analyzed.profile)
                     if self.settings.llm.enabled and self.settings.llm.policy_refinement:
-                        task = asyncio.create_task(
-                            self._refine_public(
+                        self._schedule_cloud(
+                            origin + ":" + digest,
+                            partial(
+                                self._refine_public,
                                 origin,
                                 digest,
                                 kind,
                                 str(worker_payload.get("text", "")),
                                 analyzed.profile,
-                            )
+                            ),
                         )
-                        self.background_tasks.add(task)
-                        task.add_done_callback(self.background_tasks.discard)
                 for key, value in analyzed.profile.items():
                     if key == "clauses" and isinstance(value, list):
                         value = [
@@ -518,12 +648,39 @@ class Service:
                         ]
                     if key in SiteOrAppProfile.model_fields:
                         setattr(profile, key, value)
+            if "uploads_in_progress" in payload:
+                result["uploads"] = {
+                    "profile": {"in_progress": max(0, int(payload["uploads_in_progress"]))}
+                }
+            combined_analyses = {**self.contexts.get(origin, {}).get("analyses", {}), **result}
+            clauses: set[str] = set()
+            for document_kind in ("policy", "terms"):
+                document_profile = combined_analyses.get(document_kind, {}).get("profile", {})
+                clauses.update(
+                    str(item.get("category", "")) if isinstance(item, dict) else str(item)
+                    for item in document_profile.get("clauses", [])
+                )
+            profile.clauses = sorted(clauses)
+            profile.training_on_user_content = "training_on_user_content" in clauses
+            profile.data_sale = "data_sale" in clauses
+            profile.international_transfer = (
+                profile.international_transfer or "cross_border_transfer" in clauses
+            )
+            if "retention_after_deletion" in clauses:
+                profile.retention = "after_deletion"
+            profile.policy_missing = bool(
+                combined_analyses.get("policy", {}).get("profile", {}).get("missing", False)
+            )
+            tracking_profile = combined_analyses.get("tracking", {}).get("profile", {})
+            profile.tracking_confidence = float(tracking_profile.get("confidence", 0))
             self.contexts[origin] = dict(
                 sanitize(
                     {
                         "origin": origin,
                         "purpose": payload.get("purpose", "unknown"),
-                        "analyses": result,
+                        "analyses": combined_analyses,
+                        "updated_at": time.monotonic(),
+                        "session": session,
                     }
                 )
             )
@@ -570,14 +727,40 @@ class Service:
                     )
                 if context_event:
                     decision = await self.process_event(context_event)
+                    self.event_owners[context_event.id] = session
                     analyzed_result["decision"] = decision.model_dump(mode="json")
             return result
         if request.type == "disconnect":
+            if not session:
+                raise ValueError("Disconnect requires a host session")
+            requested_event = str(payload.get("event_id", ""))
+            if requested_event:
+                if self.event_owners.get(requested_event) != session:
+                    raise ValueError("Decision belongs to a different session")
+                self.store.mark_aborted(requested_event)
+                if requested_event in self.pending_since:
+                    await self.respond(
+                        UserResponse(
+                            event_id=requested_event,
+                            action=self.decisions[requested_event].default_action,
+                        )
+                    )
+                return {"disconnected": True, "event_id": requested_event}
+            for upload_id, metadata in list(self.uploads.items()):
+                if metadata["session"] == session:
+                    with contextlib.suppress(RuntimeError, KeyError):
+                        await self.pool.run(abort_upload, upload_id)
+                    self.uploads.pop(upload_id, None)
             for event_id in list(self.pending_since):
+                if self.event_owners.get(event_id) != session:
+                    continue
                 self.store.mark_aborted(event_id)
                 await self.respond(
                     UserResponse(event_id=event_id, action=self.decisions[event_id].default_action)
                 )
+            for origin, context in list(self.contexts.items()):
+                if context.get("session") == session:
+                    self.contexts.pop(origin, None)
             return {"disconnected": True}
         if request.type == "deep_check":
             from privacy_guardian.deepcheck import run_deep_check

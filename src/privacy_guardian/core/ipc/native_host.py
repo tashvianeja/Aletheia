@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import subprocess
 import sys
 from typing import Any
@@ -69,12 +70,58 @@ def main() -> int:
     settings = Settings.load()
     if not validate_caller(sys.argv[1:], settings.allowed_extension_ids):
         return 2
+    from uuid import uuid4
+
+    session = str(uuid4())
+
+    async def relay() -> None:
+        slots = asyncio.Semaphore(8)
+        output_lock = asyncio.Lock()
+        tasks: set[asyncio.Task[None]] = set()
+
+        async def dispatch(message: dict[str, Any]) -> None:
+            try:
+                result = await forward(settings, message)
+                async with output_lock:
+                    await asyncio.to_thread(write_message, sys.stdout.buffer, result)
+            finally:
+                slots.release()
+
+        try:
+            while True:
+                await slots.acquire()
+                message = await asyncio.to_thread(read_message, sys.stdin.buffer)
+                if message is None:
+                    slots.release()
+                    break
+                payload = message.get("payload")
+                if isinstance(payload, dict):
+                    message["payload"] = {**payload, "_session": session}
+                task = asyncio.create_task(dispatch(message))
+                tasks.add(task)
+                task.add_done_callback(tasks.discard)
+        finally:
+            for task in tuple(tasks):
+                task.cancel()
+            if tasks:
+                await asyncio.gather(*tasks, return_exceptions=True)
+            with contextlib.suppress(OSError, TimeoutError, ValueError):
+                await send_request(
+                    settings.data_dir,
+                    {
+                        "v": 1,
+                        "id": "disconnect",
+                        "type": "disconnect",
+                        "payload": {"_session": session},
+                    },
+                    timeout=2,
+                )
+
     try:
-        while (message := read_message(sys.stdin.buffer)) is not None:
-            result = asyncio.run(forward(settings, message))
-            write_message(sys.stdout.buffer, result)
+        asyncio.run(relay())
     except (EOFError, ValueError, BrokenPipeError):
         return 1
+
     return 0
 
 
