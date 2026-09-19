@@ -137,7 +137,10 @@ class DeepCheckWindow(QWidget):
         rows = [
             DecisionFinding(
                 label=str(finding.get("summary", "")),
-                severity="warn",
+                # Routine contract machinery is a note. Drawing a liability cap with the
+                # same triangle as "your data can be sold" tells the reader they are the
+                # same size of problem, and leaves them nothing to prioritise.
+                severity="info" if str(finding.get("tone", "warn")) == "info" else "warn",
                 detail=str(finding.get("detail", "")),
             )
             for finding in findings[:MAX_ROWS]

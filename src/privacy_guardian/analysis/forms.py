@@ -32,7 +32,7 @@ _LEXICON: dict[str, str] = {
     "government_id.passport": r"passport|passeport|reisepass|pasaporte",
     "government_id.ssn": r"\bssn\b|social.?security|sozialversicher",
     "government_id.national_id": r"national.?id|identity.?number|personalausweis|identit[eé]|identidad|aadhaar",
-    "financial.card_number": r"card.?number|credit.?card|carte.?bancaire|kreditkarte|tarjeta",
+    "financial.card_number": r"card.?number|credit.?card|carte.?bancaire|kreditkarte|tarjeta|\bcvv\b|\bcvc\b|card.?(?:security|verification).?(?:code|value)",
     "financial.iban": r"\biban\b",
     "financial.account_number": r"bank.?account|account.?number|kontonummer|compte.?bancaire|cuenta.?bancaria",
     "medical": r"diagnosis|medication|medical|health.?condition|diagnostic|m[eé]dical|gesundheit|salud",
@@ -60,6 +60,39 @@ class FieldAssessment(BaseModel):
     intent_confidence: float = 0.0
 
 
+# The same words, meaning something else: an email address is not where you live, and
+# the name of your first pet is not your name. Now that a field arrives carrying the
+# question the page asked rather than a bare attribute, these decide far more fields.
+_NOT_THIS_FIELD: dict[str, str] = {
+    "postal_address": r"(?:e.?mail|ip|mac|web|url|wallet|server|billing e)\s?.?address",
+    "full_name": r"names? (?:of|for)\b|(?:user|file|domain|product|company|pet|brand|screen|display|business|band|street)\s?names?",
+    "age": r"average|age of consent",
+    "email": r"e.?mail (?:preferences|frequency)",
+}
+
+
+def _lexicon_category(text: str) -> str | None:
+    """The most specific category the wording supports, not the first one listed.
+
+    "Email address" matched `address` before it matched `email`, purely because postal
+    addresses sit higher in the table, and the form was then reported as asking a survey
+    respondent for their home address. The longest piece of the label that a category
+    can account for is the one that decides it.
+    """
+    best: tuple[int, str] | None = None
+    for category, pattern in _LEXICON.items():
+        match = re.search(pattern, text, re.I)
+        if match is None:
+            continue
+        disqualifier = _NOT_THIS_FIELD.get(category)
+        if disqualifier and re.search(disqualifier, text, re.I):
+            continue
+        length = match.end() - match.start()
+        if best is None or length > best[0]:
+            best = (length, category)
+    return best[1] if best else None
+
+
 def label_field(field: FormField) -> FormField:
     if field.category is not None:
         return field.model_copy()
@@ -76,9 +109,9 @@ def label_field(field: FormField) -> FormField:
             update={"category": DataCategory(input_category), "confidence": 0.98}
         )
     text = " ".join((field.label, field.name, field.field_id))
-    for category, pattern in _LEXICON.items():
-        if re.search(pattern, text, re.I):
-            return field.model_copy(update={"category": DataCategory(category), "confidence": 0.9})
+    category = _lexicon_category(text)
+    if category is not None:
+        return field.model_copy(update={"category": DataCategory(category), "confidence": 0.9})
     return field.model_copy()
 
 

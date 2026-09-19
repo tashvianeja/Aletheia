@@ -155,6 +155,7 @@ def _headline(
     event: PrivacyEvent,
     assessments: list[NecessityAssessment],
     profile: SiteOrAppProfile,
+    flagged: set[DataCategory] | None = None,
 ) -> tuple[str, str]:
     """The bold line and the paragraph under it, written for the moment of the decision."""
     who = _requester_name(event)
@@ -195,16 +196,24 @@ def _headline(
         # Name the task, not the industry. "More than a recipe site needs" is not what a
         # reader is doing; "more than it needs to join a mailing list" is.
         task = form_task(event)
+        # And say it only about what the card is actually going to show. A full name on
+        # a survey is not worth a row, so it is not worth a headline either: announcing
+        # over-collection and then listing nothing is the card arguing with itself.
+        raised = (
+            [category_label(category.value) for category in flagged]
+            if flagged is not None
+            else unnecessary
+        )
         headline = (
             f"This form is asking for more than it needs to {task}."
-            if task and unnecessary
+            if task and raised
             else f"This form is asking for more than {_article(purpose)} {purpose} needs."
-            if certain and unnecessary
+            if certain and raised
             else "This form is asking for information it may not need."
-            if unnecessary
+            if raised
             else f"{who} is asking for your details."
         )
-        body = "" if unnecessary else f"Nothing here looks unusual for {who}."
+        body = "" if raised else f"Nothing here looks unusual for {who}."
         return headline, body
 
     if isinstance(event, ConsentBannerEvent):
@@ -311,6 +320,15 @@ _VERDICT_WORDING: dict[Necessity, tuple[str, str]] = {
 
 def _necessity_notes(event: PrivacyEvent, assessments: list[NecessityAssessment]) -> list[str]:
     """The "why am I seeing this" reasoning, grouped so it can be read at a glance."""
+    if isinstance(event, FormObservedEvent) and form_task(event):
+        # A form was judged on what it is for, and the judgement already wrote itself a
+        # sentence naming that task. Restating it against the site's industry instead
+        # answers a question nobody asked: the reader is filling in this form.
+        return [
+            item.rationale
+            for item in assessments
+            if item.rationale and item.verdict in {Necessity.UNNECESSARY, Necessity.RED_FLAG}
+        ]
     certain = event.requester.purpose != "unknown" and event.requester.purpose_confidence >= 0.35
     if not assessments or not certain:
         # The body already says the purpose could not be established; saying it once
@@ -392,12 +410,13 @@ def explain(
     notes: list[str] | None = None,
     informational: bool = False,
     found: list[Finding] | None = None,
+    flagged: set[DataCategory] | None = None,
 ) -> tuple[str, str, list[DecisionFinding], list[str]]:
     """Return the widget's headline, body, finding rows and 'why am I seeing this' detail."""
     from privacy_guardian.engine.presentation import tracking_mechanisms
 
     headline, body = (informational and _informational(event, assessments)) or _headline(
-        event, assessments, profile
+        event, assessments, profile, flagged
     )
     # Whether a request was necessary is the question a form or an upload is judged on.
     # A page that is tracking you, a cookie banner and a policy are not judged on it,
@@ -406,6 +425,11 @@ def explain(
         event, TrackingEvent | ConsentBannerEvent | PolicyDocumentEvent
     )
     uncertain = event.requester.purpose == "unknown" or event.requester.purpose_confidence < 0.35
+    # A form is judged on what it is for, not on what the site sells. Where its own
+    # intent is known, "its purpose is uncertain" contradicts the headline directly
+    # above it, which has just named the task in so many words.
+    if isinstance(event, FormObservedEvent) and form_task(event):
+        uncertain = False
     if uncertain and judged_on_necessity:
         # Say plainly that necessity could not be judged rather than implying it was.
         body = UNCERTAIN_PURPOSE if not body or informational else body + " " + UNCERTAIN_PURPOSE
@@ -493,14 +517,22 @@ def consent_meanings(event: ConsentBannerEvent) -> list[str]:
 
 
 def form_findings(
-    event: FormObservedEvent, unnecessary: set[DataCategory]
+    event: FormObservedEvent,
+    flagged: set[DataCategory],
+    unnecessary: set[DataCategory] | None = None,
 ) -> list[DecisionFinding]:
     """The fields worth looking at, named the way the form names them.
 
     Where something needs looking at, the fields that are fine are not what the person
     is being asked about, and listing them doubled the height of the card. They are
     only listed when they are the whole answer: nothing here needs looking at.
+
+    `flagged` is what the card is warning about; `unnecessary` is the wider set the
+    engine could not justify. A full name on a survey is in the second and not the
+    first, and putting a warning triangle beside it sits it next to the password and
+    says the two are the same size of problem.
     """
+    unnecessary = flagged if unnecessary is None else unnecessary
     warnings: list[DecisionFinding] = []
     fine: list[DecisionFinding] = []
     seen: set[str] = set()
@@ -511,8 +543,12 @@ def form_findings(
         if label in seen:
             continue
         seen.add(label)
-        if field.category in unnecessary:
+        if field.category in flagged:
             warnings.append(DecisionFinding(label=label, severity="warn"))
+        elif field.category in unnecessary:
+            # Asked for, not obviously needed, not worth a warning: a neutral note, and
+            # never a tick claiming this form needs it.
+            fine.append(DecisionFinding(label=label, severity="info"))
         else:
             fine.append(DecisionFinding(label=f"{label} — needed for this", severity="ok"))
     if not warnings:

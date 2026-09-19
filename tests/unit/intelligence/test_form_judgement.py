@@ -174,3 +174,57 @@ def test_an_empty_optional_box_is_not_worth_interrupting_anyone_about() -> None:
 def test_an_unrecognisable_form_says_nothing_rather_than_guessing() -> None:
     fields = [field("Reference", "ref", required=True), field("Code", "code", required=True)]
     assert flagged(fields, FormContext(), "unknown") == set()
+
+
+# A form builder hands over its questions as written, with no autocomplete hint and no
+# password control: "What is your password?" is a plain text box like any other.
+SURVEY = FormContext(
+    heading="Customer feedback survey",
+    submit_text="Submit",
+    page_title="Untitled form",
+    nearby_text="Tell us what you think of our service.",
+)
+
+
+@needs_encoder
+def test_a_survey_asking_for_a_password_is_the_thing_most_worth_saying() -> None:
+    """Never calling a password unnecessary protected logins by silencing this.
+
+    The rule was written for a sign-in page, where telling someone their password is
+    over-collection destroys trust in everything else. Applied to every form, it also
+    silenced the one request nobody should ever answer.
+    """
+    fields = [
+        field("Your name", required=True),
+        field("Email address", required=True),
+        field("What is your password?", required=True),
+    ]
+    judgement = assess_form(fields, SURVEY, "unknown")
+    password = judgement.fields[2]
+    assert password.field.category is DataCategory.CREDENTIALS_PASSWORD
+    assert password.role is FieldRole.UNRELATED_COLLECTION
+    assert password.flag
+    assert "nothing to sign in to here" in password.rationale
+
+
+@needs_encoder
+def test_a_survey_asking_for_a_card_number_is_flagged_without_a_payment_to_make() -> None:
+    fields = [
+        field("Email address", required=True),
+        field("Credit card number", required=True),
+    ]
+    assert flagged(fields, SURVEY, "unknown") == {"financial.card_number"}
+
+
+@needs_encoder
+def test_an_anonymous_box_cannot_be_judged_at_all() -> None:
+    """Why the questions have to reach here: with no wording there is nothing to judge."""
+    anonymous = [field("", name="entry.1"), field("", name="entry.2")]
+    assert flagged(anonymous, SURVEY, "unknown") == set()
+
+
+def test_an_email_address_is_not_a_home_address() -> None:
+    """`address` matched before `email` did, purely because it sat higher in the table."""
+    assert field("Email address").category is DataCategory.EMAIL
+    assert field("Home address").category is DataCategory.POSTAL_ADDRESS
+    assert field("What was the name of your first pet?").category is None

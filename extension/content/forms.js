@@ -1,10 +1,53 @@
 (() => {
   let nextId=0, timer=null, typingTimer=null, lastFingerprint='', assessments=[];
   const ids=new WeakMap();
+  // What the page calls this box. A form built out of divs — every survey builder, most
+  // single-page apps — ties its question to its input with aria-labelledby or with
+  // nothing but position, so a field asking for a password or a card number arrived
+  // here anonymous and was judged as though it had asked for nothing at all.
+  const textOf=node=>(node?.textContent||'').replace(/\s+/g,' ').trim();
+  function byIds(element,attribute){
+    const ids=(element.getAttribute(attribute)||'').split(/\s+/).filter(Boolean);
+    if(!ids.length)return '';
+    const root=element.getRootNode?.();
+    return ids.map(id=>textOf((root&&root.getElementById?root.getElementById(id):null)||document.getElementById(id))).filter(Boolean).join(' ');
+  }
+  // The heading of the block this box sits in: a survey's question, a fieldset's legend.
+  // A question block holds one answer. A container holding several different boxes is a
+  // section, and its heading describes all of them at once, so lending it to each box in
+  // turn would label every field of a checkout "Credit card details".
+  function groupText(element){
+    const container=element.closest?.('[role=listitem],fieldset,[role=group],[role=radiogroup],li');
+    if(!container)return '';
+    const controls=Array.from(container.querySelectorAll('input,select,textarea,[contenteditable=true]')).filter(node=>!['hidden','submit','button','reset','image'].includes(node.type));
+    if(controls.length>1&&!controls.every(node=>['radio','checkbox'].includes(node.type)))return '';
+    const labelled=byIds(container,'aria-labelledby')||container.getAttribute?.('aria-label')||'';
+    const heading=container.querySelector?.('[role=heading],legend,h1,h2,h3,h4,h5,h6');
+    return (labelled||textOf(heading)).slice(0,300);
+  }
+  // The classic "caption above the box" with no markup joining the two.
+  function precedingText(element){
+    for(let node=element.previousElementSibling;node;node=node.previousElementSibling){
+      if(node.querySelector?.('input,select,textarea,[contenteditable=true]'))break;
+      const text=textOf(node);
+      if(text&&text.length<=120)return text;
+    }
+    return '';
+  }
+  function describe(element){
+    const own=element.labels?Array.from(element.labels).map(label=>label.textContent).join(' '):'';
+    // A radio or a checkbox is labelled with its option, not with the question, so the
+    // question has to come from the group for "Male"/"Female" to be read as gender.
+    const grouped=['checkbox','radio'].includes(element.type)?groupText(element):'';
+    // A placeholder was written for this box; a caption above it is only inferred from
+    // where it sits, so it is the last thing tried before the box's own title.
+    const candidates=[own,byIds(element,'aria-labelledby'),element.getAttribute('aria-label'),grouped,groupText(element),element.getAttribute('placeholder'),precedingText(element),element.getAttribute('title')];
+    const first=candidates.find(value=>(value||'').trim());
+    return [grouped&&grouped!==first?grouped:'',first||''].filter(Boolean).join(' ').replace(/\s+/g,' ').trim().slice(0,300);
+  }
   function fields(form=null){return PG.queryAll('input,select,textarea,[contenteditable=true]').filter(element=>PG.visible(element)&&(!form||element.form===form||form.contains(element))&&!['file','hidden','submit','button','reset','image'].includes(element.type)).map(element=>{
     if(!ids.has(element))ids.set(element,`pg-field-${++nextId}`);const field_id=ids.get(element);element.dataset.pgFieldId=field_id;
-    const labels=element.labels?Array.from(element.labels).map(label=>label.textContent).join(' '):'';
-    const label=(labels||element.getAttribute('aria-label')||element.getAttribute('placeholder')||'').trim().slice(0,300);
+    const label=describe(element);
     return {field_id,label,name:(element.name||element.id||'').slice(0,100),input_type:element.type||element.tagName.toLowerCase(),autocomplete:element.autocomplete||'',required:!!element.required||element.getAttribute('aria-required')==='true',asserted_required:/\*/.test(label)||element.dataset.required==='true',max_length:Math.max(0,Math.min(4096,element.maxLength>0?element.maxLength:0)),filled:element.isContentEditable?!!element.textContent?.trim():['checkbox','radio'].includes(element.type)?element.checked:!!element.value};
   });}
 

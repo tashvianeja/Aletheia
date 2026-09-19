@@ -55,8 +55,14 @@ _ACTIONS: dict[str, tuple[list[str], str]] = {
 }
 
 
-def form_assessments(event: FormObservedEvent) -> list[NecessityAssessment]:
-    """Necessity for a form, keyed on the transaction rather than the site category."""
+def form_assessments(
+    event: FormObservedEvent,
+) -> tuple[list[NecessityAssessment], set[DataCategory]]:
+    """Necessity for a form, keyed on the transaction rather than the site category.
+
+    Returns the per-category verdicts and, separately, the categories the engine judged
+    worth raising: the card and the in-page badges then say the same thing.
+    """
     from privacy_guardian.intelligence.necessity import assess_form, assessments_for
 
     fields = [
@@ -70,8 +76,13 @@ def form_assessments(event: FormObservedEvent) -> list[NecessityAssessment]:
     # clipboard finding, a sensor observation - still have to be judged, and the form's
     # intent says nothing about them.
     covered = {item.category for item in assessments}
-    return assessments + analyze_context(
-        event.requester, [item for item in event.data_categories if item not in covered]
+    flagged = {item.field.category for item in judgement.flagged if item.field.category}
+    return (
+        assessments
+        + analyze_context(
+            event.requester, [item for item in event.data_categories if item not in covered]
+        ),
+        flagged,
     )
 
 
@@ -94,9 +105,10 @@ def decide(
             and (not isinstance(event, FormSubmitEvent) or field.filled)
         }
     event = event.model_copy(update={"data_categories": sorted(categories, key=str)})
+    flagged: set[DataCategory] | None = None
     if isinstance(event, FormObservedEvent):
         # A form is judged against what it is for, not against the site's industry.
-        assessments = form_assessments(event)
+        assessments, flagged = form_assessments(event)
     else:
         assessments = analyze_context(event.requester, event.data_categories)
     scored = score_risk(assessments, profile, learned_rules, event.requester.purpose)
@@ -172,9 +184,15 @@ def decide(
         if material:
             risk = max(risk, 0.6)
             level = max(level, 2)
+            from privacy_guardian.engine.clauses import clause_title
+
+            # Clause titles are whole sentences about the reader, so they only need
+            # their opening capital dropped to sit inside one.
+            said = [clause_title(clause) for clause in sorted(material)]
+            said = [title[:1].lower() + title[1:] for title in said]
             notes.append(
-                "The agreement contains: "
-                + ", ".join(clause.replace("_", " ") for clause in sorted(material))
+                "This agreement says "
+                + (", ".join(said[:-1]) + " and " + said[-1] if len(said) > 1 else said[0])
                 + "."
             )
         elif event.missing or profile.policy_missing:
@@ -305,13 +323,14 @@ def decide(
         notes,
         informational=_LEVELS[level] == Outcome.INFORM,
         found=findings,
+        flagged=flagged,
     )
     unnecessary = {
         item.category
         for item in assessments
         if item.verdict in {Necessity.UNNECESSARY, Necessity.RED_FLAG}
     }
-    findings_rows = findings_for(event, findings_rows, unnecessary)
+    findings_rows = findings_for(event, findings_rows, unnecessary, flagged)
     if isinstance(event, PolicyDocumentEvent):
         rows = policy_rows(list(profile.clauses), [])
         if rows:

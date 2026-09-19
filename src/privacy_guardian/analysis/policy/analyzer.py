@@ -5,14 +5,14 @@ import json
 import re
 from functools import lru_cache
 from importlib.resources import files
-from typing import Any, Literal
+from typing import Any, Literal, NamedTuple
 
 from pydantic import BaseModel, Field
 
 from privacy_guardian.analysis.pii import redact_text
 from privacy_guardian.core.events import DataCategory
-from privacy_guardian.engine.labels import category_label
-from privacy_guardian.engine.necessity import necessity_for
+from privacy_guardian.engine.labels import article, category_label, lowered, purpose_label
+from privacy_guardian.engine.necessity import Necessity, necessity_for
 
 
 class Clause(BaseModel):
@@ -47,6 +47,9 @@ class PolicyProfile(BaseModel):
     contact: str | None = None
     clauses: list[Clause] = Field(default_factory=list)
     necessity_statements: list[str] = Field(default_factory=list)
+    # The categories the policy claims that this kind of service has no evident use for,
+    # kept as data so the report can say it once rather than string-matching sentences.
+    over_collection: list[DataCategory] = Field(default_factory=list)
     missing: bool = False
     partial: bool = False
     warnings: list[str] = Field(default_factory=list)
@@ -60,13 +63,25 @@ def patterns() -> dict[str, dict[str, list[str]]]:
     return value
 
 
+class _Rule(NamedTuple):
+    positive: list[re.Pattern[str]]
+    negative: list[re.Pattern[str]]
+    # The clause's own subject matter. A pattern can only tell you what a sentence means
+    # if the sentence is about the thing the clause is named after: "cancel at least 14
+    # days before renewal" is not an age requirement, however close a number sits to
+    # "at least". Every clause has to see its own subject before it may claim a sentence.
+    requires: list[re.Pattern[str]]
+    scope: list[str]
+
+
 @lru_cache(maxsize=1)
-def _compiled() -> dict[str, tuple[list[re.Pattern[str]], list[re.Pattern[str]], list[str]]]:
+def _compiled() -> dict[str, _Rule]:
     return {
-        key: (
+        key: _Rule(
             [re.compile(pattern, re.I) for pattern in item["positive"]],
             [re.compile(pattern, re.I) for pattern in item["negative"]],
-            item["scope"],
+            [re.compile(pattern, re.I) for pattern in item.get("requires", [])],
+            list(item["scope"]),
         )
         for key, item in patterns().items()
     }
@@ -112,15 +127,13 @@ def sentences(text: str) -> list[tuple[str, str]]:
     return result
 
 
-def _negated(text: str, start: int, end: int) -> bool:
-    prefix = text[max(0, start - 55) : end]
-    return bool(
-        re.search(
-            r"\b(?:do not|does not|will not|shall not|never|no longer|without|won\x27t|don\x27t)\b.{0,35}$",
-            prefix[: max(0, start - max(0, start - 55))],
-            re.I,
-        )
-    )
+def _claims(sentence: str, rule: _Rule) -> bool:
+    """Whether this sentence really is the clause, rather than merely resembling it."""
+    if rule.requires and not any(pattern.search(sentence) for pattern in rule.requires):
+        return False
+    if any(pattern.search(sentence) for pattern in rule.negative):
+        return False
+    return any(pattern.search(sentence) for pattern in rule.positive)
 
 
 def analyze_terms(text: str) -> TermsProfile:
@@ -133,22 +146,25 @@ def _terms_from_sentences(text: str, segmented: list[tuple[str, str]]) -> TermsP
         return TermsProfile(document_hash=digest, missing=True, nothing_unusual=[])
     found: dict[str, Clause] = {}
     for sentence, heading in segmented:
-        for category, (positive, negative, scopes) in _compiled().items():
-            if category in found:
+        for category, rule in _compiled().items():
+            if not _claims(sentence, rule):
                 continue
-            if any(pattern.search(sentence) for pattern in positive) and not any(
-                pattern.search(sentence) for pattern in negative
-            ):
-                confidence = (
-                    0.96 if any(scope.lower() in heading.lower() for scope in scopes) else 0.9
-                )
-                # Public clauses may still accidentally contain identifiers. Cache only sanitized citations.
-                found[category] = Clause(
-                    category=category,
-                    confidence=confidence,
-                    citation=redact_text(sentence)[:2000],
-                    section=redact_text(heading)[:150],
-                )
+            confidence = (
+                0.96 if any(scope.lower() in heading.lower() for scope in rule.scope) else 0.9
+            )
+            existing = found.get(category)
+            # The first sentence that matches is not always the one worth quoting. A
+            # cancellation notice and a real age limit can both mention a small number;
+            # the sentence under the matching heading is the one that means it.
+            if existing is not None and existing.confidence >= confidence:
+                continue
+            # Public clauses may still accidentally contain identifiers. Cache only sanitized citations.
+            found[category] = Clause(
+                category=category,
+                confidence=confidence,
+                citation=redact_text(sentence)[:2000],
+                section=redact_text(heading)[:150],
+            )
     normal = ["payment", "account_creation", "basic_service_usage"]
     if "automatic_renewal" in found or "liability_cap" in found:
         normal.remove("payment")
@@ -188,21 +204,97 @@ _COLLECTS = {
     "phone": r"phone|telephone|mobile number",
     "postal_address": r"postal|mailing address|home address|street address",
     "dob": r"date of birth|birth date|\bdob\b",
-    "age": r"\bage\b",
+    "age": r"\bages?\b",
     "gender": r"gender|\bsex\b",
-    "government_id": r"government.?id|identity document",
+    "government_id": r"government.?(?:issued )?id|identity document|identification (?:number|document)",
     "government_id.passport": r"passport",
     "financial.card_number": r"card number|credit card|payment card",
-    "medical": r"medical|health information",
+    "medical": r"medical (?:history|records?|information|conditions?|data)|health (?:information|data|records?|conditions?)|\bdiagnos(?:is|es|ed)\b|\bprescriptions?\b|\bmedications?\b",
     "location_precise": r"precise location|GPS|exact location|geolocation",
     "location_coarse": r"approximate location|coarse location|city.level|general location",
     "device_identifiers": r"device (?:information|identifier|ID)|IP address|advertising ID",
     "browsing_activity": r"browsing (?:activity|history|behavior)|pages you visit|websites you visit",
     "contacts": r"address book|your contacts",
     "biometric_photo": r"biometric|facial recognition",
-    "employment": r"employment|occupation",
-    "education": r"education|qualifications",
+    "employment": r"employment (?:history|status|information|details|records?)|\bjob title\b|\boccupation\b|your employer|professional (?:title|background)",
+    "education": r"education(?:al)? (?:history|background|qualifications?|records?|details?|information|level|institution)|\bdegrees?\b|\bqualifications\b|school you attend",
 }
+# The same word, a few words earlier, means something that is not you: a domain name, a
+# file name, the course of employment, educational purposes, a clause promising not to
+# discriminate on the basis of sex. A hit inside one of these is not a collection claim.
+_NOT_ABOUT_YOU = {
+    "full_name": r"(?:domain|file|host|device|brand|product|company|business|trade|screen|display|folder|path|street|user|pet|sub)\s*names?|names?\s+(?:of|for)\b",
+    "age": r"age of (?:consent|majority)",
+    "gender": r"regardless of|discriminat|equal opportunit|on the basis of",
+    "employment": r"course of employment|employment (?:agency|law|relationship|practices)",
+    "education": r"educational purposes",
+    "medical": r"medical (?:device|advice|emergency)|diagnostics?",
+}
+# The verbs a policy uses when it is telling you what it takes. A sentence carrying none
+# of them is describing something else — what a word means, who owns the trademarks, who
+# the company does not discriminate against — and reading a list of data categories out
+# of it is how a check comes to report collection that never happens.
+_COLLECTION_VERB = re.compile(
+    r"\b(?:collect|gather|obtain|receiv|request|ask|stor|retain|log|record|captur|"
+    r"hold|maintain|keep|requir|submit)\w*",
+    re.I,
+)
+# "We use browsing activity for advertising" says what they do with it, not that they
+# took it, and reporting the two the same way is how a check ends up asserting more than
+# the document does. These verbs open a claim only where a list follows them.
+_HANDLING_VERB = re.compile(r"\b(?:process|use|using|shar|sell|disclos|transfer)\w*", re.I)
+# Where a policy names the things it takes. "Technical information such as your IP
+# address" names an IP address; the words in front of "such as" name nothing.
+_ENUMERATION = re.compile(
+    r"(?:such as|including(?: but not limited to)?|includes?|for example|e\.g\.|:)", re.I
+)
+# A bullet list under "Information we collect" is a collection statement even though the
+# line itself is only a noun.
+_COLLECTION_HEADING = re.compile(
+    r"(?:information|data|details)\s+(?:that\s+|which\s+)?we\s+"
+    r"(?:collect|gather|obtain|receive|process)|what we collect|"
+    r"(?:personal|categories of)\s+(?:information|data)|information (?:you|we)",
+    re.I,
+)
+_NEGATION = re.compile(r"\b(?:do not|does not|will not|never|no|not|without)\b[^,;.]{0,100}$", re.I)
+
+
+def _collection_span(sentence: str, heading: str) -> tuple[int, int] | None:
+    """The part of a sentence that names what is taken, or None if it names nothing."""
+    if _COLLECTION_HEADING.search(heading):
+        return 0, len(sentence)
+    verb = _COLLECTION_VERB.search(sentence)
+    handling = _HANDLING_VERB.search(sentence) if verb is None else None
+    if verb is None and handling is None:
+        return None
+    start = (verb or handling).end()  # type: ignore[union-attr]
+    last = None
+    for match in _ENUMERATION.finditer(sentence, start):
+        last = match
+    if last is None:
+        return (start, len(sentence)) if verb is not None else None
+    return last.end(), len(sentence)
+
+
+def collected_categories(sentence: str, heading: str = "") -> set[str]:
+    """The data categories this sentence actually says are collected."""
+    span = _collection_span(sentence, heading)
+    if span is None:
+        return set()
+    start, end = span
+    found: set[str] = set()
+    for label, pattern in _COLLECTS.items():
+        for match in re.finditer(pattern, sentence[start:end], re.I):
+            at = start + match.start()
+            if _NEGATION.search(sentence[:at]):
+                continue
+            disqualifier = _NOT_ABOUT_YOU.get(label)
+            window = sentence[max(0, at - 40) : start + match.end() + 40]
+            if disqualifier and re.search(disqualifier, window, re.I):
+                continue
+            found.add(label)
+            break
+    return found
 
 
 def _positive_labels(sentence: str, rules: dict[str, str]) -> list[str]:
@@ -217,6 +309,46 @@ def _positive_labels(sentence: str, rules: dict[str, str]) -> list[str]:
             labels.append(label)
             break
     return labels
+
+
+def collection_statements(collects: list[DataCategory], purpose: str) -> list[str]:
+    """What the policy says it takes, said the way a person would say it.
+
+    The old sentence named the category twice and then quoted the necessity engine at
+    the reader: "Collects Date of birth: Date of birth does not appear necessary for a
+    file converter." One category, one plain sentence, and the judgement at the end
+    where it can be disagreed with.
+    """
+    named = purpose_label(purpose)
+    statements: list[str] = []
+    for category in collects:
+        thing = lowered(category_label(category.value))
+        verdict = necessity_for(purpose, category).verdict
+        if purpose == "unknown":
+            statements.append(f"The policy says it collects your {thing}.")
+        elif verdict in {Necessity.UNNECESSARY, Necessity.RED_FLAG}:
+            statements.append(
+                f"The policy says it collects your {thing}, "
+                f"which {article(named)} {named} does not appear to need."
+            )
+        elif verdict is Necessity.REQUIRED:
+            statements.append(
+                f"The policy says it collects your {thing}, which {article(named)} {named} needs."
+            )
+        else:
+            statements.append(f"The policy says it collects your {thing}.")
+    return statements
+
+
+def over_collected(collects: list[DataCategory], purpose: str) -> list[DataCategory]:
+    """The categories a service of this kind has no evident use for."""
+    if purpose == "unknown":
+        return []
+    return [
+        category
+        for category in collects
+        if necessity_for(purpose, category).verdict in {Necessity.UNNECESSARY, Necessity.RED_FLAG}
+    ]
 
 
 def analyze_policy(text: str, purpose: str = "unknown") -> PolicyProfile:
@@ -242,10 +374,7 @@ def analyze_policy(text: str, purpose: str = "unknown") -> PolicyProfile:
             r"shar|disclos|provid|transfer|recipient|sold|sell|partner", lower
         ) or re.search(r"shar|disclos|recipient", heading, re.I):
             shares.update(_positive_labels(sentence, _SHARES))
-        if re.search(
-            r"collect|gather|obtain|receiv|process|information|data|access", lower
-        ) or re.search(r"collect|information", heading, re.I):
-            collects.update(DataCategory(label) for label in _positive_labels(sentence, _COLLECTS))
+        collects.update(DataCategory(label) for label in collected_categories(sentence, heading))
         for right, pattern in {
             "access": "right.{0,30}access|request.{0,30}copy",
             "deletion": "right.{0,30}(?:delet|eras)|request.{0,30}delet",
@@ -283,8 +412,6 @@ def analyze_policy(text: str, purpose: str = "unknown") -> PolicyProfile:
     profile.purposes = sorted(used)
     profile.shares_with = sorted(shares)
     profile.user_rights = sorted(rights)
-    profile.necessity_statements = [
-        f"Collects {category_label(category.value)}: {necessity_for(purpose, category).rationale}"
-        for category in profile.collects
-    ]
+    profile.necessity_statements = collection_statements(profile.collects, purpose)
+    profile.over_collection = over_collected(profile.collects, purpose)
     return profile

@@ -205,6 +205,79 @@ async def test_deep_check_uses_cached_real_analyses_and_reports_all_risks(servic
 
 
 @pytest.mark.asyncio
+async def test_deep_check_reports_a_contract_in_words_not_in_its_own_clauses(
+    service: Service,
+) -> None:
+    """The report is the point of the product; the document is the evidence for it.
+
+    Every clause reached the report as its own database key with the sentence it was
+    found in underneath — which is the contract, retyped, with a triangle next to it.
+    """
+    origin = "https://subscription.example"
+    terms = (
+        "Subscriptions\n"
+        "Your subscription renews automatically. To cancel you must notify us at least "
+        "14 days before the renewal date.\n"
+        "Disputes\n"
+        "Any dispute shall be resolved by binding individual arbitration and you waive "
+        "any right to a trial by jury.\n"
+    )
+    await service.handle_message(
+        request("terms", "context", {"origin": origin, "terms": {"text": terms}})
+    )
+    response = await service.handle_message(
+        request("deep", "deep_check", {"origin": origin, "cached_only": True})
+    )
+    summaries = [item["summary"] for item in response["result"]["findings"]]
+    assert "This renews and charges you automatically" in summaries
+    assert "You give up the right to sue or to join a class action" in summaries
+    # The cancellation notice period is not an age requirement, and no summary is a key.
+    assert "There is a minimum age for using this" not in summaries
+    assert not any("_" in summary for summary in summaries)
+    details = " ".join(item["detail"] for item in response["result"]["findings"])
+    assert "binding individual arbitration" not in details
+
+
+@pytest.mark.asyncio
+async def test_deep_check_attributes_collection_claims_to_the_policy_that_makes_them(
+    service: Service,
+) -> None:
+    """One sentence for the whole list, and it says who is claiming it.
+
+    A finding per category was the same headline repeated with a different noun under
+    it, and it never said the claim came from the policy rather than from this page.
+    """
+    # The purpose is inferred from the site, not asserted by the caller: what a policy
+    # over-collects is only answerable once you know what the service is.
+    origin = "https://convert-pdf.example"
+    await service.handle_message(
+        request(
+            "policy",
+            "context",
+            {
+                "origin": origin,
+                "policy": {
+                    "text": (
+                        "We collect your date of birth and your precise location. "
+                        "We use your information to provide the service."
+                    )
+                },
+            },
+        )
+    )
+    response = await service.handle_message(
+        request("deep", "deep_check", {"origin": origin, "cached_only": True})
+    )
+    collection = [
+        item
+        for item in response["result"]["findings"]
+        if item["summary"].startswith("The privacy policy claims more")
+    ]
+    assert len(collection) == 1
+    assert collection[0]["detail"] == ("It says it collects date of birth and precise location.")
+
+
+@pytest.mark.asyncio
 async def test_overlapping_context_updates_preserve_each_analysis(service: Service) -> None:
     pool = GatePool()
     service.pool = pool  # type: ignore[assignment]

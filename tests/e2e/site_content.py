@@ -138,6 +138,34 @@ setTimeout(() => {
 """
 
 
+# A form builder's output: no <label for>, no name, no placeholder. The question is a
+# heading tied to the box by aria-labelledby alone, which is how every survey tool and
+# most single-page apps build a form — and how a box asking for a password reached the
+# analyser with nothing on it at all.
+ARIA_SURVEY_FORM = """
+<p>Customer feedback survey. Tell us what you think of our service.</p>
+<div id="survey" role="list">
+  <div role="listitem">
+    <div role="heading" aria-level="3" id="q1"><span>Your name</span></div>
+    <div><input type="text" aria-labelledby="q1" dir="auto"></div>
+  </div>
+  <div role="listitem">
+    <div role="heading" aria-level="3" id="q2"><span>Email address</span></div>
+    <div><input type="text" aria-labelledby="q2" dir="auto"></div>
+  </div>
+  <div role="listitem">
+    <div role="heading" aria-level="3" id="q3"><span>What is your password?</span></div>
+    <div><input type="text" aria-labelledby="q3" dir="auto"></div>
+  </div>
+  <div role="listitem">
+    <div role="heading" aria-level="3" id="q4"><span>Credit card number</span></div>
+    <div><input type="text" aria-labelledby="q4" dir="auto"></div>
+  </div>
+</div>
+<div role="button" tabindex="0">Submit</div>
+"""
+
+
 PAGES: Mapping[str, str] = {
     "image-compressor": page(
         "Online Image Compressor", "<p>Compress images without an account.</p>" + UPLOAD_FORM
@@ -150,6 +178,7 @@ PAGES: Mapping[str, str] = {
     ),
     "free-pdf-download": page("Free PDF Download", FREE_PDF_FORM),
     "bank-kyc": page("Community Bank Identity Verification", BANK_KYC_FORM),
+    "aria-survey-form": page("Untitled form", ARIA_SURVEY_FORM),
     "signup-with-terms": page("Synthetic Cloud Signup", TERMS),
     "tracker-heavy": page("Tracker Heavy News", cmp_body("onetrust"), TRACKER_SCRIPT + CMP_SCRIPT),
     "tracker-late-fingerprint": page(

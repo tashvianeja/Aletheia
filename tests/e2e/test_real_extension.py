@@ -369,6 +369,35 @@ async def test_bank_kyc_has_no_badges_or_intervention_and_submits(
 
 
 @pytest.mark.asyncio
+async def test_survey_built_from_aria_labels_flags_the_password_and_the_card(
+    real_browser: RealBrowser, fixture_site: tuple[str, object]
+) -> None:
+    """A form whose questions are headings, not labels, is still read as questions.
+
+    Every survey builder ties its question to its input with aria-labelledby and nothing
+    else. Reading only `labels` and `aria-label` left every box anonymous, so a survey
+    asking for a password and a card number was reported as asking for nothing at all.
+    """
+    base_url, _ = fixture_site
+    page = await real_browser.context.new_page()
+    await page.goto(f"{base_url}/fixtures/aria-survey-form")
+    for question, answer in (
+        ("q1", "Morgan Synthetic"),
+        ("q2", "morgan@example.test"),
+        ("q3", "synthetic-secret"),
+        ("q4", "4111111111111111"),
+    ):
+        await page.locator(f'[aria-labelledby="{question}"]').fill(answer)
+    await page.locator(".pg-badge").first.wait_for(timeout=10_000)
+    await page.wait_for_timeout(500)
+    flagged = await page.evaluate(
+        "[...document.querySelectorAll('.pg-badge')]"
+        ".map(node => node.previousElementSibling.getAttribute('aria-labelledby'))"
+    )
+    assert sorted(flagged) == ["q3", "q4"]
+
+
+@pytest.mark.asyncio
 async def test_hidden_reject_desktop_action_rejects_only_optional_cookies(
     real_browser: RealBrowser, fixture_site: tuple[str, object]
 ) -> None:
@@ -513,13 +542,18 @@ async def test_terms_interception_shows_three_risks_and_preserves_checkbox_state
     panel = page.locator(".pg-panel")
     await panel.wait_for(timeout=5_000)
     text = (await panel.inner_text()).lower()
-    assert "arbitration" in text
-    assert "training" in text
-    assert "retention" in text or "deletion" in text
-    assert "payment" in text
-    assert "account" in text
-    assert "basic" in text
-    assert text.count("✓") >= 3
+    # Each risk said as what it does to the reader. The clauses themselves are one
+    # click away under "Show me where", not pasted onto the card as the explanation.
+    assert "give up the right to sue" in text
+    assert "train their ai" in text
+    assert "deleting your account does not delete your data" in text
+    assert "paying for it works the usual way" in text
+    assert "creating an account works the usual way" in text
+    assert "using the service works the usual way" in text
+    assert "binding arbitration" not in text
+    # Three risks and three all-clears, one row each. The tick is drawn as an icon, so
+    # counting the glyph in the text counted nothing.
+    assert await panel.locator(".pg-rows li").count() == 6
     await panel.locator('[data-pg-action="continue"]').click()
     await panel.wait_for(state="detached", timeout=3_000)
     assert await page.locator("#agree").is_checked()
@@ -727,8 +761,9 @@ async def test_recipe_deep_check_reports_unnecessary_precise_location(
     summaries = " ".join(
         f"{item['summary']} {item.get('detail', '')}" for item in result["result"]["findings"]
     ).lower()
-    assert "precise location" in summaries
-    assert "not appear necessary" in summaries or "unnecessary" in summaries
+    # Said once, in words, and attributed to the policy rather than to this page.
+    assert "the privacy policy claims more than this site appears to need" in summaries
+    assert "it says it collects precise location" in summaries
 
 
 @pytest.mark.asyncio

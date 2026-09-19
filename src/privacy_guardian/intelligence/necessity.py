@@ -172,6 +172,33 @@ _PAYMENT_INTENTS = {
     FormIntent.IDENTITY_VERIFICATION,
     FormIntent.PROFILE_EDIT,
 }
+# The forms that have a password to take: there is an account to get into, or one to
+# make. Everywhere else a password box is somebody asking for the keys to something
+# they have nothing to do with.
+_AUTH_INTENTS = {
+    FormIntent.ACCOUNT_SIGNUP,
+    FormIntent.ACCOUNT_LOGIN,
+    FormIntent.PASSWORD_RESET,
+    FormIntent.TWO_FACTOR,
+    FormIntent.PROFILE_EDIT,
+}
+
+
+def credential_expected(field: FormField, intent: FormIntent, structure: Structure) -> bool:
+    """Whether this form has any business holding a password.
+
+    Never telling someone their password is unnecessary protects the one case that
+    matters — a login — by silencing the other one, where a survey asks for the password
+    to an account it has nothing to do with. The question is not whether the field is a
+    password; it is whether there is anything here to sign in to.
+    """
+    if intent in _AUTH_INTENTS:
+        return True
+    if intent is FormIntent.UNKNOWN:
+        # A form nobody could classify, carrying a real masked password box, is a sign-in
+        # far more often than it is an attack. A question typed in the clear is not.
+        return field.input_type == "password" and structure.password_count > 0
+    return False
 
 
 def _root(category: DataCategory) -> str:
@@ -214,7 +241,9 @@ def infer_role(
         return FieldRole.PROFILE_DETAIL
     root = _root(category)
     if root == "credentials":
-        return FieldRole.CREDENTIAL
+        if credential_expected(field, intent, structure):
+            return FieldRole.CREDENTIAL
+        return FieldRole.UNRELATED_COLLECTION
     # A card number is a payment instrument on a form that takes payment. On a job
     # application it is just a bank account somebody has asked a stranger for, and
     # calling it a payment instrument is what would hide it.
@@ -260,12 +289,15 @@ def verdict_for(
     *,
     site_purpose: str = "unknown",
     intent_confidence: float = 1.0,
+    expected_credential: bool = True,
 ) -> Necessity:
     root = _root(category)
     if intent is FormIntent.UNKNOWN or intent_confidence < MIN_INTENT_CONFIDENCE:
         # Nothing is known about the transaction, so only an implausible recipient of
-        # genuinely sensitive data is worth saying anything about.
-        if root in SENSITIVE_ROOTS - {"credentials"}:
+        # genuinely sensitive data is worth saying anything about. A password typed into
+        # a box that does not hide it, on a page with no sign-in, is one of those.
+        watched = SENSITIVE_ROOTS if not expected_credential else SENSITIVE_ROOTS - {"credentials"}
+        if root in watched:
             if site_purpose in _IMPLAUSIBLE_RECIPIENTS:
                 return Necessity.RED_FLAG
             if root not in _PLAUSIBLE_SENSITIVE.get(site_purpose, set()):
@@ -351,7 +383,15 @@ def explain_field(
             if phrase
             else f"{label} is a normal thing to ask here."
         )
-    caveat = _CAVEATS.get((intent, _root(category)), "")
+    root = _root(category)
+    if root == "credentials":
+        # The single most valuable thing this product can say, so it does not hide
+        # behind "does not appear necessary for a survey".
+        return (
+            f"{label}: there is nothing to sign in to here. "
+            "A form that asks for it is asking for the keys to an account it does not run."
+        )
+    caveat = _CAVEATS.get((intent, root), "")
     if not phrase:
         base = f"{label} does not appear necessary here."
     elif verdict is Necessity.RED_FLAG:
@@ -440,6 +480,7 @@ def assess_form(
             effective,
             site_purpose=site_purpose,
             intent_confidence=intent.confidence,
+            expected_credential=credential_expected(field, effective, intent.structure),
         )
         role = infer_role(field, effective, intent.structure, verdict)
         if role in {FieldRole.PRIMARY_IDENTIFIER, FieldRole.ALTERNATE_IDENTIFIER}:

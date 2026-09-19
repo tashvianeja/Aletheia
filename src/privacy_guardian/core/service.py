@@ -429,21 +429,27 @@ class Service:
                 )
                 if decision.outcome == Outcome.IGNORE:
                     decision.outcome = Outcome.INFORM
+            from privacy_guardian.engine.clauses import clause_meaning, clause_title
+            from privacy_guardian.engine.clauses import ordinary_label as ordinary
+
             for clause in document.get("clauses", []):
                 if isinstance(clause, dict):
-                    title = str(clause.get("category", "")).replace("_", " ").capitalize()
+                    category = str(clause.get("category", ""))
                     citation = str(clause.get("citation", ""))
-                    decision.rationale.append("⚠ " + title)
+                    meaning = clause_meaning(category)
+                    decision.rationale.append(
+                        "⚠ " + clause_title(category) + (". " + meaning if meaning else "")
+                    )
+                    # The sentence itself, marked as a quotation rather than dropped in
+                    # as though the document's own words were this app's explanation.
                     if citation:
-                        decision.rationale.append("Citation: " + citation)
+                        decision.rationale.append("It says: “" + citation + "”")
             nothing_unusual = [str(item) for item in document.get("nothing_unusual", [])]
             if document.get("clauses") or nothing_unusual:
                 from privacy_guardian.engine.presentation import policy_rows
 
                 decision.findings = policy_rows(list(document.get("clauses", [])), nothing_unusual)
-            decision.rationale.extend(
-                "✓ Nothing unusual about " + item.replace("_", " ") for item in nothing_unusual
-            )
+            decision.rationale.extend("✓ " + ordinary(item) for item in nothing_unusual)
         if self.paused_until and datetime.now(UTC) < self.paused_until:
             decision = decision.model_copy(
                 update={
@@ -1050,16 +1056,26 @@ class Service:
                 if cached is not None and isinstance(cached.get(kind), dict):
                     analyzed = AnalysisResult(profile=cached[kind])
                     if kind == "policy":
-                        from privacy_guardian.engine.labels import category_label
-                        from privacy_guardian.engine.necessity import necessity_for
+                        # The document is cached; the judgement of it is not, because
+                        # the same policy means different things on different sites.
+                        from privacy_guardian.analysis.policy.analyzer import (
+                            collection_statements,
+                            over_collected,
+                        )
 
                         purpose = str(payload.get("purpose", "unknown"))
-                        collected = analyzed.profile.get("collects", [])
-                        analyzed.profile["necessity_statements"] = [
-                            f"Collects {category_label(category.value)}: {necessity_for(purpose, category).rationale}"
-                            for category in map(
-                                DataCategory, collected if isinstance(collected, list) else []
+                        collected_value = analyzed.profile.get("collects", [])
+                        collected = [
+                            DataCategory(category)
+                            for category in (
+                                collected_value if isinstance(collected_value, list) else []
                             )
+                        ]
+                        analyzed.profile["necessity_statements"] = collection_statements(
+                            collected, purpose
+                        )
+                        analyzed.profile["over_collection"] = [
+                            category.value for category in over_collected(collected, purpose)
                         ]
                 elif kind in {"forms", "consent", "tracking"}:
                     if kind == "forms":

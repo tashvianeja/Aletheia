@@ -47,8 +47,14 @@ that reason.
 Two safeguards keep the model honest. An intent that exists only because of the field it
 would excuse is discarded: a page claiming to "verify your identity" has not become a
 bank by saying so, so `identity_verification` is only credible from a site whose business
-plausibly involves it. And a credential is never reported as unnecessary, because telling
-someone their password is not needed to log in discredits everything else the product says.
+plausibly involves it. And a credential is never reported as unnecessary *where there is
+something to sign in to* — telling someone their password is not needed to log in
+discredits everything else the product says. The exemption is conditional on the intent,
+not on the field: on a signup, login, reset, two-factor or profile form a password is the
+transaction, and on an unclassified form a real masked password box is a sign-in far more
+often than it is an attack. Everywhere else — a survey, a contact form, a mailing list —
+a password request has no account behind it, and suppressing it silenced the single most
+valuable thing the product can say.
 
 ## Deciding whether to say anything
 

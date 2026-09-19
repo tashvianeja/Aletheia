@@ -42,8 +42,51 @@ UNAVAILABLE = {
 }
 
 
-def _finding(kind: str, severity: str, summary: str, detail: str = "") -> dict[str, Any]:
-    return {"kind": kind, "severity": severity, "summary": summary, "detail": detail}
+def _sentence_list(items: list[str]) -> str:
+    if len(items) <= 1:
+        return items[0] if items else ""
+    return ", ".join(items[:-1]) + " and " + items[-1]
+
+
+def _named(categories: list[Any]) -> list[str]:
+    """Data categories as a reader would say them, lower case for mid-sentence use."""
+    from privacy_guardian.engine.labels import category_label, lowered
+
+    named = [lowered(category_label(str(category))) for category in categories if category]
+    return list(dict.fromkeys(named))
+
+
+def _finding(
+    kind: str, severity: str, summary: str, detail: str = "", tone: str = "warn"
+) -> dict[str, Any]:
+    """One row of the report. `tone` is how it is drawn; `severity` is what it triggers.
+
+    A liability cap and "your data can be sold" are both worth knowing and are not worth
+    the same triangle, so the ordinary machinery of a contract is reported as a note.
+    """
+    return {"kind": kind, "severity": severity, "summary": summary, "detail": detail, "tone": tone}
+
+
+def _clause_findings(kind: str, profile: dict[str, Any], seen: set[str]) -> list[dict[str, Any]]:
+    """What the document's clauses mean, said once each however many documents say it."""
+    from privacy_guardian.engine.clauses import clause_meaning, clause_title, is_material
+
+    rows: list[dict[str, Any]] = []
+    for clause in profile.get("clauses", []):
+        category = clause.get("category", "") if isinstance(clause, dict) else str(clause)
+        if not category or category in seen:
+            continue
+        seen.add(category)
+        rows.append(
+            _finding(
+                kind,
+                "INFORM",
+                clause_title(category),
+                clause_meaning(category),
+                tone="warn" if is_material(category) else "info",
+            )
+        )
+    return rows
 
 
 def build_groups(
@@ -55,7 +98,7 @@ def build_groups(
     for key, title, kinds in GROUPS:
         rows = [
             {
-                "severity": "warn",
+                "severity": finding.get("tone", "warn"),
                 "summary": finding["summary"],
                 "detail": finding.get("detail", ""),
             }
@@ -124,6 +167,8 @@ async def run_deep_check(
     )
     findings: list[dict[str, Any]] = []
     checked: list[dict[str, Any]] = []
+    # A policy and a set of terms usually repeat one another. Say each clause once.
+    seen_clauses: set[str] = set()
     analyses = context.get("analyses", {})
     for name in ("tracking", "consent", "policy", "terms", "forms", "uploads"):
         analysis = analyses.get(name, {})
@@ -176,50 +221,36 @@ async def run_deep_check(
                         "What is collected, shared and kept could not be checked.",
                     )
                 )
-            if profile.get("retention") == "after_deletion":
+            # Retention after deletion is a clause, and the clause says it in better
+            # words. This stands in only where the profile knows it some other way.
+            if profile.get("retention") == "after_deletion" and not any(
+                (clause.get("category") if isinstance(clause, dict) else clause)
+                == "retention_after_deletion"
+                for clause in profile.get("clauses", [])
+            ):
                 findings.append(
                     _finding(
                         "policy",
                         "INFORM",
-                        "Data retention",
-                        "Uploaded files may be kept after you delete them.",
+                        "Deleting your account does not delete your data",
+                        "Copies can be kept after you close the account or delete the file.",
                     )
                 )
-            for statement in profile.get("necessity_statements", []):
-                if (
-                    "unnecessary" in statement.lower()
-                    or "not appear necessary" in statement.lower()
-                    or "does not" in statement.lower()
-                ):
-                    findings.append(
-                        _finding("policy", "INFORM", "Collects more than it needs", statement)
+            over = _named(profile.get("over_collection", []))
+            if over:
+                # One sentence for the whole list. A finding per category was the same
+                # headline five times over, each with a different noun under it.
+                findings.append(
+                    _finding(
+                        "policy",
+                        "INFORM",
+                        "The privacy policy claims more than this site appears to need",
+                        f"It says it collects {_sentence_list(over)}.",
                     )
-            for clause in profile.get("clauses", []):
-                category = clause.get("category", "") if isinstance(clause, dict) else str(clause)
-                if category in {"data_sale", "training_on_user_content", "third_party_sharing"}:
-                    findings.append(
-                        _finding(
-                            "policy",
-                            "INFORM",
-                            category.replace("_", " ").capitalize(),
-                            str(clause.get("citation", "")) if isinstance(clause, dict) else "",
-                        )
-                    )
+                )
+            findings.extend(_clause_findings("policy", profile, seen_clauses))
         elif name == "terms":
-            for clause in profile.get("clauses", []):
-                category = clause.get("category", "") if isinstance(clause, dict) else str(clause)
-                if category and not any(
-                    category.replace("_", " ").lower() in item["summary"].lower()
-                    for item in findings
-                ):
-                    findings.append(
-                        _finding(
-                            "terms",
-                            "INFORM",
-                            category.replace("_", " ").capitalize(),
-                            str(clause.get("citation", "")) if isinstance(clause, dict) else "",
-                        )
-                    )
+            findings.extend(_clause_findings("terms", profile, seen_clauses))
         elif name == "uploads" and profile.get("in_progress", 0):
             findings.append(
                 _finding(
@@ -230,17 +261,38 @@ async def run_deep_check(
                 )
             )
         elif name == "forms":
-            for field in analysis.get("fields", []):
-                necessity = field.get("necessity") or {}
-                if necessity.get("verdict") in {"unnecessary", "red_flag"}:
-                    findings.append(
-                        _finding(
-                            "forms",
-                            "INFORM",
-                            "This form asks for more than it needs",
-                            str(necessity.get("rationale", "")),
-                        )
+            asked = [
+                field
+                for field in analysis.get("fields", [])
+                if (field.get("necessity") or {}).get("verdict") in {"unnecessary", "red_flag"}
+            ]
+            serious = [
+                field
+                for field in asked
+                if (field.get("necessity") or {}).get("verdict") == "red_flag"
+            ]
+            if asked:
+                names = _named(
+                    [(field.get("necessity") or {}).get("category", "") for field in asked]
+                )
+                findings.append(
+                    _finding(
+                        "forms",
+                        "INTERVENE" if serious else "INFORM",
+                        "This form asks for "
+                        + (
+                            "things it has no business asking for"
+                            if serious
+                            else "more than it needs"
+                        ),
+                        f"It asks for {_sentence_list(names)}. "
+                        + (
+                            str((asked[0].get("necessity") or {}).get("rationale", ""))
+                            if len(asked) == 1
+                            else "None of these is needed for what this form does."
+                        ),
                     )
+                )
         checked.append(
             {
                 "kind": name,
@@ -301,7 +353,8 @@ async def run_deep_check(
             }
         )
         progress("permissions", "done" if desktop_available else "unavailable")
-    findings.sort(key=lambda item: item["severity"] != "INTERVENE")
+    # Questions first, then the things worth knowing, then the ordinary machinery.
+    findings.sort(key=lambda item: (item["severity"] != "INTERVENE", item.get("tone") != "warn"))
     count = len(findings)
     report: dict[str, Any] = {
         "origin": context.get("origin", origin) or (foreground.display_name if foreground else ""),

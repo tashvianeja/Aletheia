@@ -132,6 +132,7 @@ def findings_for(
     event: PrivacyEvent,
     default: list[DecisionFinding],
     unnecessary: set[DataCategory],
+    flagged: set[DataCategory] | None = None,
 ) -> list[DecisionFinding]:
     """Event-specific rows where the raw categories would not say enough."""
     from privacy_guardian.engine.explain import consent_findings, form_findings
@@ -139,7 +140,12 @@ def findings_for(
     if isinstance(event, ConsentBannerEvent):
         return consent_findings(event)
     if isinstance(event, FormObservedEvent):
-        rows = form_findings(event, {c for c in event.data_categories if c in unnecessary})
+        asked = set(event.data_categories)
+        rows = form_findings(
+            event,
+            asked & (unnecessary if flagged is None else flagged),
+            asked & unnecessary,
+        )
         return rows or default
     if isinstance(event, TrackingEvent):
         return tracking_rows(event) or default
@@ -265,34 +271,31 @@ def tracking_mechanisms(event: TrackingEvent) -> list[str]:
 
 
 def policy_rows(clauses: list[object], nothing_unusual: list[str]) -> list[DecisionFinding]:
-    """Material clauses first, then the ordinary things that turned out fine."""
-    wording = {
-        "third_party_sharing": "Data may be shared with third parties",
-        "training_on_user_content": "Your submitted content may be used to improve their services",
-        "retention_after_deletion": "Account data may be kept after you delete your account",
-        "arbitration": "Arbitration clause: disputes go to private arbitration, not court",
-        "data_sale": "Data may be sold to other companies",
-        "international_transfer": "Data may be moved to other countries",
-        "advertising_partners": "Identifiers may be shared with advertising partners",
-        "class_action_waiver": "You give up the right to join a class action",
-        "unilateral_change": "Terms can be changed without telling you",
-    }
+    """Material clauses first, then the ordinary things that turned out fine.
+
+    Every row says what the clause does to the reader. The sentence it was read out of
+    travels alongside as the quote, for "Show me where" and for anyone who wants to
+    check the claim, rather than standing in for the claim itself.
+    """
+    from privacy_guardian.engine.clauses import clause_meaning, clause_title, is_material
+    from privacy_guardian.engine.clauses import ordinary_label as ordinary
+
     rows: list[DecisionFinding] = []
     for clause in clauses:
         name = clause.get("category", "") if isinstance(clause, dict) else str(clause)
         if not name:
             continue
-        detail = str(clause.get("citation", "")) if isinstance(clause, dict) else ""
+        quote = str(clause.get("citation", "")) if isinstance(clause, dict) else ""
         rows.append(
             DecisionFinding(
-                label=wording.get(name, name.replace("_", " ").capitalize()),
-                severity="warn",
-                detail=detail,
+                label=clause_title(name),
+                severity="warn" if is_material(name) else "info",
+                detail=clause_meaning(name),
+                quote=quote,
             )
         )
     rows.extend(
-        DecisionFinding(label=str(item).replace("_", " ").capitalize(), severity="ok")
-        for item in nothing_unusual
+        DecisionFinding(label=ordinary(str(item)), severity="ok") for item in nothing_unusual
     )
     # Four clauses is already a lot to take in standing at a checkout; the complete
     # list is one line down under "Why am I seeing this?".

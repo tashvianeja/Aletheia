@@ -13,6 +13,7 @@ from privacy_guardian.analysis.policy import (
     analyze_policy,
     analyze_terms,
 )
+from privacy_guardian.core.events import DataCategory
 
 CORPUS_ROOT = Path(__file__).resolve().parents[2] / "fixtures" / "corpora"
 
@@ -77,5 +78,15 @@ def test_policy_necessity_changes_with_site_purpose() -> None:
     recipe = analyze_policy(text, purpose="recipe")
     navigation = analyze_policy(text, purpose="maps_navigation")
     assert recipe.necessity_statements != navigation.necessity_statements
-    assert "does not appear necessary" in " ".join(recipe.necessity_statements).lower()
-    assert "is needed" in " ".join(navigation.necessity_statements).lower()
+    assert "does not appear to need" in " ".join(recipe.necessity_statements).lower()
+    assert "which a maps app needs" in " ".join(navigation.necessity_statements).lower()
+    assert recipe.over_collection == [DataCategory.LOCATION_PRECISE]
+    assert navigation.over_collection == []
+
+
+def test_collection_statements_name_the_category_once_in_plain_words() -> None:
+    """The reader is told what was taken, not handed the engine's own reasoning twice."""
+    profile = analyze_policy("We collect your date of birth.", purpose="recipe")
+    assert profile.necessity_statements == [
+        "The policy says it collects your date of birth, which a recipe site does not appear to need."
+    ]

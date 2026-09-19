@@ -245,6 +245,10 @@ class DecisionFinding(Model):
     label: str
     severity: Literal["warn", "ok", "info"] = "warn"
     detail: str = ""
+    # The sentence in the document this row is based on, kept verbatim so "Show me
+    # where" can find it on the page. It is evidence for a claim already made in plain
+    # words, never the claim itself: a reader who wanted the legalese would not be here.
+    quote: str = ""
 
 
 class Decision(Model):

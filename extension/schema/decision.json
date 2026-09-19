@@ -22,6 +22,11 @@
           "default": "",
           "title": "Detail",
           "type": "string"
+        },
+        "quote": {
+          "default": "",
+          "title": "Quote",
+          "type": "string"
         }
       },
       "required": [
