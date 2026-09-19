@@ -109,3 +109,77 @@ def scan_extension_manifests(roots: list[Path]) -> list[PrivacyEvent]:
             except (OSError, ValueError, TypeError):
                 continue
     return events
+
+
+# Directories that only ever hold operating-system binaries. A grant held by something
+# living here belongs to the platform, not to a program the person chose to install.
+SYSTEM_PATH_PREFIXES = (
+    "/system/",
+    "/usr/libexec/",
+    "/usr/sbin/",
+    "/usr/bin/",
+    "/sbin/",
+    "/bin/",
+    "/library/apple/",
+    "c:/windows/",
+    "c:/program files/windowsapps/microsoft.windows.",
+)
+# Apple ships hundreds of agents and daemons that hold TCC grants as a matter of course.
+# These are the handful a person actually launches and can meaningfully decide about;
+# everything else under com.apple. is machinery they cannot act on.
+APPLE_USER_FACING = frozenset(
+    {
+        "com.apple.safari",
+        "com.apple.mail",
+        "com.apple.photos",
+        "com.apple.mobilesms",
+        "com.apple.facetime",
+        "com.apple.maps",
+        "com.apple.music",
+        "com.apple.tv",
+        "com.apple.podcasts",
+        "com.apple.notes",
+        "com.apple.ical",
+        "com.apple.addressbook",
+        "com.apple.reminders",
+        "com.apple.freeform",
+        "com.apple.preview",
+        "com.apple.quicktimeplayerx",
+        "com.apple.terminal",
+        "com.apple.ibooksx",
+        "com.apple.news",
+        "com.apple.shortcuts",
+        "com.apple.automator",
+        "com.apple.scripteditor2",
+        "com.apple.iwork.pages",
+        "com.apple.iwork.numbers",
+        "com.apple.iwork.keynote",
+        "com.apple.imovieapp",
+        "com.apple.dt.xcode",
+    }
+)
+# Windows' own shell and platform surfaces, by package family or executable name.
+WINDOWS_SYSTEM_IDENTITIES = (
+    "microsoft.windows.",
+    "microsoftwindows.",
+    "windows.immersivecontrolpanel",
+    "microsoft.aad.brokerplugin",
+    "microsoft.lockapp",
+    "microsoft.accountscontrol",
+)
+
+
+def is_system_component(requester: Requester) -> bool:
+    """True when the requester is part of the operating system itself.
+
+    The platform's own agents hold camera, accessibility and file grants because the
+    system needs them, and the person can neither explain nor revoke them app by app.
+    Reporting those is noise that buries the requests that genuinely deserve a look.
+    """
+    identity = requester.bundle_id.strip().lower()
+    path = requester.exe_path.strip().lower().replace("\\", "/")
+    if identity.startswith("com.apple."):
+        return identity not in APPLE_USER_FACING
+    if any(identity.startswith(prefix) for prefix in WINDOWS_SYSTEM_IDENTITIES):
+        return True
+    return bool(path) and path.startswith(SYSTEM_PATH_PREFIXES)

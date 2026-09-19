@@ -409,3 +409,82 @@ def test_real_windows_registry_camera_grant_reaches_engine_as_intervention(monke
         if not base_existed:
             with contextlib.suppress(FileNotFoundError):
                 winreg.DeleteKey(winreg.HKEY_CURRENT_USER, base)
+
+
+def test_system_agents_never_reach_the_person(tmp_path: Path) -> None:
+    """The bug this guards: a wave of "loginwindow is asking for your accessibility
+    control" toasts for macOS's own agents, none of which anyone can act on."""
+    database = tmp_path / "TCC.db"
+    create_tcc(
+        database,
+        [
+            ("com.apple.CoreLocationAgent", "kTCCServiceAccessibility", 2, 1),
+            ("com.apple.loginwindow", "kTCCServiceAccessibility", 2, 1),
+            ("/usr/libexec/trustd", "kTCCServiceAccessibility", 2, 1),
+            ("com.synthetic.recorder", "kTCCServiceAccessibility", 2, 1),
+        ],
+    )
+    adapter = MacOSAdapter(tcc_paths=[database], watch_paths=[], backend=MacBackend())
+    published: list[Any] = []
+    adapter._emit = published.append
+
+    for event in adapter.diff_tcc({}, adapter.read_tcc()):
+        adapter._publish(event)
+
+    assert {event.requester.key for event in published} == {"com.synthetic.recorder"}
+
+
+def test_routine_authorisation_lookups_are_not_permission_requests() -> None:
+    """macOS consults the authorisation table constantly; none of that is a request."""
+    adapter = MacOSAdapter(tcc_paths=[], watch_paths=[], backend=MacBackend())
+
+    lookups = [
+        adapter.parse_log(
+            {
+                "eventMessage": "AUTHREQ_CTX: msgID=1, service=kTCCServiceAccessibility, "
+                "preflight=yes, query=1, client=com.synthetic.helper"
+            }
+        ),
+        adapter.parse_log(
+            {
+                "eventMessage": "-[TCCDAccessIdentity staticCode]: static code for: "
+                "identifier com.synthetic.helper, service kTCCServiceAccessibility"
+            }
+        ),
+        adapter.parse_log(
+            {"eventMessage": "client=com.synthetic.helper service=kTCCServiceCamera"}
+        ),
+    ]
+
+    assert lookups == [[], [], []]
+
+
+def test_a_permission_already_held_is_not_reported_as_a_request() -> None:
+    adapter = MacOSAdapter(tcc_paths=[], watch_paths=[], backend=MacBackend())
+    adapter._access["com.synthetic.recorder"] = {DataCategory.ACCESSIBILITY}
+
+    repeat = adapter.parse_log(
+        {"eventMessage": "client=com.synthetic.recorder kTCCServiceAccessibility allow"}
+    )
+    fresh = adapter.parse_log(
+        {"eventMessage": "client=com.synthetic.recorder kTCCServiceCamera allow"}
+    )
+
+    assert repeat == []
+    assert fresh[0].permission == "camera"
+
+
+def test_reading_the_whole_table_reports_standing_grants_not_fresh_requests(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "TCC.db"
+    create_tcc(database, [("com.synthetic.recorder", "kTCCServiceCamera", 2, 1)])
+    adapter = MacOSAdapter(tcc_paths=[database], watch_paths=[], backend=MacBackend())
+
+    standing = adapter.diff_tcc({}, adapter.read_tcc(), standing=True)
+    changed = adapter.diff_tcc({}, adapter.read_tcc())
+
+    assert standing[0].existing is True
+    assert changed[0].existing is False
+    assert "already has access to your camera" in decide(standing[0]).headline
+    assert "was given access to your camera" in decide(changed[0]).headline

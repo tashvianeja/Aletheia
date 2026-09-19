@@ -171,6 +171,8 @@ EN: dict[str, str] = {
     "error": "Unable to complete this action",
     "no_events": "No privacy events yet.",
     "check_summary": "Overall: {count} things to review",
+    "check_summary_one": "Overall: 1 thing to review",
+    "more_findings": "{count} more in the full analysis",
     "checked": "Checked",
     "foreground": "Current application",
     "extension_install": "Open extension installation folder",

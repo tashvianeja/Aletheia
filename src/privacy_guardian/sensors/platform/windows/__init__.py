@@ -25,6 +25,7 @@ from privacy_guardian.sensors.platform.base import (
     PERMISSION_CATEGORIES,
     Emit,
     PlatformAdapter,
+    is_system_component,
     scan_extension_manifests,
 )
 
@@ -393,8 +394,17 @@ class WindowsAdapter(PlatformAdapter):
             )
 
     def diff_registry(
-        self, previous: dict[str, dict[str, Any]], current: dict[str, dict[str, Any]]
+        self,
+        previous: dict[str, dict[str, Any]],
+        current: dict[str, dict[str, Any]],
+        *,
+        standing: bool = False,
     ) -> list[PrivacyEvent]:
+        """Turn a change in the consent store into events.
+
+        ``standing`` says the whole store is being read rather than compared, so every
+        entry describes a grant that was already in place rather than a fresh request.
+        """
         events: list[PrivacyEvent] = []
         revoked_startup: set[str] = set()
         for removed_path in previous.keys() - current.keys():
@@ -461,6 +471,7 @@ class WindowsAdapter(PlatformAdapter):
                         data_categories=[category],
                         permission=permission,
                         state=state,
+                        existing=standing,
                     )
                 )
                 if permission == "screen":
@@ -684,14 +695,21 @@ class WindowsAdapter(PlatformAdapter):
                     events.extend(self.poll_startup_files())
                 self._latest = events or self._latest
                 for event in events:
-                    self._emit(event)
+                    self._publish(event)
             except Exception:
                 self._stop.wait(0.5)
+
+    def _publish(self, event: PrivacyEvent) -> None:
+        """The single exit from the adapter, so nothing system-owned reaches the person."""
+        if is_system_component(event.requester):
+            return
+        self._emit(event)
 
     def start(self, emit: Emit) -> None:
         self._emit = emit
         self._state = self.registry.snapshot()
-        self.diff_registry({}, self._state)
+        # Record what is already granted without announcing any of it.
+        self.diff_registry({}, self._state, standing=True)
         self.poll_startup_files()
         from privacy_guardian.sensors.filesystem import PathMonitor
 
@@ -748,6 +766,8 @@ class WindowsAdapter(PlatformAdapter):
 
     def snapshot(self, requester: Requester | None = None) -> list[PrivacyEvent]:
         requester = requester or self.foreground_requester()
+        if is_system_component(requester):
+            return []
         base = Path(os.getenv("LOCALAPPDATA", ""))
         roots = [
             base / name
@@ -760,7 +780,7 @@ class WindowsAdapter(PlatformAdapter):
         roots.append(Path(os.getenv("APPDATA", "")) / "Mozilla/Firefox/Profiles")
         return [
             event
-            for event in self.diff_registry({}, self.registry.snapshot())
+            for event in self.diff_registry({}, self.registry.snapshot(), standing=True)
             if event.requester.key == requester.key
         ] + scan_extension_manifests(roots)
 

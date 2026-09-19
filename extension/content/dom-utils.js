@@ -32,6 +32,14 @@
   function icon(name){const node=document.createElementNS(SVG,'svg');node.setAttribute('viewBox','0 0 20 20');node.setAttribute('aria-hidden','true');node.innerHTML=GLYPHS[name]?.d||'';return node;}
   function element(tag,className,text){const node=document.createElement(tag);if(className)node.className=className;if(text!==undefined)node.textContent=text;return node;}
   PG.decisionStates=new Map();
+  // Every panel lives in one bottom-right column, newest above, so none of them can
+  // cover another one's buttons.
+  PG.stack=()=>{
+    let host=document.querySelector('.pg-stack');
+    if(!host){host=element('div','pg-stack');(document.body||document.documentElement).append(host);}
+    else if(host.parentNode!==(document.body||document.documentElement))(document.body||document.documentElement).append(host);
+    return host;
+  };
   // The widget: one card, laid out exactly as the desktop popup lays it out.
   function buildPanel(decision,state){
     const informational=decision.outcome==='INFORM';
@@ -40,20 +48,23 @@
     panel.setAttribute('aria-label','Privacy Guardian');
     panel.setAttribute('aria-live',informational?'polite':'assertive');
     const headline=element('p','pg-headline',decision.headline||decision.explanation);
+    const dismiss=()=>{const close=element('button','pg-close');close.type='button';close.setAttribute('aria-label','Dismiss');close.append(icon('close'));close.addEventListener('click',()=>state.dismiss());return close;};
     if(informational){
       const head=element('div','pg-head');
-      const severity=(decision.findings||[]).some(item=>item.severity==='warn')?'warn':'ok';
+      // A tick reports something that is fine or already handled; anything else that
+      // is worth saying gets the neutral mark, never a green all-clear.
+      const severity=(decision.findings||[]).some(item=>item.severity==='warn')?'warn':(decision.auto_action||(decision.risk||0)<0.25)?'ok':'info';
       head.append(icon(severity),headline);
       headline.style.margin='0';
+      headline.style.flex='1';
+      if(decision.destination)head.append(element('span','pg-origin',decision.destination));
+      head.append(dismiss());
       panel.append(head);
     }else{
       const head=element('div','pg-head');
       head.append(icon('padlock'),element('span','pg-name','Privacy Guardian'));
       if(decision.destination)head.append(element('span','pg-origin',decision.destination));
-      const close=element('button','pg-close');close.type='button';close.setAttribute('aria-label','Dismiss');
-      close.append(icon('close'));
-      close.addEventListener('click',()=>state.dismiss());
-      head.append(close);
+      head.append(dismiss());
       panel.append(head,headline);
     }
     const body=element('p','pg-body',decision.body||'');
@@ -111,11 +122,6 @@
       foot.append(why);
     }
     panel.append(foot);
-    if(informational){
-      const bar=element('div','pg-countdown');const fill=document.createElement('span');
-      bar.append(fill);panel.append(bar);
-      requestAnimationFrame(()=>{fill.style.transition='transform 8s linear';fill.style.transform='scaleX(0)';});
-    }
     return {panel,body};
   }
   PG.showDecision = (decision,onAction) => {
@@ -130,13 +136,13 @@
     // Dismissing an intervention is the same as letting it time out: the safe default stands.
     state.dismiss=()=>{if(decision.outcome==='INTERVENE'){state.apply({action:decision.default_action||'cancel'});}else{state.resolved=true;close();state.resolve({action:'continue'});}};
     const view=buildPanel(decision,state);
-    (document.body||document.documentElement).append(view.panel);PG.panels.set(decision.event_id,view.panel);
+    PG.stack().append(view.panel);PG.panels.set(decision.event_id,view.panel);
     if(decision.auto_action){
       // The user authorised this action; carry it out, record it, let the toast report it.
       (async()=>{try{await state.onAction?.({action:decision.auto_action});}catch(_){}
         try{await PG.request('action',{event_id:decision.event_id,action:decision.auto_action});}catch(_){}})();
     }
-    if(informational){setTimeout(()=>{if(!state.resolved){state.resolved=true;close();state.resolve({action:'continue'});}},8000);return state.promise;}
+    if(informational)return state.promise;
     (async()=>{const started=Date.now();while(!state.resolved&&Date.now()-started<61000){try{const reply=await PG.request('action_poll',{event_id:decision.event_id});if(!reply.pending&&reply.action)await state.apply(reply.action);}catch(_){}if(!state.resolved)await PG.wait(300);}if(!state.resolved)await state.apply({action:decision.default_action||'cancel'});setTimeout(()=>PG.decisionStates.delete(decision.event_id),240000);})();
     return state.promise;
   };
@@ -155,7 +161,7 @@
     done.style.marginLeft='14px';
     done.addEventListener('click',()=>panel.remove());
     row.append(done);panel.append(row);
-    (document.body||document.documentElement).append(panel);
+    PG.stack().append(panel);
     setTimeout(()=>panel.remove(),8000);
     return panel;
   };
@@ -171,7 +177,7 @@
         for(const phrase of wanted){
           if(seen.has(phrase)||phrase.length<24||!text.includes(phrase))continue;
           const host=node.parentElement;
-          if(!host||host.closest('.pg-panel'))continue;
+          if(!host||host.closest('.pg-panel,.pg-stack'))continue;
           seen.add(phrase);host.classList.add('pg-review');
           host.setAttribute('aria-description','Privacy Guardian flagged this clause');
           first=first||host;found++;
@@ -198,7 +204,7 @@
   PG.checkSubmission=async form=>{for(const check of PG.submitChecks){if(!await check(form))return false;}return true;};
   document.addEventListener('click',async event=>{
     const button=event.target.closest?.('button,input[type=submit],input[type=image]');
-    if(!button||!button.form||button.type==='button'||button.type==='reset'||button.closest('.pg-panel'))return;
+    if(!button||!button.form||button.type==='button'||button.type==='reset'||button.closest('.pg-panel,.pg-stack'))return;
     if(bypassClicks.has(button)){bypassClicks.delete(button);return;}
     event.preventDefault();event.stopImmediatePropagation();
     try{if(await PG.checkSubmission(button.form)){PG.approvedForms.add(button.form);bypassClicks.add(button);button.click();setTimeout(()=>PG.approvedForms.delete(button.form),0);}}catch(_){}

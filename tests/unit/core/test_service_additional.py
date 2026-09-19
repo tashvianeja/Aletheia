@@ -350,3 +350,66 @@ async def test_disconnect_validates_owner_and_cleans_session_state(service: Serv
     assert service.browser_sessions == {}
     assert service.session_processes == {}
     assert service.connected_browsers == {}
+
+
+@pytest.mark.asyncio
+async def test_a_desktop_notice_is_never_answered_on_the_person_s_behalf(
+    service: Service, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nothing is held up by a desktop notice, and its default opens system settings.
+
+    Taking that default for someone who stepped away would open System Settings by
+    itself, minutes later, with nobody there. It waits instead.
+    """
+    desktop = PermissionRequestEvent(
+        id="desktop-event",
+        source="os",
+        requester=Requester(kind="application", bundle_id="com.synthetic.grabber"),
+        data_categories=[DataCategory.CAMERA],
+        permission="camera",
+    )
+    page = FileUploadEvent(
+        id="page-event",
+        source="browser",
+        requester=Requester(origin="https://shrinkpix.example"),
+        data_categories=[DataCategory.GOVERNMENT_ID_PASSPORT],
+    )
+    for event, actions, default in (
+        (desktop, ["open_settings", "continue"], "open_settings"),
+        (page, ["cancel", "continue"], "cancel"),
+    ):
+        decision = Decision(
+            event_id=event.id,
+            outcome=Outcome.INTERVENE,
+            risk=0.8,
+            explanation="Synthetic",
+            actions=actions,
+            default_action=default,
+        )
+        service.events[event.id] = event
+        service.decisions[event.id] = decision
+        service.store.save_event(event)
+        service.store.save_decision(decision)
+        service.pending_since[event.id] = 0
+    service.browser_sessions["browser-session"] = "chrome"
+    service.control.ensure_running = _noop  # type: ignore[method-assign]
+    sleeps = 0
+
+    async def sleep(_seconds: float) -> None:
+        nonlocal sleeps
+        sleeps += 1
+        if sleeps > 1:
+            raise asyncio.CancelledError
+
+    monkeypatch.setattr("privacy_guardian.core.service.asyncio.sleep", sleep)
+    monkeypatch.setattr("privacy_guardian.core.service.time.monotonic", lambda: 1_000.0)
+
+    with pytest.raises(asyncio.CancelledError):
+        await service._maintenance()
+
+    assert "desktop-event" not in service.actions
+    assert service.actions["page-event"] == {"action": "cancel", "event_id": "page-event"}
+
+
+async def _noop() -> None:
+    return None

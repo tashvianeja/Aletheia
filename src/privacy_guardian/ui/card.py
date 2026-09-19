@@ -22,7 +22,7 @@ import logging
 import sys
 from collections.abc import Callable
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QRect, Qt, Signal
 from PySide6.QtGui import QCursor, QGuiApplication, QScreen
 from PySide6.QtWidgets import (
     QFrame,
@@ -320,6 +320,10 @@ def keep_above_dock(widget: QWidget) -> None:
     if sys.platform != "darwin" or not widget.isVisible():
         # winId() would force a native handle early; the level is reapplied on show.
         return
+    if QGuiApplication.platformName() != "cocoa":
+        # Offscreen and minimal plugins hand back a winId that is not an NSView, and
+        # reading it as one takes the process down rather than raising.
+        return
     try:
         import objc
         from AppKit import NSStatusWindowLevel
@@ -358,6 +362,68 @@ def bring_to_front(widget: QWidget) -> None:
         logging.getLogger(__name__).debug("application activation unchanged")
 
 
+# Every floating surface in the corner, oldest first. A surface that arrives while
+# another is up stacks above it rather than landing on top of it: a card covering the
+# buttons of the card underneath makes the one the person is trying to answer
+# unanswerable, which is worse than showing nothing at all.
+_STACK: list[QWidget] = []
+
+
+def _alive(widget: QWidget) -> bool:
+    try:
+        return widget.isVisible()
+    except RuntimeError:  # the C++ object is already gone
+        return False
+
+
+def _prune() -> None:
+    for widget in list(_STACK):
+        try:
+            widget.isVisible()
+        except RuntimeError:
+            _STACK.remove(widget)
+
+
+def register_surface(widget: QWidget) -> None:
+    """Add a floating surface to the corner stack, if it is not already in it."""
+    _prune()
+    if widget not in _STACK:
+        _STACK.append(widget)
+        widget.destroyed.connect(lambda *_args: _prune())
+
+
+def release_surface(widget: QWidget) -> None:
+    """Take a surface out of the stack and close the gap it leaves behind."""
+    _prune()
+    if widget in _STACK:
+        _STACK.remove(widget)
+    restack()
+
+
+def restack() -> None:
+    """Re-place every surface still on screen, bottom-up, so none of them overlap."""
+    _prune()
+    for widget in list(_STACK):
+        if _alive(widget):
+            anchor_bottom_right(widget, getattr(widget, "stack_content", lambda: None)())
+
+
+def _occupied(widget: QWidget, rect: QRect) -> int:
+    """How far up from the bottom edge the surfaces below this one already reach.
+
+    Only what is on the screen being placed into counts: surfaces on another display
+    are not in the way, and treating them as though they were would push this one up
+    into the middle of an empty screen.
+    """
+    total = 0
+    for other in _STACK:
+        if other is widget:
+            break
+        if _alive(other) and rect.intersects(other.frameGeometry()):
+            total += other.height()
+    return total
+
+
 def anchor_bottom_right(widget: QWidget, content: QWidget | None = None) -> None:
     """Pin the window to the bottom-right of the usable screen area.
 
@@ -367,6 +433,9 @@ def anchor_bottom_right(widget: QWidget, content: QWidget | None = None) -> None
     * the layout has to be activated, because a word-wrapped label reports far too
       small a height until it has been laid out at its real width, and
     * the height has to be capped to the space actually available.
+
+    The surface is then raised above whatever else is already in the corner instead of
+    being dropped on top of it.
     """
     layout = widget.layout()
     if layout is not None:
@@ -375,13 +444,15 @@ def anchor_bottom_right(widget: QWidget, content: QWidget | None = None) -> None
     if screen is None:
         widget.adjustSize()
         return
+    register_surface(widget)
     rect = screen.availableGeometry()
+    taken = min(_occupied(widget, rect), max(0, rect.height() - 2 * SCREEN_MARGIN))
     wanted = (content or widget).sizeHint()
     width = min(max(wanted.width(), widget.minimumWidth()), rect.width())
-    height = min(max(wanted.height(), widget.minimumHeight()), rect.height())
+    height = min(max(wanted.height(), widget.minimumHeight()), rect.height() - taken)
     widget.resize(width, height)
     widget.move(
         max(rect.left(), rect.right() - width + 1),
-        max(rect.top(), rect.bottom() - height + 1),
+        max(rect.top(), rect.bottom() - taken - height + 1),
     )
     keep_above_dock(widget)

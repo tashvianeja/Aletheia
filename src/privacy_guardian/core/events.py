@@ -160,12 +160,16 @@ class PermissionRequestEvent(PrivacyEvent):
     event_type: Literal["permission_request"] = "permission_request"
     permission: str = ""
     state: Literal["requested", "granted", "denied", "active", "stopped"] = "requested"
+    # True when the grant was already in place, rather than something that just changed.
+    # A standing grant is the state of the machine, not news, and is worded that way.
+    existing: bool = False
 
 
 class SystemAccessEvent(PrivacyEvent):
     event_type: Literal["system_access"] = "system_access"
     accesses: list[str] = Field(default_factory=list)
     breadth: float = Field(default=0, ge=0, le=1)
+    existing: bool = False
 
 
 class ClipboardReadEvent(PrivacyEvent):

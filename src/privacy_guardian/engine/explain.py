@@ -297,7 +297,11 @@ def _headline(
         return headline, body
 
     if isinstance(event, SystemAccessEvent):
-        headline = f"{who} is requesting broad access to your computer."
+        headline = (
+            f"{who} already has broad access to your computer."
+            if event.existing
+            else f"{who} is requesting broad access to your computer."
+        )
         body = (
             f"These permissions appear broader than necessary for {_article(purpose)} {purpose}."
             if certain
@@ -308,8 +312,18 @@ def _headline(
     if isinstance(event, PermissionRequestEvent):
         permission = category_label(
             event.permission if event.permission in LABELS else event.permission
+        ).lower()
+        # A grant made months ago is not a question being put to the person now, and
+        # wording it as one is the difference between a report and a false alarm.
+        headline = (
+            f"{who} already has access to your {permission}."
+            if event.existing
+            else f"{who} was given access to your {permission}."
+            if event.state == "granted"
+            else f"{who} is using your {permission}."
+            if event.state == "active"
+            else f"{who} is asking for your {permission}."
         )
-        headline = f"{who} is asking for your {permission.lower()}."
         body = (
             f"{_article(purpose).capitalize()} {purpose} does not normally need this."
             if certain and unnecessary

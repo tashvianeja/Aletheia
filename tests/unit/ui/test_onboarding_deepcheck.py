@@ -99,7 +99,7 @@ def test_deep_check_progresses_then_renders_grouped_result(qtbot, ui_controller)
     ]
     window.show_report(
         {
-            "summary": "Overall: 1 things to review",
+            "summary": "Overall: 1 thing to review",
             "origin": "dropcrate.example",
             "findings": findings,
             "checked": checked,
@@ -109,12 +109,64 @@ def test_deep_check_progresses_then_renders_grouped_result(qtbot, ui_controller)
     )
     labels = _labels(window)
 
-    assert window.status.text() == "Overall: 1 things to review"
+    assert window.status.text() == "Overall: 1 thing to review"
     assert "Advertising profile" in labels
     assert "Your activity may be used for personalised advertising." in labels
-    assert "No sensitive file currently shared" in labels
     assert "dropcrate.example" in labels
     assert {"Done", "View full analysis"} <= set(labels)
+    # Only what needs looking at. The all-clear lines stay in the full report.
+    assert "No sensitive file currently shared" not in labels
+    assert "No advertising profile detected" not in labels
+
+
+def test_deep_check_card_lists_nothing_when_there_is_nothing_to_review(
+    qtbot, ui_controller
+) -> None:
+    from privacy_guardian.deepcheck import build_groups
+
+    window = DeepCheckWindow(ui_controller)
+    qtbot.addWidget(window)
+    checked = [{"kind": kind, "available": True, "clean": True} for kind in ("tracking", "forms")]
+
+    window.show_report(
+        {
+            "summary": "Nothing to review",
+            "origin": "dropcrate.example",
+            "findings": [],
+            "checked": checked,
+            "groups": build_groups([], checked),
+            "context_available": True,
+        }
+    )
+    labels = _labels(window)
+
+    assert window.status.text() == "Nothing to review"
+    assert not any("No " in label for label in labels), labels
+
+
+def test_deep_check_card_caps_the_list_and_points_at_the_full_report(qtbot, ui_controller) -> None:
+    window = DeepCheckWindow(ui_controller)
+    qtbot.addWidget(window)
+    findings = [
+        {"kind": "tracking", "severity": "INFORM", "summary": f"Finding {index}", "detail": ""}
+        for index in range(8)
+    ]
+
+    window.show_report(
+        {
+            "summary": "Overall: 8 things to review",
+            "origin": "dropcrate.example",
+            "findings": findings,
+            "checked": [],
+            "groups": [],
+            "context_available": True,
+        }
+    )
+    labels = _labels(window)
+
+    assert "Finding 0" in labels and "Finding 4" in labels
+    assert "Finding 5" not in labels
+    assert "3 more in the full analysis" in labels
 
 
 def test_deep_check_full_analysis_opens_the_report(qtbot, ui_controller) -> None:

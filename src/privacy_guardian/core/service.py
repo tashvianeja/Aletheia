@@ -47,6 +47,12 @@ from privacy_guardian.storage import Store
 from privacy_guardian.util.i18n import tr
 from privacy_guardian.util.privacy import public_identity, safe_origin, sanitize
 
+# How long a decision stays answerable. A widget now waits for the person instead of
+# expiring, so the decision behind one they have not got to yet has to outlive the ten
+# minutes that an answered one needs.
+RESOLVED_RETENTION = 600
+UNANSWERED_RETENTION = 3600
+
 
 class Service:
     def __init__(self, settings: Settings, store: Store | None = None) -> None:
@@ -256,9 +262,16 @@ class Service:
                     self.pool.recycle()
                     self.prepare_browser_worker()
                 for event_id, since in list(self.pending_since.items()):
+                    event = self.events.get(event_id)
                     if (
                         now - since >= self.settings.popup_timeout_seconds
                         and event_id not in self.actions
+                        # Only a page waiting on an answer needs one taken for it. A
+                        # desktop notice holds nothing up, so it waits for the person
+                        # instead of acting — and "acting" here could mean opening
+                        # system settings on its own, minutes after they walked away.
+                        and event is not None
+                        and not self._desktop_owns(event)
                     ):
                         decision = self.decisions[event_id]
                         await self.respond(
@@ -271,7 +284,14 @@ class Service:
                         await self.pool.run(abort_upload, upload_id)
                         self.uploads.pop(upload_id, None)
                 for event_id, event in list(self.events.items()):
-                    if (datetime.now(UTC) - event.ts).total_seconds() > 600:
+                    outstanding = self.decisions.get(event_id)
+                    unanswered = (
+                        event_id not in self.actions
+                        and outstanding is not None
+                        and outstanding.outcome != Outcome.IGNORE
+                    )
+                    age = (datetime.now(UTC) - event.ts).total_seconds()
+                    if age > (UNANSWERED_RETENTION if unanswered else RESOLVED_RETENTION):
                         self.events.pop(event_id, None)
                         self.decisions.pop(event_id, None)
                         self.actions.pop(event_id, None)

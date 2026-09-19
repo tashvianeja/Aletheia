@@ -14,17 +14,25 @@ from privacy_guardian.ui.card import (
     GuardianCard,
     anchor_bottom_right,
     glyph,
+    release_surface,
     scrollable,
 )
 from privacy_guardian.ui.theme import card_stylesheet, palette
 from privacy_guardian.util.i18n import tr
 
-INFORM_MILLISECONDS = 8000
-INTERVENE_MILLISECONDS = 60000
+# Closing a card must never act on the person's behalf. Where the safe default is a
+# refusal it stands; where it would do something — open system settings, say — the
+# close control only closes.
+PROTECTIVE_DEFAULTS = frozenset({"cancel", "reject_optional", "block"})
 
 
 class InterventionPopup(QWidget):
-    """The floating widget. Frameless, never steals focus until it is touched."""
+    """The floating widget. Frameless, never steals focus until it is touched.
+
+    It stays up until the person deals with it. A warning that removes itself after a
+    few seconds is a warning they may never have finished reading, and one they cannot
+    act on once it is gone.
+    """
 
     action_selected = Signal(str, str, bool)
     closed = Signal()
@@ -46,9 +54,6 @@ class InterventionPopup(QWidget):
         self.decision = decision
         self.mode = mode
         self._resolved = False
-        self._remaining = (
-            INFORM_MILLISECONDS if decision.outcome == Outcome.INFORM else INTERVENE_MILLISECONDS
-        )
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setAccessibleName(tr("app_name"))
@@ -67,14 +72,6 @@ class InterventionPopup(QWidget):
         QGuiApplication.styleHints().colorSchemeChanged.connect(
             lambda _scheme: self.set_theme(self.mode)
         )
-        self.timer = QTimer(self)
-        self.timer.setSingleShot(True)
-        self.timer.timeout.connect(self.timeout)
-        self.timer.start(self._remaining)
-        if self.card.progress is not None:
-            self.countdown = QTimer(self)
-            self.countdown.timeout.connect(self._tick)
-            self.countdown.start(100)
 
     # -- construction ---------------------------------------------------------
 
@@ -83,14 +80,16 @@ class InterventionPopup(QWidget):
         informational = decision.outcome == Outcome.INFORM
         card = self.card
         if informational:
-            # A toast reports a fact: a status glyph, a line, and a countdown. No buttons.
+            # A toast reports a fact: a status glyph and a line. No buttons to press,
+            # but a close control, because it waits for the person rather than expiring.
+            card.add_header(right=self._origin())
+            card.closed.connect(self.dismiss)
             self.headline = self._status_row()
             self.explanation = card.add_body(decision.detail or decision.explanation)
             self._add_rationale()
             self.remember = QCheckBox(tr("remember"))
             self.remember.hide()
             card.add_footer()
-            card.add_countdown(INFORM_MILLISECONDS)
             return
         card.add_header(right=self._origin())
         card.closed.connect(self.dismiss)
@@ -130,17 +129,22 @@ class InterventionPopup(QWidget):
         self.card.add_widget(self.rationale)
 
     def _status_row(self) -> QLabel:
+        decision = self.decision
         severity: Literal["warn", "ok", "info"] = (
             "warn"
-            if any(finding.severity == "warn" for finding in self.decision.findings)
+            if any(finding.severity == "warn" for finding in decision.findings)
             else "ok"
+            if decision.auto_action or decision.risk < 0.25
+            else "info"
         )
         label = QLabel(self.decision.title or self.decision.explanation)
         label.setObjectName("cardHeadline")
         label.setWordWrap(True)
         row = QHBoxLayout()
         row.setSpacing(9)
-        row.addWidget(glyph(severity, self.card.colors["ok" if severity == "ok" else "warn"]))
+        row.addWidget(
+            glyph(severity, self.card.colors[{"ok": "ok", "warn": "warn"}.get(severity, "faint")])
+        )
         row.addWidget(label, 1)
         self.card.add_layout(row)
         return label
@@ -185,29 +189,29 @@ class InterventionPopup(QWidget):
         if self._resolved or action not in self.decision.actions:
             return
         self._resolved = True
-        self.timer.stop()
         self.action_selected.emit(self.decision.event_id, action, self.remember.isChecked())
-        self.hide()
-        self.closed.emit()
+        self._close()
+
+    def dismiss_action(self) -> str:
+        """What stepping away means, when it means anything at all."""
+        default = self.decision.default_action
+        if default in PROTECTIVE_DEFAULTS and default in self.decision.actions:
+            return default
+        return "continue" if "continue" in self.decision.actions else ""
 
     def dismiss(self) -> None:
-        """The close control: step away without choosing, exactly like letting it time out."""
-        self.timeout()
-
-    def timeout(self) -> None:
-        if self.decision.outcome == Outcome.INTERVENE:
-            self.choose(self.decision.default_action)
-        else:
-            self._resolved = True
-            self.timer.stop()
-            self.hide()
-            self.closed.emit()
-
-    def _tick(self) -> None:
-        if self.card.progress is None:
+        """The close control: step away, holding whatever the safe answer was."""
+        action = self.dismiss_action()
+        if action:
+            self.choose(action)
             return
-        self._remaining = max(0, self._remaining - 100)
-        self.card.progress.setValue(self._remaining)
+        self._resolved = True
+        self._close()
+
+    def _close(self) -> None:
+        self.hide()
+        release_surface(self)
+        self.closed.emit()
 
     def eventFilter(self, watched: Any, event: QEvent) -> bool:
         if event.type() == QEvent.Type.MouseButtonRelease:
@@ -230,9 +234,12 @@ class InterventionPopup(QWidget):
         self.activateWindow()
         super().mousePressEvent(event)
 
+    def stack_content(self) -> QWidget:
+        return self.scroller.widget()
+
     def keyPressEvent(self, event: Any) -> None:
         if event.key() == Qt.Key.Key_Escape:
-            self.timeout()
+            self.dismiss()
         else:
             super().keyPressEvent(event)
 
@@ -286,6 +293,7 @@ class PopupQueue(QWidget):
             and self.current.decision.event_id in core.actions
         ):
             self.current.hide()
+            release_surface(self.current)
             self._closed()
 
     def _respond(self, event_id: str, action: str, remember: bool) -> None:
@@ -293,6 +301,7 @@ class PopupQueue(QWidget):
 
     def _closed(self) -> None:
         if self.current:
+            release_surface(self.current)
             self.current.deleteLater()
             self.current = None
         QTimer.singleShot(0, self._next)
@@ -345,5 +354,6 @@ class ConfirmationBar(QWidget):
 
     def _finish(self) -> None:
         self.hide()
+        release_surface(self)
         self.done.emit()
         self.deleteLater()

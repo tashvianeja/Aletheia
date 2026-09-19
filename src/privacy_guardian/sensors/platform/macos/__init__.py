@@ -25,6 +25,7 @@ from privacy_guardian.sensors.platform.base import (
     PERMISSION_CATEGORIES,
     Emit,
     PlatformAdapter,
+    is_system_component,
     scan_extension_manifests,
 )
 
@@ -49,6 +50,16 @@ TCC_PERMISSIONS = {
     "kTCCServiceBluetoothAlways": "bluetooth",
     "kTCCServiceNotifications": "notifications",
 }
+
+
+# Log lines that mean "macOS consulted the authorisation table", not "someone asked".
+# The table itself is polled separately and is the authority on what is actually
+# granted, so dropping these costs nothing and removes almost all of the log noise.
+LOOKUP_MESSAGE = re.compile(
+    r"preflight|query=1|static ?code|attribution|entitlement|identity|"
+    r"synchroniz|replacing|updating|initializing",
+    re.I,
+)
 
 
 class MacBackend:
@@ -163,7 +174,16 @@ class MacOSAdapter(PlatformAdapter):
         self,
         previous: dict[tuple[str, str], dict[str, Any]],
         current: dict[tuple[str, str], dict[str, Any]],
+        *,
+        standing: bool = False,
     ) -> list[PrivacyEvent]:
+        """Turn a change in the authorisation table into events.
+
+        ``standing`` says the whole table is being read rather than compared, so every
+        row is a grant that was already in place. Those describe how the machine is set
+        up; presenting them as fresh requests is how a settled permission ends up being
+        announced as though the application had just asked for it.
+        """
         events: list[PrivacyEvent] = []
         for removed_key in previous.keys() - current.keys():
             client, service = removed_key
@@ -202,6 +222,7 @@ class MacOSAdapter(PlatformAdapter):
                 data_categories=[category],
                 permission=permission,
                 state=state,
+                existing=standing,
             )
             events.append(event)
             if permission == "screen" and state == "granted":
@@ -223,10 +244,10 @@ class MacOSAdapter(PlatformAdapter):
                     DataCategory.ACCESSIBILITY,
                     DataCategory.AUTOMATION,
                 }:
-                    events.append(self._breadth(requester))
+                    events.append(self._breadth(requester, standing))
         return events
 
-    def _breadth(self, requester: Requester) -> SystemAccessEvent:
+    def _breadth(self, requester: Requester, standing: bool = False) -> SystemAccessEvent:
         accesses = self._access.setdefault(requester.key, set())
         return SystemAccessEvent(
             source="os",
@@ -235,7 +256,14 @@ class MacOSAdapter(PlatformAdapter):
             data_categories=sorted(accesses, key=str),
             accesses=[str(category) for category in accesses],
             breadth=min(1, len(accesses) / 3),
+            existing=standing,
         )
+
+    def _publish(self, event: PrivacyEvent) -> None:
+        """The single exit from the adapter, so nothing system-owned reaches the person."""
+        if is_system_component(event.requester):
+            return
+        self._emit(event)
 
     def poll_tcc(self) -> list[PrivacyEvent]:
         current = self.read_tcc()
@@ -441,6 +469,22 @@ class MacOSAdapter(PlatformAdapter):
         permission = TCC_PERMISSIONS.get(service_match[0])
         if not permission:
             return []
+        if LOOKUP_MESSAGE.search(message):
+            # Preflight queries and code-signing lookups are how macOS reads the
+            # authorisation table. They happen constantly, for system agents most of
+            # all, and nothing has been asked of the person when one is logged.
+            return []
+        state: Literal["requested", "granted", "denied", "active", "stopped"] | None = (
+            "denied"
+            if re.search(r"deny|denied|refus|authValue=0", message, re.I)
+            else "granted"
+            if re.search(r"grant|allow|authValue=[23]", message, re.I)
+            else "requested"
+            if re.search(r"prompt|authreq_ctx|user consent", message, re.I)
+            else None
+        )
+        if state is None:
+            return []
         requester = enrich_requester(
             Requester(
                 kind="application",
@@ -448,19 +492,19 @@ class MacOSAdapter(PlatformAdapter):
                 display_name=client_match[1].split(".")[-1],
             )
         )
-        state: Literal["requested", "granted", "denied", "active", "stopped"] = (
-            "denied"
-            if re.search(r"deny|denied|authValue=0", message, re.I)
-            else "granted"
-            if re.search(r"grant|allow|authValue=2", message, re.I)
-            else "requested"
-        )
+        category = PERMISSION_CATEGORIES[permission]
+        if is_system_component(requester):
+            return []
+        if state != "denied" and category in self._access.get(requester.key, set()):
+            # The authorisation table already records this grant, so the log line is
+            # the system re-reading a decision the person made long ago.
+            return []
         return [
             PermissionRequestEvent(
                 source="os",
                 platform="macos",
                 requester=requester,
-                data_categories=[PERMISSION_CATEGORIES[permission]],
+                data_categories=[category],
                 permission=permission,
                 state=state,
             )
@@ -487,7 +531,7 @@ class MacOSAdapter(PlatformAdapter):
                     break
                 try:
                     for event in self.parse_log(json.loads(line)):
-                        self._emit(event)
+                        self._publish(event)
                 except (ValueError, TypeError):
                     continue
         except OSError:
@@ -529,14 +573,16 @@ class MacOSAdapter(PlatformAdapter):
                     last_extensions = time.monotonic()
                 self._latest = events or self._latest
                 for event in events:
-                    self._emit(event)
+                    self._publish(event)
             except Exception:
                 continue
 
     def start(self, emit: Emit) -> None:
         self._emit = emit
         self._tcc = self.read_tcc()
-        self.diff_tcc({}, self._tcc)
+        # Prime the access map from the table as it stands. These grants predate the
+        # session, so they are recorded, never announced.
+        self.diff_tcc({}, self._tcc, standing=True)
         self.poll_files()
         from privacy_guardian.sensors.filesystem import PathMonitor
 
@@ -604,7 +650,9 @@ class MacOSAdapter(PlatformAdapter):
 
     def snapshot(self, requester: Requester | None = None) -> list[PrivacyEvent]:
         requester = requester or self.foreground_requester()
-        events = self.diff_tcc({}, self.read_tcc())
+        if is_system_component(requester):
+            return []
+        events = self.diff_tcc({}, self.read_tcc(), standing=True)
         return [event for event in events if event.requester.key == requester.key] + [
             event for event in self._latest if event.requester.key == requester.key
         ]

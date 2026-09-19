@@ -48,6 +48,22 @@ def settle(qtbot, widget) -> None:
     qtbot.waitUntil(lambda: widget.frameGeometry().bottom() == available().bottom(), timeout=2000)
 
 
+def settle_above(qtbot, widget, below) -> None:
+    """Show a surface and wait for it to take its place above the one already there.
+
+    Waiting on "somewhere above the bottom edge" would pass before placement had run
+    at all, because an unplaced window starts in the middle of the screen.
+    """
+    widget.show()
+    qtbot.waitUntil(
+        lambda: (
+            widget.frameGeometry().right() == below.frameGeometry().right()
+            and widget.frameGeometry().bottom() == below.frameGeometry().top() - 1
+        ),
+        timeout=2000,
+    )
+
+
 def upload_decision() -> Decision:
     event = FileUploadEvent(
         filename="passport.pdf",
@@ -159,8 +175,33 @@ def test_inform_toast_and_confirmation_bar_sit_inside_the_usable_area(qtbot) -> 
 
     bar = ConfirmationBar("3 fields marked as not needed")
     qtbot.addWidget(bar)
-    settle(qtbot, bar)
+    settle_above(qtbot, bar, toast)
     assert_on_screen(bar)
+
+
+def test_a_second_surface_stacks_above_the_first_instead_of_covering_it(
+    qtbot, ui_controller
+) -> None:
+    """The bug this guards: a toast landing on the check card hid the buttons under it."""
+    window = DeepCheckWindow(ui_controller)
+    qtbot.addWidget(window)
+    settle(qtbot, window)
+    settled = window.frameGeometry()
+
+    toast = InterventionPopup(upload_decision().model_copy(update={"outcome": Outcome.INFORM}))
+    qtbot.addWidget(toast)
+    settle_above(qtbot, toast, window)
+
+    assert not window.frameGeometry().intersects(toast.frameGeometry()), (
+        "the newer surface must sit above the older one, not on top of it"
+    )
+    assert window.frameGeometry() == settled, "the card underneath must not be moved"
+    assert_on_screen(window)
+    assert_on_screen(toast)
+
+    # Closing the one underneath brings the one above back down to the corner.
+    window.close()
+    qtbot.waitUntil(lambda: toast.frameGeometry().bottom() == available().bottom())
 
 
 def test_deep_check_window_sits_inside_the_usable_area(qtbot, ui_controller) -> None:

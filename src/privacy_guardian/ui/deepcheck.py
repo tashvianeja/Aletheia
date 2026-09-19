@@ -25,6 +25,7 @@ from privacy_guardian.ui.card import (
     SCREEN_MARGIN,
     GuardianCard,
     anchor_bottom_right,
+    release_surface,
     scrollable,
 )
 from privacy_guardian.ui.theme import card_stylesheet, palette
@@ -37,6 +38,9 @@ STAGES = (
     ("policy", "Privacy policy"),
     ("forms", "Current form"),
 )
+# As many findings as fit on a card that can still be read at a glance; the rest are
+# one line away in the full report.
+MAX_ROWS = 5
 STAGE_SOURCES = {
     "permissions": {"permissions"},
     "tracking": {"tracking", "consent"},
@@ -121,19 +125,28 @@ class DeepCheckWindow(QWidget):
         card = self._reset_card()
         card.add_header(title=tr("privacy_check"), right=self._origin(report))
         card.add_headline(str(report.get("summary", tr("check_complete"))))
-        rows: list[DecisionFinding] = []
-        for finding in report.get("findings", [])[:4]:
+        # Only the things that need looking at. A card that spends half its height
+        # listing what turned out fine makes the person hunt for the part that matters;
+        # the all-clear sections are still there in the full report.
+        findings = [
+            finding
+            for finding in report.get("findings", [])
+            if str(finding.get("severity", "")).lower() != "ok"
+        ]
+        rows = [
+            DecisionFinding(
+                label=str(finding.get("summary", "")),
+                severity="warn",
+                detail=str(finding.get("detail", "")),
+            )
+            for finding in findings[:MAX_ROWS]
+        ]
+        if len(findings) > MAX_ROWS:
             rows.append(
                 DecisionFinding(
-                    label=str(finding.get("summary", "")),
-                    severity="warn",
-                    detail=str(finding.get("detail", "")),
+                    label=tr("more_findings", count=len(findings) - MAX_ROWS), severity="info"
                 )
             )
-        for group in report.get("groups", []):
-            for entry in group.get("rows", []):
-                if entry.get("severity") == "ok":
-                    rows.append(DecisionFinding(label=str(entry.get("summary", "")), severity="ok"))
         if not report.get("context_available"):
             rows.append(DecisionFinding(label=tr("no_context"), severity="info"))
         card.add_rows(rows)
@@ -169,8 +182,19 @@ class DeepCheckWindow(QWidget):
         return str(getattr(core, "focused_origin", "") or "")
 
     def _anchor(self) -> None:
-        anchor_bottom_right(self, self.scroller.widget() if self.scroller else None)
+        anchor_bottom_right(self, self.stack_content())
+
+    def stack_content(self) -> QWidget | None:
+        return self.scroller.widget() if self.scroller else None
 
     def showEvent(self, event: Any) -> None:
         super().showEvent(event)
         QTimer.singleShot(0, self._anchor)
+
+    def closeEvent(self, event: Any) -> None:
+        release_surface(self)
+        super().closeEvent(event)
+
+    def hideEvent(self, event: Any) -> None:
+        release_surface(self)
+        super().hideEvent(event)

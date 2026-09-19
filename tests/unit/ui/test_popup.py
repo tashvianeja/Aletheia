@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
+from PySide6.QtWidgets import QLabel
 
 from privacy_guardian.core.events import Decision, Outcome
 from privacy_guardian.ui.popup import InterventionPopup, PopupQueue
@@ -27,25 +28,67 @@ def test_popup_buttons_emit_action_and_remember(qtbot) -> None:
     qtbot.mouseClick(popup.buttons["redact"], Qt.MouseButton.LeftButton)
 
     assert selected == [("event-1", "redact", True)]
-    assert not popup.timer.isActive()
     assert popup._resolved is True
 
 
-def test_popup_uses_safe_timeout_and_inform_dismissal(qtbot) -> None:
-    intervene_actions: list[tuple[str, str, bool]] = []
-    intervene = InterventionPopup(decision(), lambda *args: intervene_actions.append(args))
+def test_widgets_stay_up_until_they_are_answered(qtbot) -> None:
+    """A warning that removes itself is one the person may never finish reading."""
+    actions: list[tuple[str, str, bool]] = []
+    intervene = InterventionPopup(decision(), lambda *args: actions.append(args))
     inform = InterventionPopup(decision("inform", Outcome.INFORM))
     qtbot.addWidget(intervene)
     qtbot.addWidget(inform)
+    intervene.show()
+    inform.show()
 
-    assert intervene.timer.interval() == 60_000
-    assert inform.timer.interval() == 8_000
-    intervene.timeout()
-    inform.timeout()
+    # Long enough that the old eight-second toast would have gone.
+    qtbot.wait(300)
 
-    assert intervene_actions == [("event-1", "cancel", False)]
-    assert inform._resolved is True
+    assert intervene.isVisible() and inform.isVisible()
+    assert not actions
+    assert not any(
+        isinstance(child, QTimer) and child.isActive() and child.interval() >= 1_000
+        for child in intervene.findChildren(QTimer) + inform.findChildren(QTimer)
+    ), "nothing may be counting down towards dismissing the widget"
+
+
+def test_informational_card_can_be_closed_and_closing_it_does_nothing_else(qtbot) -> None:
+    actions: list[tuple[str, str, bool]] = []
+    inform = InterventionPopup(
+        decision("inform", Outcome.INFORM), lambda *args: actions.append(args)
+    )
+    qtbot.addWidget(inform)
+    inform.show()
+
+    assert inform.card.close_button is not None, "a card that never expires needs a way out"
+    qtbot.mouseClick(inform.card.close_button, Qt.MouseButton.LeftButton)
+
     assert not inform.isVisible()
+    assert actions == [("inform", "cancel", False)]
+
+
+def test_closing_a_desktop_notice_does_not_act_on_the_person_s_behalf(qtbot) -> None:
+    """Dismissing a permission notice must not open system settings by itself."""
+    from privacy_guardian.core.events import DataCategory, PermissionRequestEvent, Requester
+    from privacy_guardian.engine.decision import decide
+
+    notice = decide(
+        PermissionRequestEvent(
+            source="os",
+            requester=Requester(kind="application", bundle_id="com.synthetic.grabber"),
+            data_categories=[DataCategory.CAMERA],
+            permission="camera",
+            state="requested",
+        )
+    )
+    chosen: list[tuple[str, str, bool]] = []
+    popup = InterventionPopup(notice, lambda *args: chosen.append(args))
+    qtbot.addWidget(popup)
+
+    assert popup.dismiss_action() == "continue"
+    popup.dismiss()
+
+    assert [action for _id, action, _remember in chosen] == ["continue"]
 
 
 def test_escape_selects_default_action(qtbot) -> None:
@@ -105,3 +148,27 @@ def test_queue_ignores_ignore_outcomes(qtbot, ui_controller) -> None:
     queue.enqueue(decision(outcome=Outcome.IGNORE))
     assert queue.current is None
     assert not queue.queue
+
+
+def test_a_notice_is_not_given_a_green_tick_it_has_not_earned(qtbot) -> None:
+    """A tick beside "is asking for your camera" says the opposite of the sentence."""
+    from privacy_guardian.ui import icons
+
+    notice = decision("notice", Outcome.INFORM).model_copy(update={"risk": 0.45})
+    settled = decision("settled", Outcome.INFORM).model_copy(update={"risk": 0.1})
+    for popup, expected in (
+        (InterventionPopup(notice), "info"),
+        (InterventionPopup(settled), "ok"),
+    ):
+        qtbot.addWidget(popup)
+        glyphs = [
+            label
+            for label in popup.card.findChildren(QLabel)
+            if not label.text() and not label.pixmap().isNull()
+        ]
+        wanted = icons.pixmap(
+            expected, popup.card.colors["ok" if expected == "ok" else "faint"], 15
+        )
+        assert any(label.pixmap().toImage() == wanted.toImage() for label in glyphs), (
+            f"expected the {expected} glyph beside the headline"
+        )

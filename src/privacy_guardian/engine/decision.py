@@ -42,10 +42,12 @@ _ACTIONS: dict[str, tuple[list[str], str]] = {
     "form_observed": (["review_fields", "continue"], "review_fields"),
     "consent_banner": (["reject_optional", "continue", "view_details"], "reject_optional"),
     "tracking": (["block", "learn_more"], "block"),
-    "permission_request": (["open_settings", "mark_expected"], "open_settings"),
-    "system_access": (["open_settings", "mark_expected"], "open_settings"),
-    "screen_capture": (["open_settings", "mark_expected"], "open_settings"),
-    "startup_registration": (["open_settings", "mark_expected"], "open_settings"),
+    # "continue" is the way to put a desktop notice down without doing anything about
+    # it. Without one, closing the card would either act or leave it outstanding forever.
+    "permission_request": (["open_settings", "mark_expected", "continue"], "open_settings"),
+    "system_access": (["open_settings", "mark_expected", "continue"], "open_settings"),
+    "screen_capture": (["open_settings", "mark_expected", "continue"], "open_settings"),
+    "startup_registration": (["open_settings", "mark_expected", "continue"], "open_settings"),
     "clipboard_read": (["clear_clipboard", "open_settings", "continue"], "clear_clipboard"),
     "policy_document": (["cancel", "continue", "view_details"], "cancel"),
 }
@@ -174,6 +176,18 @@ def decide(
         notes.append(
             "Operating-system clipboard cloud sync is enabled; sensitive clipboard content may be copied to other devices."
         )
+    if (
+        getattr(event, "existing", False)
+        and not any(
+            item.verdict in {Necessity.UNNECESSARY, Necessity.RED_FLAG} for item in assessments
+        )
+        and not high_impact
+    ):
+        # An access the requester already holds is the state of the machine, not news.
+        # Saying "this app is asking for your camera" about a grant made months ago is
+        # simply wrong, and doing it for every settled permission buries the real ones.
+        level = minimum
+        notes.append("This access was already in place; nothing has changed.")
     expected = set(preferences.expected_permissions.get(event.requester.key, []))
     if categories and categories <= expected:
         level = 0 if not high_impact else min(level, 1)

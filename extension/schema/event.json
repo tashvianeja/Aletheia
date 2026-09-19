@@ -717,6 +717,11 @@
           ],
           "title": "State",
           "type": "string"
+        },
+        "existing": {
+          "default": false,
+          "title": "Existing",
+          "type": "boolean"
         }
       },
       "title": "PermissionRequestEvent",
@@ -1132,6 +1137,11 @@
           "minimum": 0,
           "title": "Breadth",
           "type": "number"
+        },
+        "existing": {
+          "default": false,
+          "title": "Existing",
+          "type": "boolean"
         }
       },
       "title": "SystemAccessEvent",

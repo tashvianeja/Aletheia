@@ -141,3 +141,106 @@ def test_learning_and_rate_limit_can_never_silence_high_risk_request() -> None:
     )
     assert decision.risk >= 0.55
     assert decision.outcome == Outcome.INFORM
+
+
+def _standing_grant(existing: bool = True, purpose: str = "unknown") -> Outcome:
+    from privacy_guardian.core.events import PermissionRequestEvent
+
+    return decide(
+        PermissionRequestEvent(
+            source="os",
+            requester=Requester(
+                kind="application",
+                bundle_id="com.synthetic.helper",
+                display_name="helper",
+                purpose=purpose,
+                purpose_confidence=0.9 if purpose != "unknown" else 0.0,
+            ),
+            data_categories=[DataCategory.ACCESSIBILITY],
+            permission="accessibility",
+            state="granted",
+            existing=existing,
+        )
+    ).outcome
+
+
+def test_a_permission_already_held_is_not_raised_as_something_to_review() -> None:
+    """The bug this guards: every settled grant on the machine announced as a request."""
+    assert _standing_grant(existing=True) == Outcome.IGNORE
+    assert _standing_grant(existing=False) != Outcome.IGNORE
+
+
+def test_a_permission_already_held_is_still_raised_when_it_is_unnecessary() -> None:
+    """Quiet about the ordinary is not the same as quiet about the unearned."""
+    assert necessity_for("recipe", DataCategory.ACCESSIBILITY, 1.0).verdict in {
+        Necessity.UNNECESSARY,
+        Necessity.RED_FLAG,
+    }
+    assert _standing_grant(existing=True, purpose="recipe") != Outcome.IGNORE
+
+
+def test_closing_a_desktop_notice_is_an_option_the_decision_offers() -> None:
+    from privacy_guardian.core.events import PermissionRequestEvent
+
+    decision = decide(
+        PermissionRequestEvent(
+            source="os",
+            requester=Requester(kind="application", bundle_id="com.synthetic.helper"),
+            data_categories=[DataCategory.CAMERA],
+            permission="camera",
+        )
+    )
+
+    assert "continue" in decision.actions
+    assert decision.default_action == "open_settings"
+
+
+@pytest.mark.parametrize(
+    ("state", "existing", "expected"),
+    [
+        ("requested", False, "Snipper is asking for your camera."),
+        ("granted", False, "Snipper was given access to your camera."),
+        ("granted", True, "Snipper already has access to your camera."),
+        ("active", False, "Snipper is using your camera."),
+    ],
+)
+def test_a_permission_is_described_as_what_actually_happened(
+    state: str, existing: bool, expected: str
+) -> None:
+    from privacy_guardian.core.events import PermissionRequestEvent
+    from privacy_guardian.engine.context import analyze_context
+    from privacy_guardian.engine.explain import explain
+
+    event = PermissionRequestEvent(
+        source="os",
+        requester=Requester(kind="application", bundle_id="com.synthetic", display_name="Snipper"),
+        data_categories=[DataCategory.CAMERA],
+        permission="camera",
+        state=state,  # type: ignore[arg-type]
+        existing=existing,
+    )
+    headline, _body, _rows, _why = explain(
+        event, analyze_context(event.requester, event.data_categories), SiteOrAppProfile()
+    )
+
+    assert headline == expected
+
+
+def test_broad_access_already_held_is_described_as_held() -> None:
+    from privacy_guardian.core.events import SystemAccessEvent
+    from privacy_guardian.engine.context import analyze_context
+    from privacy_guardian.engine.explain import explain
+
+    event = SystemAccessEvent(
+        source="os",
+        requester=Requester(kind="application", bundle_id="com.synthetic", display_name="Snipper"),
+        data_categories=[DataCategory.FILES_BROAD, DataCategory.ACCESSIBILITY],
+        accesses=["files_broad", "accessibility"],
+        breadth=0.7,
+        existing=True,
+    )
+    headline, _body, _rows, _why = explain(
+        event, analyze_context(event.requester, event.data_categories), SiteOrAppProfile()
+    )
+
+    assert headline == "Snipper already has broad access to your computer."

@@ -114,10 +114,13 @@ is one of three things.
 
 **Ignore.** Nothing appears. This is what happens almost all the time.
 
-**Inform.** A toast, bottom right, gone in eight seconds. No buttons. *"Identity document shared
+**Inform.** A toast, bottom right. No buttons beyond its close control. *"Identity document shared
 with Government of Verdania eVisa Portal — expected for an identity check."*
 
 **Intervene.** The widget, with the safe option as the easy one, and the way past it still there.
+
+Neither one times out. It stays until you deal with it, and a second one stacks above the first
+rather than landing on top of it, so nothing ever covers the buttons you are reaching for.
 
 ### Thorough check
 

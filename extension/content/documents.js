@@ -17,7 +17,7 @@
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',firstVisit,{once:true});else firstVisit();
   const bypass=new WeakSet();
   document.addEventListener('click',async event=>{
-    const target=event.target.closest?.('input[type=checkbox],button,[role=button]');if(!target||target.closest('.pg-panel')||bypass.has(target)){bypass.delete(target);return;}
+    const target=event.target.closest?.('input[type=checkbox],button,[role=button]');if(!target||target.closest('.pg-panel,.pg-stack')||bypass.has(target)){bypass.delete(target);return;}
     const label=(target.labels?Array.from(target.labels).map(node=>node.textContent).join(' '):'')+' '+(target.getAttribute('aria-label')||target.textContent||'');
     if(!/i agree|agree to|accept terms|accept.*conditions|by continuing|zustimm|j.accepte|acepto/i.test(label)||!links('terms').length&&!inline('terms'))return;
     event.preventDefault();event.stopImmediatePropagation();const intendedChecked=target instanceof HTMLInputElement?target.checked:null;

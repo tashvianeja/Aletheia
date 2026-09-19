@@ -304,7 +304,13 @@ async def run_deep_check(
         "findings": findings,
         "checked": checked,
         "groups": build_groups(findings, checked),
-        "summary": tr("check_summary", count=count) if count else tr("check_clean"),
+        "summary": (
+            tr("check_summary", count=count)
+            if count > 1
+            else tr("check_summary_one")
+            if count
+            else tr("check_clean")
+        ),
         "context_available": bool(context) or service.adapter is not None,
         "fresh": fresh,
     }

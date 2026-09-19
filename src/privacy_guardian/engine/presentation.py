@@ -49,18 +49,22 @@ ACTION_LABELS: dict[str, dict[str, str]] = {
     "permission_request": {
         "mark_expected": "Expected",
         "open_settings": "Review access",
+        "continue": "Not now",
     },
     "system_access": {
         "mark_expected": "Expected",
         "open_settings": "Review access",
+        "continue": "Not now",
     },
     "screen_capture": {
         "mark_expected": "Expected",
         "open_settings": "Review access",
+        "continue": "Not now",
     },
     "startup_registration": {
         "mark_expected": "Expected",
         "open_settings": "Review access",
+        "continue": "Not now",
     },
 }
 
