@@ -60,7 +60,7 @@ jobs:
         timeout-minutes: 15
         id: runtime_gate
         continue-on-error: true
-        run: uv run pytest tests/e2e tests/perf tests/platform/test_clipboard.py::test_real_macos_clipboard_classifies_synthetic_card_within_500ms tests/platform/test_clipboard.py::test_real_windows_clipboard_classifies_synthetic_card_within_500ms
+        run: uv run pytest -v tests/e2e tests/perf tests/platform/test_clipboard.py::test_real_macos_clipboard_classifies_synthetic_card_within_500ms tests/platform/test_clipboard.py::test_real_windows_clipboard_classifies_synthetic_card_within_500ms
       - name: Check line coverage
         id: coverage_gate
         continue-on-error: true
@@ -76,6 +76,7 @@ jobs:
         if: runner.os == 'Windows'
         run: uv run python scripts/build.py windows
       - name: Packaged macOS smoke
+        timeout-minutes: 10
         if: runner.os == 'macOS'
         run: |
           dist/PrivacyGuardian.app/Contents/MacOS/PrivacyGuardian --diagnose
@@ -83,12 +84,15 @@ jobs:
           codesign --verify --deep --strict dist/PrivacyGuardian.app
           uv run python tests/packaging/verify_packaged_installation.py --platform macos --artifact dist/PrivacyGuardian-*.dmg --maximum-macos 13.0
       - name: Packaged Windows smoke
+        timeout-minutes: 10
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $env:PRIVACY_GUARDIAN_DATA_DIR = "$env:RUNNER_TEMP/guardian-smoke"
           & dist/PrivacyGuardian/PrivacyGuardian.exe --diagnose
+          if ($LASTEXITCODE -ne 0) { throw "Packaged diagnostics failed" }
           & dist/PrivacyGuardian/PrivacyGuardian.exe --smoke-test
+          if ($LASTEXITCODE -ne 0) { throw "Packaged application smoke failed" }
           $installer = @(Get-ChildItem dist/PrivacyGuardian-Setup-*.exe)
           if ($installer.Count -ne 1) { throw "Expected exactly one installer artifact" }
           uv run python tests/packaging/verify_packaged_installation.py --platform windows --artifact $installer[0].FullName
