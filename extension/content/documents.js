@@ -1,6 +1,6 @@
 (() => {
   const analyzed=new Map(),agreed=new Set(),partialDocuments=new Map();let cachedPolicy=null,cachedTerms=null;
-  function links(kind){const pattern=kind==='terms'?/terms|conditions|agreement|nutzungsbedingungen|condiciones/i:/privacy|datenschutz|confidentialit|privacidad/i;return PG.queryAll('a[href],link[rel~=privacy-policy][href]').filter(link=>link.rel==='privacy-policy'||pattern.test(`${link.textContent} ${link.getAttribute('href')}`)).map(link=>link.href).filter(url=>/^https?:/.test(url));}
+  function links(kind){const pattern=kind==='terms'?/terms|conditions|agreement|nutzungsbedingungen|condiciones/i:/privacy|datenschutz|confidentialit|privacidad/i;return PG.queryAll('a[href],link[rel~=privacy-policy][href]').filter(link=>(kind==='policy'&&link.rel==='privacy-policy')||pattern.test(`${link.textContent} ${link.getAttribute('href')}`)).map(link=>link.href).filter(url=>/^https?:/.test(url));}
   function inline(kind){const selectors=kind==='terms'?'[data-terms-text],#terms-text,.terms-content':'[data-privacy-policy],#privacy-policy,.privacy-policy-content';return PG.queryAll(selectors).map(node=>node.textContent).join('\n');}
   function boundedText(kind,text,partial=false){let bounded=text;while(new TextEncoder().encode(JSON.stringify({text:bounded})).length>600*1024)bounded=bounded.slice(0,Math.floor(bounded.length*0.8));partialDocuments.set(kind,partial||bounded.length<text.length);return bounded;}
   function htmlText(text){return new DOMParser().parseFromString(text,'text/html').body.textContent||text;}

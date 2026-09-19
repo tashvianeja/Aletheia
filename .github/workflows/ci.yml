@@ -22,6 +22,9 @@ jobs:
         with:
           enable-cache: true
           python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
       - run: uv sync --frozen
       - name: Install OCR (macOS)
         if: runner.os == 'macOS'
@@ -29,6 +32,20 @@ jobs:
       - name: Install OCR and installer compiler (Windows)
         if: runner.os == 'Windows'
         run: choco install tesseract innosetup -y --no-progress
+      - name: Install Firefox (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          if [ ! -x /Applications/Firefox.app/Contents/MacOS/firefox ]; then
+            brew install --cask firefox
+          fi
+      - name: Install Firefox (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (!(Test-Path "C:/Program Files/Mozilla Firefox/firefox.exe")) {
+            choco install firefox -y --no-progress
+          }
+      - run: npm install --prefix build/firefox-tools web-ext@10.6.0
       - run: uv run playwright install chromium
       - run: uv run python scripts/generate_schema.py
       - run: uv run ruff check .

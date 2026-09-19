@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import tomllib
 import zipfile
 from pathlib import Path
 
@@ -13,6 +14,7 @@ def main() -> None:
     run_path(str(ROOT / "scripts/generate_schema.py"), run_name="__main__")
     target = ROOT / "dist"
     target.mkdir(exist_ok=True)
+    version = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"]
     for browser in ("chromium", "firefox"):
         with zipfile.ZipFile(
             target / f"privacy-guardian-{browser}.zip", "w", zipfile.ZIP_DEFLATED
@@ -25,8 +27,14 @@ def main() -> None:
                 ):
                     continue
                 relative = path.relative_to(ROOT / "extension")
-                if path.name == "manifest.json" and browser == "firefox":
-                    manifest = json.loads((ROOT / "extension/manifest.firefox.json").read_text())
+                if path.name == "manifest.json":
+                    source = (
+                        ROOT
+                        / "extension"
+                        / ("manifest.firefox.json" if browser == "firefox" else "manifest.json")
+                    )
+                    manifest = json.loads(source.read_text())
+                    manifest["version"] = version
                     output.writestr("manifest.json", json.dumps(manifest, indent=2))
                 else:
                     output.write(path, relative)
