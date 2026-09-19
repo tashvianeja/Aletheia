@@ -29,6 +29,7 @@ class AnalysisResult(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     profile: dict[str, object] = Field(default_factory=dict)
     fields: list[FieldAssessment] = Field(default_factory=list)
+    timings_ms: dict[str, float] = Field(default_factory=dict)
 
 
 @dataclass
@@ -76,6 +77,7 @@ def analyze_payload(payload: dict[str, object]) -> AnalysisResult:
             if isinstance(timeout, (float, int, str))
             else 20.0
         )
+        extraction_start = time.perf_counter()
         document = extract_document(
             data,
             filename,
@@ -83,6 +85,8 @@ def analyze_payload(payload: dict[str, object]) -> AnalysisResult:
             partial=bool(payload.get("partial", False)),
             original_size=int(original_size) if isinstance(original_size, (int, str)) else None,
         )
+        extraction_ms = (time.perf_counter() - extraction_start) * 1000
+        pii_start = time.perf_counter()
         findings = [
             finding
             for page in document.pages
@@ -106,6 +110,10 @@ def analyze_payload(payload: dict[str, object]) -> AnalysisResult:
             document_type=document.document_type,
             partial=document.partial,
             warnings=document.warnings,
+            timings_ms={
+                "extraction": extraction_ms,
+                "pii": (time.perf_counter() - pii_start) * 1000,
+            },
         )
     if kind == "text":
         text = str(payload.get("text", ""))

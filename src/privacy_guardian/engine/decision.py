@@ -7,6 +7,7 @@ from privacy_guardian.core.events import (
     ConsentBannerEvent,
     DataCategory,
     Decision,
+    FileUploadEvent,
     Finding,
     FormObservedEvent,
     FormSubmitEvent,
@@ -212,6 +213,11 @@ def decide(
         notes.append("The same request was already shown within the last day.")
         break
     level = max(level, learned_floor)
+    partial_upload = isinstance(event, FileUploadEvent) and event.partial
+    if partial_upload:
+        level = max(level, 1)
+        risk = max(risk, 0.25)
+        notes.append("Partial file analysis: omitted or unreadable content has not been checked.")
     actions, default_action = _ACTIONS.get(
         event.event_type, (["open_settings", "continue"], "open_settings")
     )
@@ -222,6 +228,10 @@ def decide(
     if event.event_type == "file_upload" and DataCategory.LOCATION_PRECISE in categories:
         actions.insert(0, "strip_metadata")
     explanation, rationale = explain(event, assessments, profile, notes)
+    if partial_upload:
+        explanation = (
+            "This file was only partially checked; " + explanation[:1].lower() + explanation[1:]
+        )
     if isinstance(event, PermissionRequestEvent) and event.state in {"denied", "stopped"}:
         level = 0
         explanation = "Access was denied or stopped; no active grant was detected."

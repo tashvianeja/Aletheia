@@ -97,6 +97,7 @@ class Service:
         self._upload_preparation: asyncio.Task[None] | None = None
         self._worker_preparation: asyncio.Task[None] | None = None
         self._ner_generation = -1
+        self._light_generation = -1
 
     def prepare_browser_worker(self) -> None:
         if self.pool._pool is not None or (
@@ -109,6 +110,7 @@ class Service:
 
             with contextlib.suppress(RuntimeError, OSError):
                 await self.pool.run(prepare_worker)
+                self._light_generation = self.pool.generation
 
         self._worker_preparation = asyncio.create_task(prepare())
 
@@ -123,6 +125,7 @@ class Service:
             from privacy_guardian.core.worker_dispatch import prepare_upload_model
 
             with contextlib.suppress(RuntimeError, OSError):
+                self._light_generation = -1
                 await self.pool.run(prepare_upload_model)
                 self._ner_generation = self.pool.generation
 
@@ -167,6 +170,9 @@ class Service:
         task.add_done_callback(self.background_tasks.discard)
 
     async def start(self) -> None:
+        self.prepare_browser_worker()
+        if self._worker_preparation:
+            await self._worker_preparation
         await self.control.start()
         self.bus.subscribe(self._on_event)
         self.store.purge(self.settings.retention_days)
@@ -221,12 +227,14 @@ class Service:
                     self._close_cloud()
                 if (
                     self.pool._pool is not None
+                    and self._light_generation != self.pool.generation
                     and not self.pool.active
                     and not self.uploads
                     and now - self.pool.last_used
                     > (120 if any(event.payload_ref for event in self.events.values()) else 10)
                 ):
                     self.pool.recycle()
+                    self.prepare_browser_worker()
                 for event_id, since in list(self.pending_since.items()):
                     if (
                         now - since >= self.settings.popup_timeout_seconds
@@ -574,6 +582,7 @@ class Service:
 
     async def handle_message(self, message: dict[str, Any]) -> dict[str, Any]:
         request_id = str(message.get("id", ""))[:128]
+        started = time.perf_counter()
         try:
             request = Request.model_validate(message)
             result = await self._route(request)
@@ -597,6 +606,15 @@ class Service:
                     "message": "Analysis unavailable; please retry",
                 },
             }
+        finally:
+            if message.get("type") in {"file_start", "file_chunk", "file_finish"}:
+                logging.getLogger(__name__).debug(
+                    "file_analysis_stage",
+                    extra={
+                        "purpose": message["type"],
+                        "latency_ms": round((time.perf_counter() - started) * 1000, 3),
+                    },
+                )
 
     async def _route(self, request: Request) -> dict[str, Any]:
         payload = dict(request.payload)
@@ -701,6 +719,7 @@ class Service:
                 raise ValueError("Upload session is no longer valid")
             self.uploads.pop(upload_id)
             self.inflight_uploads[upload_id] = meta
+            self._light_generation = -1
             try:
                 analysis = await self.pool.run(
                     finish_upload, upload_id, self.settings.analysis_timeout_seconds
@@ -718,6 +737,11 @@ class Service:
                 partial=analysis.partial,
                 size_bytes=meta["size"],
             )
+            for stage, elapsed in analysis.timings_ms.items():
+                logging.getLogger(__name__).debug(
+                    "document_analysis_stage",
+                    extra={"purpose": stage, "latency_ms": round(elapsed, 3)},
+                )
             if session in self.closed_sessions or meta["generation"] != self.pool.generation:
                 event.data_categories = sorted(
                     {finding.category for finding in analysis.findings}, key=str

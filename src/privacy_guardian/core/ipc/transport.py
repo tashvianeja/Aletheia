@@ -72,9 +72,7 @@ class ControlServer:
         self._closed.clear()
         if sys.platform == "win32":
             loop = asyncio.get_running_loop()
-            self.listener = Listener(
-                endpoint(self.data_dir), family="AF_PIPE", authkey=self.token.encode()
-            )
+            self.listener = Listener(endpoint(self.data_dir), family="AF_PIPE", authkey=None)
             self._pipe_thread = threading.Thread(
                 target=self._pipe_loop, args=(loop,), daemon=True, name="guardian-pipe"
             )
@@ -206,7 +204,9 @@ async def send_request(
     if sys.platform == "win32":
 
         def exchange() -> dict[str, Any]:
-            connection = Client(endpoint(data_dir), family="AF_PIPE", authkey=token.encode())
+            # Authentication is the mandatory JSON-envelope token. Keeping the
+            # stdlib challenge disabled avoids an unbounded handshake in accept().
+            connection = Client(endpoint(data_dir), family="AF_PIPE", authkey=None)
             try:
                 connection.send_bytes(json.dumps(envelope).encode())
                 if not connection.poll(timeout):
