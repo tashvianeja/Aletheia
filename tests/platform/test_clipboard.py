@@ -17,6 +17,15 @@ class InlinePool:
         return function(*args)
 
 
+class CountingPool(InlinePool):
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def run(self, function: Any, *args: Any) -> Any:
+        self.calls += 1
+        return await super().run(function, *args)
+
+
 class ClipboardBackend:
     def __init__(self) -> None:
         self.sequence = 1
@@ -83,6 +92,23 @@ async def test_clipboard_sequence_change_replaces_prior_sensitive_categories() -
     await monitor.tick()
 
     assert monitor.categories == []
+
+
+@pytest.mark.asyncio
+async def test_clipboard_rechecks_empty_snapshot_when_writer_sets_text_at_same_sequence() -> None:
+    backend = ClipboardBackend()
+    backend.text = ""
+    pool = CountingPool()
+    monitor = ClipboardMonitor(backend, pool, lambda _event: None)
+
+    await monitor.tick()
+    backend.text = "Synthetic card 4111111111111111"
+    await monitor.tick()
+
+    assert DataCategory.FINANCIAL_CARD_NUMBER in monitor.categories
+    assert pool.calls == 1
+    await monitor.tick()
+    assert pool.calls == 1
 
 
 @pytest.mark.asyncio

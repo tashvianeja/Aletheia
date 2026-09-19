@@ -133,9 +133,7 @@ async def test_windows_pipe_rejects_wrong_envelope_and_expires_idle_client(
 
         await asyncio.sleep(5.2)
         with pytest.raises((EOFError, OSError)):
-            await asyncio.wait_for(
-                asyncio.to_thread(idle.recv_bytes, MAX_MESSAGE_BYTES), timeout=1
-            )
+            await asyncio.wait_for(asyncio.to_thread(idle.recv_bytes, MAX_MESSAGE_BYTES), timeout=1)
     finally:
         idle.close()
         wrong.close()

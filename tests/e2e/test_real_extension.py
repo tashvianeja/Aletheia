@@ -377,9 +377,7 @@ async def test_passport_redacted_copy_replaces_input_and_rescans_clean(
     redact = page.locator('.pg-panel [data-pg-action="redact"]')
     await redact.wait_for(timeout=10_000)
     intervention_seconds = time.perf_counter() - started
-    dom_intervention_ms = await page.evaluate(
-        "window.__pgPanelVisible-window.__pgSelectionStarted"
-    )
+    dom_intervention_ms = await page.evaluate("window.__pgPanelVisible-window.__pgSelectionStarted")
     print(f"passport change-event-to-visible-DOM latency: {dom_intervention_ms:.3f}ms")
     print(f"passport selection-to-intervention latency: {intervention_seconds:.6f}s")
     decision = await latest_decision(real_browser, "file_upload")

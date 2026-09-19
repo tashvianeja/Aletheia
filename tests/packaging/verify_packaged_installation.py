@@ -159,7 +159,11 @@ def native_handshake(executable: Path, environment: dict[str, str]) -> dict[str,
 def unique_named_files(root: Path, names: set[str]) -> list[Path]:
     """Return physical files once when an app exposes them through resource symlinks."""
     return sorted(
-        {path.resolve() for path in root.rglob("*") if path.is_file() and path.name.lower() in names}
+        {
+            path.resolve()
+            for path in root.rglob("*")
+            if path.is_file() and path.name.lower() in names
+        }
     )
 
 
