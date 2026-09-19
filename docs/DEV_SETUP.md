@@ -54,7 +54,9 @@ Optional OpenAI credentials are stored through the operating-system keychain onl
 
 ## Fresh-clone verification procedure
 
-This completed at `d3390ba`: setup, diagnose/smoke, source macOS build, extension archives, packaged install/onboarding/native handshake/PNG and native-JPEG OCR, uninstall/restore, and the 339-Mach-O macOS-13 audit passed. `make check` reported 307 passed and 5 skipped, with two first-phase performance cases deselected; coverage was 85.71% scoped and 75.42% overall.
+The historical full clean-clone lifecycle completed at `d3390ba`: setup, diagnose/smoke, source macOS build, extension archives, packaged install/onboarding/native handshake/PNG and native-JPEG OCR, uninstall/restore, and the 339-Mach-O macOS-13 audit passed. Its `make check` reported 307 passed and 5 skipped, with two first-phase performance cases deselected; coverage was 85.71% scoped and 75.42% overall.
+
+Sol’s current literal clean clone at `aefa9729132b25284a7a968bc12b2515e884d39d` passed `QT_QPA_PLATFORM=offscreen make check`: 312 passed, 5 skipped, and 2 first-phase performance deselections (278 instrumented in 42.74 seconds and 34 runtime in 94.05 seconds). Ruff checked 176 files and mypy 73 modules. Its scoped coverage was 85.55% (`1,687/1,972`) and its overall coverage was 75.44% (`4,143/5,492`). This clone did not build or install the final `1539390` artifact; that lifecycle evidence is recorded separately in the README.
 
 ```sh
 git clone https://github.com/tashvianeja/Privacy-Guardian.git
@@ -86,7 +88,7 @@ The worker must record command exit codes, test/coverage totals, generated exten
 | `make run` | Start the console app | Fresh clone diagnose/smoke passed |
 | `make test` | Pytest with coverage | Fresh clone passed within final check |
 | `make e2e` | Playwright browser suite | Fresh clone runtime suite passed; Windows browser runtime remains pending |
-| `make check` | Lint, typecheck, and test | Final local headed run: 312 passed, 5 skipped; clean clone passed 307, 5 skipped |
+| `make check` | Lint, typecheck, and test | Current clean clone: 312 passed, 5 skipped; historical full lifecycle clone: 307 passed, 5 skipped |
 | `make build-extension` | Generate/build extension assets | Fresh clone passed |
 | `make build-mac` | macOS app + DMG with bundled compatible OCR | Current lifecycle passed |
 | `make build-win` | Build the Windows installer on Windows | Final installed-runtime acceptance pending |
