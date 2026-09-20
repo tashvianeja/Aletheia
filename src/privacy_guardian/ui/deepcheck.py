@@ -1,7 +1,8 @@
 """The thorough check, shown as the same floating card as every other intervention.
 
-While it runs the card is a live checklist; when it finishes it becomes a result summary
-with a way through to the full report in the dashboard.
+While it runs the card is a bar filling up under one line saying what is being looked at
+right now; when it finishes it becomes a result summary with a way through to the full
+report in the dashboard.
 """
 
 from __future__ import annotations
@@ -34,36 +35,25 @@ from privacy_guardian.ui.card import (
 from privacy_guardian.ui.theme import card_stylesheet, palette, urgency_palette
 from privacy_guardian.util.i18n import tr
 
-# The four lines the card ticks off while the check runs.
-STAGES = (
-    ("permissions", "Permissions"),
-    ("tracking", "Tracking"),
-    ("policy", "Privacy policy"),
-    ("forms", "Current form"),
-)
 # As many findings as fit on a card that can still be read at a glance; the rest are
 # one line away in the full report.
 MAX_ROWS = 5
+# The four parts of a run the bar counts off, and the parts of the run that answer for
+# each. They are no longer listed on the card: a run takes a few seconds, and a list of
+# four things that have not happened yet is a reading exercise, not progress.
 STAGE_SOURCES = {
     "permissions": {"permissions"},
     "tracking": {"tracking", "consent"},
     "policy": {"policy", "terms"},
     "forms": {"forms", "uploads"},
 }
-# How each line is drawn in each of the states the check reports for it: waiting its
-# turn, under way, answered, or not answerable here. The mark and the colour say the
-# same thing, so the list is readable without relying on either alone.
-STAGE_MARKS = {
-    "pending": ("pending", "faint"),
-    "running": ("running", "accent"),
-    "done": ("ok", "ok"),
-    "unavailable": ("info", "faint"),
-}
-# A line that has stopped moving, either way, counts towards the bar along the bottom.
+STAGE_COUNT = len(STAGE_SOURCES)
+# A part that has stopped moving, either way, counts towards the bar.
 SETTLED = frozenset({"done", "unavailable"})
-# What the check is doing at the moment each part of it reports in. The two that have
-# no line of their own — collecting the page, and writing the summary afterwards —
-# are the longest waits in the whole run, so the card has to be able to say them.
+# What the check is doing at the moment each part of it reports in. Everything the page
+# is asked for is asked for at once, so the six parts behind it share one line; the two
+# longest waits in a run — collecting the page, and writing the summary afterwards —
+# have their own words, because otherwise the card would sit there looking finished.
 ACTIVITY = {
     "start": "checking_start",
     "tracking": "checking_page",
@@ -76,8 +66,8 @@ ACTIVITY = {
     "summary": "checking_summary",
     "complete": "checking_finished",
 }
-# One turn of the spinner every 1.1 seconds or so: fast enough to read as alive,
-# slow enough not to pull the eye away from whatever the person is actually doing.
+# One turn of the mark every 1.1 seconds or so: fast enough to read as alive, slow
+# enough not to pull the eye away from whatever the person is actually doing.
 SPIN_DEGREES = 30
 SPIN_INTERVAL_MS = 90
 # A report finding's severity, as the analysis names it, to the tier it is shown in.
@@ -117,16 +107,18 @@ class DeepCheckWindow(QWidget):
         self._outer.setContentsMargins(0, 0, 0, 0)
         self.scroller: QScrollArea | None = None
         self.card: GuardianCard | None = None
-        self.stage_glyphs: dict[str, QLabel] = {}
-        self.stage_titles = dict(STAGES)
-        # Where each line of the checklist has got to, and the raw state of every part
-        # of the run behind it — several parts can share one line.
+        # Where each of the four parts the bar counts has got to, and the raw state of
+        # every part of the run behind them — several parts can share one of the four.
         self.stage_states: dict[str, str] = {}
         self.source_states: dict[str, str] = {}
         self.activity: QLabel | None = None
+        self.activity_glyph: QLabel | None = None
+        self.tally: QLabel | None = None
         self.steps: QProgressBar | None = None
-        # A still list is indistinguishable from a stuck one. The line that is being
-        # worked on turns, for as long as it is really being worked on.
+        # A bar that only moves four times in a run is still for seconds at a stretch,
+        # and a still card is indistinguishable from a stuck one. The mark beside the
+        # line turns for as long as the run really is going.
+        self._complete = False
         self._turn = 0.0
         self.spinner = QTimer(self)
         self.spinner.setInterval(SPIN_INTERVAL_MS)
@@ -139,8 +131,9 @@ class DeepCheckWindow(QWidget):
         # Whatever was spinning belongs to the card about to be thrown away; stop
         # before its labels go, not after.
         self._stop_spinner()
-        self.stage_glyphs = {}
         self.activity = None
+        self.activity_glyph = None
+        self.tally = None
         self.steps = None
         if self.scroller is not None:
             self._outer.removeWidget(self.scroller)
@@ -157,37 +150,38 @@ class DeepCheckWindow(QWidget):
         card = self._reset_card("note")
         card.add_header(title=tr("urgency_checking"), right=tr("app_name"))
         card.add_headline(tr("privacy_check"))
-        # What is happening right now, in one line. The two longest waits in a run —
-        # asking the page for its context, and writing the summary afterwards — have
-        # no line of their own on the checklist, and without this the card would sit
-        # there looking finished while it was still working.
-        self.activity = card.add_body(tr("checking_start"))
+        self._complete = False
         self.stage_states = dict.fromkeys(STAGE_SOURCES, "pending")
         self.source_states = {}
-        box = QVBoxLayout()
-        box.setSpacing(7)
-        for key, title in STAGES:
-            row = QHBoxLayout()
-            row.setSpacing(9)
-            glyph = QLabel()
-            glyph.setFixedWidth(19)
-            row.addWidget(glyph)
-            label = QLabel(title)
-            label.setObjectName("cardRow")
-            row.addWidget(label, 1)
-            box.addLayout(row)
-            self.stage_glyphs[key] = glyph
-            self._paint_stage(key)
-        card.add_layout(box)
-        # How far through the run is, along the bottom of the list. Three pixels of
-        # colour: enough to see it move, not enough to read as a warning of its own.
+        # What is being looked at right now, in one line, with a mark that turns beside
+        # it and the count of how many of the four parts have answered. A run is over in
+        # a few seconds; naming the one thing in hand is more use in that time than a
+        # list of four, three of which are always "waiting".
+        line = QHBoxLayout()
+        line.setSpacing(9)
+        self.activity_glyph = QLabel()
+        self.activity_glyph.setFixedWidth(19)
+        line.addWidget(self.activity_glyph)
+        self.activity = QLabel(tr("checking_start"))
+        self.activity.setObjectName("cardBody")
+        self.activity.setWordWrap(True)
+        line.addWidget(self.activity, 1)
+        self.tally = QLabel()
+        self.tally.setObjectName("cardContext")
+        line.addWidget(self.tally)
+        card.add_layout(line)
+        # How far through the run is. With the list gone this is the only thing that
+        # says so, so it is drawn as a bar rather than the hairline under a list.
         self.steps = QProgressBar()
+        self.steps.setObjectName("checkProgress")
         self.steps.setTextVisible(False)
-        self.steps.setRange(0, len(STAGES))
+        self.steps.setRange(0, STAGE_COUNT)
         self.steps.setValue(0)
-        self.steps.setFixedHeight(3)
-        self.steps.setAccessibleName(tr("checking_steps", done=0, total=len(STAGES)))
+        self.steps.setFixedHeight(6)
         card.add_widget(self.steps)
+        self._settle_steps()
+        self._paint_activity()
+        self._run_spinner()
         card.add_context(tr("privacy_check"), self.origin)
         card.add_footer()
         self.status = card.headline_label or QLabel()
@@ -202,7 +196,7 @@ class DeepCheckWindow(QWidget):
         that takes seconds is visibly taking them rather than appearing, finished,
         alongside every other step at the end.
         """
-        if isinstance(update, str) or self.card is None or not self.stage_glyphs:
+        if isinstance(update, str) or self.card is None or self.steps is None:
             return
         stage = str(update.get("stage", ""))
         state = str(update.get("state", ""))
@@ -211,25 +205,30 @@ class DeepCheckWindow(QWidget):
         announces = state == "running" or (state == "done" and stage in {"complete", "summary"})
         if announces and stage in ACTIVITY and self.activity is not None:
             self.activity.setText(tr(ACTIVITY[stage]))
+        if stage == "complete" and state == "done":
+            self._complete = True
         if state:
             self.source_states[stage] = state
         for key, sources in STAGE_SOURCES.items():
             if stage in sources:
-                self._set_stage(key, self._folded(sources))
+                self.stage_states[key] = self._folded(sources)
         self._settle_steps()
-        if stage == "summary" and state == "running" and self.steps is not None:
-            # Every line is answered by now and there is no way to know how long the
+        if stage == "summary" and state == "running":
+            # All four are answered by now and there is no way to know how long the
             # model will take: a busy bar says "still working" without claiming to
-            # know how much of it is left.
+            # know how much of it is left, and a count of four out of four beside it
+            # would say the opposite.
             self.steps.setRange(0, 0)
+            if self.tally is not None:
+                self.tally.setText("")
         self._run_spinner()
 
     def _folded(self, sources: set[str]) -> str:
-        """One line can stand for several parts of the run; the furthest on wins.
+        """One of the four can stand for several parts of the run; the furthest on wins.
 
-        A line is answered as soon as any part behind it has an answer: "Tracking"
-        covers both the trackers on the page and the cookie banner, and a page with a
-        banner but no trackers has still been checked for tracking.
+        A part is answered as soon as anything behind it has an answer: tracking covers
+        both the trackers on the page and the cookie banner, and a page with a banner
+        but no trackers has still been checked for tracking.
         """
         states = {self.source_states.get(source, "pending") for source in sources}
         for state in ("done", "running", "unavailable"):
@@ -237,41 +236,36 @@ class DeepCheckWindow(QWidget):
                 return state
         return "pending"
 
-    def _set_stage(self, key: str, state: str) -> None:
-        if self.stage_states.get(key) == state:
-            return
-        self.stage_states[key] = state
-        self._paint_stage(key)
-
-    def _paint_stage(self, key: str) -> None:
-        glyph = self.stage_glyphs.get(key)
-        if glyph is None:
-            return
-        state = self.stage_states.get(key, "pending")
-        name, color = STAGE_MARKS.get(state, STAGE_MARKS["pending"])
-        turn = self._turn if state == "running" else 0.0
-        glyph.setPixmap(icons.pixmap(name, self.colors[color], 15, turn=turn))
-        # The mark is the only thing that says where this line has got to, and a mark
-        # is nothing to a screen reader; the line says it in words as well.
-        glyph.setAccessibleName(f"{self.stage_titles.get(key, key)}: {tr('stage_' + state)}")
+    def _paint_activity(self) -> None:
+        # Decoration: the mark says only that the run is alive, which the moving bar
+        # beside it says too. What is being checked, and how far through it is, are
+        # both in words — the line itself, and the bar's name.
+        if self.activity_glyph is not None:
+            self.activity_glyph.setPixmap(
+                icons.pixmap("running", self.colors["accent"], 15, turn=self._turn)
+            )
 
     def _settle_steps(self) -> None:
         if self.steps is None:
             return
         done = sum(1 for state in self.stage_states.values() if state in SETTLED)
-        self.steps.setRange(0, len(STAGES))
+        self.steps.setRange(0, STAGE_COUNT)
         self.steps.setValue(done)
-        self.steps.setAccessibleName(tr("checking_steps", done=done, total=len(STAGES)))
+        self.steps.setAccessibleName(tr("checking_steps", done=done, total=STAGE_COUNT))
+        if self.tally is not None:
+            self.tally.setText(tr("checking_tally", done=done, total=STAGE_COUNT))
 
     def _run_spinner(self) -> None:
-        """Turn only while something really is turning, on a card someone can see.
+        """Turn for as long as the run is going, on a card someone can see.
 
-        A check whose page was left behind takes its card down while the run carries
-        on reporting in; there is nothing to animate for a card that is no longer on
-        screen, and the timer would outlive it by the length of the run.
+        The run is going from the moment the card goes up until it says it is complete:
+        the waits with nothing to count against them — collecting the page at the start,
+        writing the summary at the end — are the longest ones, and they are exactly when
+        a still card would look stuck. A check whose page was left behind takes its card
+        down while the run carries on reporting in; there is nothing to animate for a
+        card nobody can see, and the timer would outlive it by the length of the run.
         """
-        running = any(state == "running" for state in self.stage_states.values())
-        if running and self.isVisible():
+        if self.steps is not None and not self._complete and self.isVisible():
             if not self.spinner.isActive():
                 self.spinner.start()
         else:
@@ -279,9 +273,7 @@ class DeepCheckWindow(QWidget):
 
     def _advance_spinner(self) -> None:
         self._turn = (self._turn + SPIN_DEGREES) % 360
-        for key, state in self.stage_states.items():
-            if state == "running":
-                self._paint_stage(key)
+        self._paint_activity()
 
     def _stop_spinner(self) -> None:
         self.spinner.stop()
@@ -353,9 +345,9 @@ class DeepCheckWindow(QWidget):
         """The browser is showing another page now, so this card is about the wrong one.
 
         A check is a reading of one page at one moment. Left up over the next tab it
-        keeps the same headline, the same findings and the same tick marks, and every
-        one of them now reads as a verdict on a page that was never checked. There is
-        no honest way to keep it on screen, so it goes.
+        keeps the same headline and the same findings, and every one of them now reads
+        as a verdict on a page that was never checked. There is no honest way to keep
+        it on screen, so it goes.
         """
         # An empty origin means the browser is not showing a web page at all — a blank
         # tab, its own settings, or a window that has never been focused — which is not
@@ -393,6 +385,9 @@ class DeepCheckWindow(QWidget):
 
     def showEvent(self, event: Any) -> None:
         super().showEvent(event)
+        # Nothing turns on a card that is not on screen yet, and the card is built
+        # before it is shown, so the mark starts here rather than at the first report.
+        self._run_spinner()
         QTimer.singleShot(0, self._anchor)
 
     def closeEvent(self, event: Any) -> None:

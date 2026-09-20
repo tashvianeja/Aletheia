@@ -296,6 +296,11 @@ def card_stylesheet(mode: str = "system") -> str:
 #cardGlyphOk {{ font-size: 13px; color: {c["ok"]}; font-weight: 700; }}
 #cardGlyphInfo {{ font-size: 13px; color: {c["faint"]}; font-weight: 700; }}
 #cardLock {{ font-size: 14px; color: {c["accent"]}; }}
+#checkProgress {{
+  background: {c["line"]}; border: none; border-radius: 3px;
+  min-height: 6px; max-height: 6px;
+}}
+#checkProgress::chunk {{ background: {c["accent"]}; border-radius: 3px; }}
 QPushButton[tier="tertiary"] {{ text-decoration: underline; }}
 """
         + _urgency_rules(mode)

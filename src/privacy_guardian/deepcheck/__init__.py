@@ -156,7 +156,7 @@ async def run_deep_check(
         # Waiting for the page to answer is the longest part of most runs. Everything
         # that waiting is for is under way from here, and saying so is the difference
         # between a card that is working and a card that looks stuck: the alternative
-        # is a list that sits still for seconds and then fills in all at once.
+        # is a bar that sits at nothing for seconds and then fills in all at once.
         for name in PAGE_STAGES:
             progress(name, "running")
         service.context_updated.clear()
@@ -383,9 +383,9 @@ async def run_deep_check(
         "fresh": fresh,
     }
     if service.settings.llm.enabled and service.settings.llm.deep_check_narrative:
-        # Up to another twenty seconds, after every line of the checklist has been
+        # Up to another twenty seconds, after all four parts of the check have been
         # answered. Reporting the run complete here and then waiting it out left the
-        # card sitting fully ticked with nothing to say for itself.
+        # card sitting on a full bar with nothing to say for itself.
         progress("summary", "running")
         from functools import partial
 

@@ -6,6 +6,14 @@ All notable changes will be documented here. This project has not produced a ver
 
 ### Changed
 
+- The thorough check shows a progress bar while it runs, not a checklist. The card used to
+  list the four sections it was going to check and tick them off; for the few seconds a run
+  lasts that is a list to read, mostly of things that have not happened yet. It is now one
+  line naming what is being checked at that moment — getting ready, trackers, policies and
+  forms, application permissions, writing the summary — a count of how many of the four have
+  answered, and a bar that fills as they do, going busy for the summary because there is no
+  way to know how long the model will take. The mark beside the line turns for as long as the
+  run is going, including the two waits the bar cannot count.
 - Preferences is now Settings, and About is gone. The dashboard has four sections: Overview,
   Events, Settings, Sites & apps. The Gemini model is a closed list of the current Flash models
   (`gemini-flash-latest`, 3.8 / 3.7 / 3.6 / 3.5 Flash, 3.5 / 3.1 Flash-Lite, 2.5 Flash / Flash-Lite)

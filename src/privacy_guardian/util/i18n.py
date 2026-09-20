@@ -79,20 +79,18 @@ EN: dict[str, str] = {
     # What the page says when a workflow it runs itself could not finish.
     "reject_not_found": "The banner's reject control could not be found",
     "reject_not_found_body": "Its cookie choices are unchanged. You can still reject them in the banner yourself.",
-    # What the thorough check is doing right now, so the card is visibly working
-    # rather than a list that sits still until every answer arrives at once.
+    # What the thorough check is doing right now, in the one line above its bar. Named
+    # briefly, because the card is only up for a few seconds and the person is reading
+    # it out of the corner of an eye.
     "checking_start": "Getting ready\u2026",
-    "checking_page": "Reading this page\u2026",
+    "checking_page": "Checking trackers, policies and forms\u2026",
     "checking_permissions": "Checking application permissions\u2026",
     "checking_summary": "Writing the summary\u2026",
     "checking_finished": "Finishing up\u2026",
+    # How far through the run is: beside the line for anyone reading the card, and as
+    # the bar's name for anyone who cannot see it fill.
+    "checking_tally": "{done} of {total}",
     "checking_steps": "{done} of {total} checks done",
-    # Where a line of the running checklist has got to, for anyone who cannot see
-    # which mark is beside it.
-    "stage_pending": "waiting",
-    "stage_running": "checking",
-    "stage_done": "checked",
-    "stage_unavailable": "not available here",
     "watching_quietly": "Watching quietly · Nothing needs your attention",
     "watching_attention": "{count} thing needs your attention",
     "watching_attention_plural": "{count} things need your attention",

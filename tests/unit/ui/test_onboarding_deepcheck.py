@@ -79,9 +79,11 @@ def test_deep_check_progresses_then_renders_grouped_result(qtbot, ui_controller)
     window = DeepCheckWindow(ui_controller)
     qtbot.addWidget(window)
 
-    # While running it is a checklist of the four sections.
-    assert set(window.stage_glyphs) == {"permissions", "tracking", "policy", "forms"}
-    assert "Privacy policy" in _labels(window)
+    # While running it is a bar and one line about what is being checked, not a list.
+    assert set(window.stage_states) == {"permissions", "tracking", "policy", "forms"}
+    running = _labels(window)
+    assert "Getting ready…" in running and "0 of 4" in running
+    assert "Privacy policy" not in running, "the four sections are the bar, not a list"
     window.show_progress({"stage": "tracking", "state": "done"})
 
     findings = [
@@ -422,9 +424,9 @@ def test_the_running_check_shows_each_part_starting_rather_than_only_finishing(
     qtbot, ui_controller
 ) -> None:
     """The bug this guards: every part of a run reported only when it was over, and the
-    parts that take seconds all report within a moment of each other at the end. The
-    card was a list of four things that sat still and then filled in at once, which
-    tells the person nothing about whether it is working."""
+    parts that take seconds all report within a moment of each other at the end, so the
+    bar would sit at nothing and then fill in at once, telling the person nothing about
+    whether it is working."""
     window = DeepCheckWindow(ui_controller)
     qtbot.addWidget(window)
 
@@ -446,14 +448,15 @@ def test_the_running_check_shows_each_part_starting_rather_than_only_finishing(
     assert window.stage_states["tracking"] == "done"
     assert window.stage_states["policy"] == "unavailable"
     assert window.stage_states["permissions"] == "running"
-    # A line that cannot be answered here has stopped moving too, so the bar counts it.
+    # A part that cannot be answered here has stopped moving too, so the bar counts it.
     assert window.steps.value() == 2
+    assert window.tally is not None and window.tally.text() == "2 of 4"
 
 
-def test_a_line_is_answered_by_whichever_part_behind_it_answers_first(qtbot, ui_controller) -> None:
-    """The Tracking line covers the trackers and the cookie banner. A page with a
-    banner and no trackers has still been checked for tracking, so the line may not
-    slide back to "under way" because the second part of it reported later."""
+def test_a_part_is_answered_by_whichever_step_behind_it_answers_first(qtbot, ui_controller) -> None:
+    """Tracking covers the trackers and the cookie banner. A page with a banner and no
+    trackers has still been checked for tracking, so the bar may not give the count
+    back because the second step behind it reported later."""
     window = DeepCheckWindow(ui_controller)
     qtbot.addWidget(window)
 
@@ -463,15 +466,15 @@ def test_a_line_is_answered_by_whichever_part_behind_it_answers_first(qtbot, ui_
     assert window.stage_states["tracking"] == "done"
 
 
-def test_the_mark_on_a_running_line_keeps_turning_and_then_stops(qtbot, ui_controller) -> None:
-    """Motion is the whole point: a still list is indistinguishable from a stuck one.
-    It also has to stop, because a card that spins after it has finished is lying."""
+def test_the_mark_beside_the_line_keeps_turning_and_then_stops(qtbot, ui_controller) -> None:
+    """Motion is the whole point: a bar that moves four times in a run is still for
+    seconds at a stretch, and a still card is indistinguishable from a stuck one. It
+    also has to stop, because a card that spins after it has finished is lying."""
     window = DeepCheckWindow(ui_controller)
     qtbot.addWidget(window)
     window.show()
 
-    window.show_progress({"stage": "tracking", "state": "running"})
-    assert window.spinner.isActive()
+    assert window.spinner.isActive(), "the card is up, so the run is under way"
     qtbot.waitUntil(lambda: window._turn > 0, timeout=2_000)
     turned = window._turn
     qtbot.waitUntil(lambda: window._turn != turned, timeout=2_000)
@@ -479,14 +482,18 @@ def test_the_mark_on_a_running_line_keeps_turning_and_then_stops(qtbot, ui_contr
     for stage in ("tracking", "consent", "policy", "terms", "forms", "uploads", "permissions"):
         window.show_progress({"stage": stage, "state": "done"})
 
-    assert not window.spinner.isActive(), "nothing turns once nothing is running"
     assert window.steps is not None and window.steps.value() == 4
+    assert window.spinner.isActive(), "four of four answered, but the run is still going"
+
+    window.show_progress({"stage": "complete", "state": "done"})
+
+    assert not window.spinner.isActive(), "nothing turns once the run says it is over"
 
 
 def test_the_running_check_says_what_it_is_doing_now(qtbot, ui_controller) -> None:
-    """The two longest waits in a run have no line of their own on the checklist:
-    asking the page for its context, and writing the summary once every line is
-    ticked. Without a word for them the card sits there looking finished."""
+    """The line above the bar is all the person gets now that the list has gone, so it
+    has to name what is being checked at each point — including the two longest waits,
+    collecting the page and writing the summary, which the bar cannot count."""
     window = DeepCheckWindow(ui_controller)
     qtbot.addWidget(window)
     assert window.activity is not None
@@ -494,7 +501,7 @@ def test_the_running_check_says_what_it_is_doing_now(qtbot, ui_controller) -> No
     window.show_progress({"stage": "start", "state": "running"})
     assert window.activity.text() == "Getting ready…"
     window.show_progress({"stage": "tracking", "state": "running"})
-    assert window.activity.text() == "Reading this page…"
+    assert window.activity.text() == "Checking trackers, policies and forms…"
     window.show_progress({"stage": "permissions", "state": "running"})
     assert window.activity.text() == "Checking application permissions…"
 
@@ -504,11 +511,14 @@ def test_the_running_check_says_what_it_is_doing_now(qtbot, ui_controller) -> No
 
     assert window.activity.text() == "Writing the summary…"
     assert window.steps is not None and window.steps.maximum() == 0, (
-        "no line left to count and no way to know how long: the bar says busy, not done"
+        "nothing left to count and no way to know how long: the bar says busy, not done"
+    )
+    assert window.tally is not None and window.tally.text() == "", (
+        "four of four beside a busy bar would say the run had already finished"
     )
 
 
-def test_a_rerun_starts_the_checklist_over_and_leaves_nothing_turning(qtbot, ui_controller) -> None:
+def test_a_rerun_starts_the_bar_over_and_leaves_nothing_turning(qtbot, ui_controller) -> None:
     window = DeepCheckWindow(ui_controller)
     qtbot.addWidget(window)
     window.show()
@@ -518,12 +528,13 @@ def test_a_rerun_starts_the_checklist_over_and_leaves_nothing_turning(qtbot, ui_
     window.show_report({"summary": "Nothing to review", "findings": [], "groups": []})
 
     assert not window.spinner.isActive(), "the card the spinner was drawing on has gone"
-    assert not window.stage_glyphs
+    assert window.steps is None and window.activity is None
 
     window._show_running()
 
     assert set(window.stage_states.values()) == {"pending"}
     assert window.steps is not None and window.steps.value() == 0
+    assert window.tally is not None and window.tally.text() == "0 of 4"
     assert window.activity is not None and window.activity.text() == "Getting ready…"
 
 
