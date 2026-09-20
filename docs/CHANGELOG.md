@@ -76,6 +76,15 @@ All notable changes will be documented here. This project has not produced a ver
 
 ### Added
 
+- A form asking for what it has no business asking for now offers to do something about it.
+  A survey wanting a password and a card number used to collect a small badge beside each box
+  and stop there: the person could see that something was wrong and had no way to find out
+  that anything could be done. One card now covers the whole form — not one per field — names
+  every box it is warning about, and offers "Redact these fields", which fills each of them
+  with as many bullets as it held characters. The site never sees what was typed, the boxes
+  the form does need are left alone, and because a redacted box is still a filled box, this
+  is offered for a field the form insists on, where "Send only what's needed" cannot go. The
+  card asks nothing and holds nothing up: it is a notice with a workflow attached.
 - Learned defaults: after the same reversible protective choice on five distinct sites, Privacy
   Guardian offers once to make it automatic, with "Keep asking me" as a real option. Government ID,
   medical, financial and credential data are excluded from automation by construction.

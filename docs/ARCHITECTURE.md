@@ -16,7 +16,7 @@ Optional LLM work is isolated from the critical analysis queue in a separate laz
 
 `PrivacyEvent(id=uuid, ts=UTC-now, event_type, source, requester, data_categories=[], payload_ref=None, platform="unknown", correlation_id=None)`. Discriminator event_type values: file_upload, form_observed, form_submit, consent_banner, policy_document, tracking, permission_request, system_access, clipboard_read, screen_capture, startup_registration, deep_check. See typed subclass fields in events.py.
 
-`Decision(event_id, outcome: Outcome[IGNORE/INFORM/INTERVENE], risk:0..1, explanation:str, rationale:list[str], actions:list[str], default_action:str)`. Action IDs: cancel, continue, redact, strip_metadata, review_fields, reject_optional, block, open_settings, mark_expected. `UserResponse(event_id, action, ts, remember=False)`.
+`Decision(event_id, outcome: Outcome[IGNORE/INFORM/INTERVENE], risk:0..1, explanation:str, rationale:list[str], actions:list[str], default_action:str)`. Action IDs: cancel, continue, redact, unredact, strip_metadata, review_fields, clear_fields, redact_fields, reject_optional, block, open_settings, mark_expected, view_details, learn_more, clear_clipboard (the authoritative set is `core.ipc.protocol.ACTIONS`). `UserResponse(event_id, action, ts, remember=False)`.
 
 ## Service APIs
 

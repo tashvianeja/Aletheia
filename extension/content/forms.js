@@ -1,5 +1,5 @@
 (() => {
-  let nextId=0, timer=null, typingTimer=null, lastFingerprint='', assessments=[];
+  let nextId=0, timer=null, typingTimer=null, lastFingerprint='', assessments=[], noticeKey='', noticeId='';
   const ids=new WeakMap();
   // What the page calls this box. A form built out of divs — every survey builder, most
   // single-page apps — ties its question to its input with aria-labelledby or with
@@ -93,9 +93,49 @@
   // fingerprint that pretended every box was empty meant that moment never arrived.
   // What is compared is the boolean, never the value, which is never sent anywhere.
   async function inventory(){const items=fields();const fingerprint=JSON.stringify(items);if(fingerprint===lastFingerprint)return;lastFingerprint=fingerprint;
-    try{const result=await PG.request('context',{forms:{fields:items,context:context(dominantForm())}});if(fingerprint!==lastFingerprint)return;assessments=result.forms?.fields||[];PG.queryAll('.pg-badge').forEach(node=>node.remove());
-      for(const assessment of assessments){if(!assessment.badge)continue;const element=PG.queryAll('[data-pg-field-id]').find(node=>node.dataset.pgFieldId===assessment.field.field_id);if(!element)continue;const badge=document.createElement('span');badge.className='pg-badge';badge.textContent='May be unnecessary';badge.title=assessment.necessity?.rationale||'';badge.setAttribute('role','note');element.insertAdjacentElement('afterend',badge);}
+    try{const result=await PG.request('context',{forms:{fields:items,context:context(dominantForm())}});if(fingerprint!==lastFingerprint)return;assessments=result.forms?.fields||[];
+      // A box already dealt with keeps its "Redacted" mark: this pass runs again on
+      // the very next keystroke, and wiping it would take the receipt off the page.
+      PG.queryAll('.pg-badge').forEach(node=>{if(node.dataset.pgRedacted!=='1')node.remove();});
+      for(const assessment of assessments){if(!assessment.badge)continue;const element=PG.queryAll('[data-pg-field-id]').find(node=>node.dataset.pgFieldId===assessment.field.field_id);if(!element||element.dataset.pgRedacted==='1')continue;const badge=document.createElement('span');badge.className='pg-badge';badge.textContent='May be unnecessary';badge.title=assessment.necessity?.rationale||'';badge.setAttribute('role','note');element.insertAdjacentElement('afterend',badge);}
+      await notice(items);
     }catch(_){lastFingerprint='';}}
+  // One card for the whole form, not one per field. A badge beside a box says which
+  // box; it does not say that anything can be done about it, and a person watching a
+  // password box collect a badge has no way to find out that it can. This is that
+  // offer, made once: the service keys the card on what this form asks for, so every
+  // later pass sharpens the card already up rather than raising a second one.
+  //
+  // What is sent is the same inventory the badges came from — which boxes, what they
+  // are called, whether they hold anything. Never what they hold.
+  async function notice(items){
+    const flagged=assessments.filter(assessment=>assessment.badge).map(assessment=>assessment.field);
+    // Re-asked when the flagged boxes change, and when one of them first gets
+    // something typed into it: that is the moment there are contents to redact.
+    const key=flagged.map(field=>field.field_id+(field.filled?'\u0001':'')).join('\u001f');
+    if(key===noticeKey)return;
+    noticeKey=key;
+    if(!flagged.length)return;
+    try{
+      const result=await PG.safeRace(PG.request('event',{event:{event_type:'form_observed',fields:items,context:context(dominantForm())}}),4000,null);
+      // Analysis that ran out of time is not an answer of "nothing to say": the next
+      // pass over this form asks again rather than staying quiet about it for good.
+      if(!result?.decision){noticeKey='';return;}
+      noticeId=result.decision.event_id;
+      PG.showDecision(result.decision,selected=>{
+        if(selected.action==='redact_fields'){
+          // The service names the fields: the ones the card warned about that have
+          // something in them. Each is handed bullets in place of its contents.
+          const redacted=PG.redactFields(selected.fields||[]);
+          if(selected.report&&redacted)PG.showResult(selected.report);
+        }
+        if(selected.action==='review_fields'){
+          PG.highlight(flagged);
+          PG.showResult(selected.report||{headline:`${flagged.length} field${flagged.length===1?'':'s'} marked as not needed`,body:'They are outlined on the page. Nothing has been sent yet.'});
+        }
+      });
+    }catch(_){noticeKey='';}
+  }
   const schedule=()=>{clearTimeout(timer);timer=setTimeout(inventory,10);};
   // Typing moves no element and changes no attribute, so nothing else here notices it.
   // Waiting for a pause keeps this to one pass per field rather than one per keystroke.
@@ -109,6 +149,10 @@
   PG.submitChecks.push(async form=>{
     const items=fields(form);if(!items.some(field=>field.filled))return true;
     const result=await PG.safeRace(PG.request('event',{event:{event_type:'form_submit',fields:items,context:context(form)}}),4000,null);if(!result)return true;
+    // The card about this form sitting on the page is overtaken by the card about it
+    // being sent: the same fields, the same remedies, and now something actually held
+    // up. It goes before the larger one arrives rather than stacking beneath it.
+    if(noticeId){PG.putDown(noticeId);noticeId='';}
     const action=await PG.awaitDecision(result.decision,selected=>{
       if(selected.action==='review_fields'){
         const flagged=assessments.filter(assessment=>assessment.badge).map(assessment=>assessment.field).filter(field=>items.some(item=>item.field_id===field.field_id));

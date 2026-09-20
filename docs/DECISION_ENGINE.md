@@ -15,7 +15,9 @@ Events describe the requester, purpose confidence, categories, and event class. 
 5. Preferences can raise a minimum outcome. `usually_allow` raises thresholds, but protected categories cannot silently be downgraded to Ignore. Protected roots are government ID, medical, financial, credentials, biometric photo, and minors’ data.
 6. The same requester/category set is rate-limited for 24 hours unless new red flags or high-impact data exist. Three consecutive Continues may downgrade an intervention to Inform for a non-protected category and purpose pair.
 
-Event-specific rules cover consent dark patterns, tracking signals, broad system access, screen capture, denied permissions, form observation, clipboard allowlists, expected permissions, and requester allow overrides. Actions are selected by event type: for example, file uploads offer `cancel`, `continue`, and `redact`; consent offers `reject_optional`; tracking offers `block`.
+Event-specific rules cover consent dark patterns, tracking signals, broad system access, screen capture, denied permissions, form observation, clipboard allowlists, expected permissions, and requester allow overrides. Actions are selected by event type: for example, file uploads offer `cancel`, `continue`, and `redact`; consent offers `reject_optional`; tracking offers `block`; a form being looked at offers `redact_fields`, and a form being sent offers `clear_fields`.
+
+A remedy that could do nothing is withdrawn rather than shown greyed out. `clear_fields` goes when every field worth blanking is one the form insists on, since a required box cannot be sent empty; `redact_fields` goes when nothing the card is warning about has been typed into yet, since redaction replaces contents. The two differ in exactly that: bullets leave the box filled, so `engine.decision.redactable_fields()` will redact a field the form insists on, while `clearable_fields()` will not blank one.
 
 ## Judging a form
 
@@ -79,12 +81,15 @@ falls silent on the ambiguous remainder rather than guessing at it.
 
 Two classes are always raised afresh, listed in `notice.ALWAYS_ASK`: warnings that hold up something the person is doing now — uploads, form submissions, terms acceptance — because reusing one would apply an earlier answer to a new action; and warnings that report a moment rather than a standing state, which today means clipboard reads.
 
+A form merely sitting on the page is neither. It is a standing state — this form asks for these things — and the page re-reads it on every keystroke, so `form_observed` is keyed on what the form asks for. That is what makes it one card about the whole form, sharpened as the person fills it in, rather than one card per field per pass. Submitting the same form stays in `ALWAYS_ASK`, because that holds up a real send.
+
 ## Examples
 
 | Situation | Evidence used | Expected engine behavior |
 |---|---|---|
 | Passport to an image tool | Government-ID finding; `image_tool` purpose; an identity-verification claim the site's business does not support | High risk and **Intervene** with cancel/redact actions. |
 | Instagram signup asking for phone-or-email | `account_signup` intent; the field is the account's alternate identifier | Silent. The identifier and the password are what the transaction needs. |
+| Survey asking for a password and a card number, both typed in | `survey` intent; neither box is the credential or payment instrument of anything the form does | **Inform** — one card for the whole form — offering `redact_fields`, which fills both boxes with bullets in place of what was typed. |
 | Mailing-list box asking for a birthday | `newsletter` intent; `dob` outside what the intent needs and above the sensitivity floor | **Inform**, naming the date of birth. |
 | Filled bank KYC form | Financial/identity category; banking purpose | Required/reasonable context can reduce the outcome; it is not automatically treated as suspicious. |
 | Hidden reject button in a consent banner | Optional purposes plus dark-pattern signal | At least **Intervene**, with `reject_optional` as default action. |

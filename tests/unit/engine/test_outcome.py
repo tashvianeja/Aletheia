@@ -9,12 +9,19 @@ from privacy_guardian.core.events import (
     FileUploadEvent,
     FormContext,
     FormField,
+    FormObservedEvent,
     FormSubmitEvent,
+    Outcome,
     PermissionRequestEvent,
     Requester,
     TrackingEvent,
 )
-from privacy_guardian.engine.decision import clearable_fields, decide
+from privacy_guardian.engine.decision import (
+    clearable_fields,
+    decide,
+    form_assessments,
+    redactable_fields,
+)
 from privacy_guardian.engine.outcome import report_for
 
 
@@ -162,3 +169,127 @@ def test_answers_that_do_nothing_have_nothing_to_report() -> None:
     decision = decide(upload)
     assert report_for(upload, decision, "continue", {}) is None
     assert report_for(upload, decision, "cancel", {}) is None
+
+
+def survey() -> FormObservedEvent:
+    """A feedback survey asking for a password and a card number, both typed in.
+
+    The form has no login and nothing to charge, so neither box is the credential or
+    the payment instrument of anything: they are a survey collecting two things it has
+    no business collecting.
+    """
+    return FormObservedEvent(
+        requester=site("https://feedback.example", "survey"),
+        fields=[
+            FormField(field_id="f1", label="Your name", filled=True),
+            FormField(field_id="f2", label="Email address", filled=True),
+            FormField(field_id="f3", label="What is your password?", filled=True),
+            FormField(field_id="f4", label="Credit card number", filled=True),
+        ],
+        context=FormContext(
+            submit_text="Submit",
+            heading="Customer feedback survey",
+            page_title="Untitled form",
+            nearby_text="Customer feedback survey. Tell us what you think of our service.",
+        ),
+    )
+
+
+def labelled(event: FormObservedEvent) -> FormObservedEvent:
+    """The event as the service hands it to the engine, with its fields categorised."""
+    from privacy_guardian.analysis.forms import label_field
+
+    fields = [label_field(field) for field in event.fields]
+    return event.model_copy(
+        update={
+            "fields": fields,
+            "data_categories": sorted(
+                {field.category for field in fields if field.category is not None}, key=str
+            ),
+        }
+    )
+
+
+def test_a_form_asking_for_a_password_and_a_card_offers_one_card_for_both() -> None:
+    """The user's report: a badge appeared beside each box and said nothing could be
+    done. One card now covers the whole form, names every field it is warning about,
+    and offers the workflow that deals with all of them at once."""
+    form = labelled(survey())
+    decision = decide(form)
+
+    # A form sitting on a page holds nothing up, so this card asks for no decision.
+    assert decision.outcome is Outcome.INFORM
+    assert decision.headline == "This form is asking for more than it needs to answer a survey."
+    assert [finding.label for finding in decision.findings] == ["Password", "Card number"]
+    assert "redact_fields" in decision.actions and decision.primary_action == "redact_fields"
+    assert decision.action_labels["redact_fields"] == "Redact these fields"
+
+    _assessments, flagged = form_assessments(form)
+    assert redactable_fields(form, flagged) == ["f3", "f4"], "one workflow, both fields"
+
+
+def test_redacting_a_form_names_the_boxes_that_now_hold_bullets() -> None:
+    form = labelled(survey())
+    decision = decide(form)
+    report = report_for(form, decision, "redact_fields", {"fields": ["f3", "f4"]})
+    assert report is not None
+    assert report["headline"] == "2 fields replaced with bullets"
+    assert report["body"] == (
+        "Password and card number stayed with you. Those boxes now read as bullets, "
+        "so feedback.example never sees what you typed."
+    )
+    assert (report["subject"], report["destination"]) == ("Form on this page", "feedback.example")
+    one = report_for(form, decision, "redact_fields", {"fields": ["f3"]})
+    assert one is not None and one["headline"] == "1 field replaced with bullets"
+
+
+def test_only_boxes_with_something_typed_in_them_are_redacted() -> None:
+    """Redaction replaces contents, so a box still empty has nothing to hide, and a
+    card offering to redact nothing is a button that does nothing."""
+    form = labelled(survey())
+    _assessments, flagged = form_assessments(form)
+
+    untouched = form.model_copy(
+        update={
+            "fields": [
+                field.model_copy(update={"filled": False}) if field.field_id == "f3" else field
+                for field in form.fields
+            ]
+        }
+    )
+    assert redactable_fields(untouched, flagged) == ["f4"]
+
+    empty = form.model_copy(
+        update={"fields": [field.model_copy(update={"filled": False}) for field in form.fields]}
+    )
+    assert redactable_fields(empty, flagged) == []
+    assert "redact_fields" not in decide(empty).actions
+
+
+def test_a_box_that_could_not_hold_bullets_is_left_to_be_blanked_instead() -> None:
+    """A tick, a dropdown or a date picker keeps only the shapes of value it knows, so
+    bullets written into one are discarded or empty it."""
+    form = labelled(survey())
+    _assessments, flagged = form_assessments(form)
+    picker = form.model_copy(
+        update={
+            "fields": [
+                field.model_copy(update={"input_type": "date"}) if field.field_id == "f4" else field
+                for field in form.fields
+            ]
+        }
+    )
+    assert redactable_fields(picker, flagged) == ["f3"]
+
+
+def test_a_field_the_form_insists_on_can_still_be_redacted() -> None:
+    """The point of bullets over blanking: the box stays filled, so the form still
+    validates, and the site still never sees the real answer."""
+    form = labelled(survey())
+    _assessments, flagged = form_assessments(form)
+    compulsory = form.model_copy(
+        update={"fields": [field.model_copy(update={"required": True}) for field in form.fields]}
+    )
+    assert clearable_fields(compulsory, flagged) == [], "blanking cannot touch a required box"
+    assert redactable_fields(compulsory, flagged) == ["f3", "f4"]
+    assert "redact_fields" in decide(compulsory).actions

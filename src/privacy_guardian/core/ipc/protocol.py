@@ -15,6 +15,7 @@ ACTIONS = frozenset(
         "strip_metadata",
         "review_fields",
         "clear_fields",
+        "redact_fields",
         "reject_optional",
         "block",
         "open_settings",

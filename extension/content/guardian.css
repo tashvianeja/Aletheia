@@ -61,6 +61,9 @@
 .pg-panel button:focus-visible{outline:2px solid #3b5bdb!important;outline-offset:2px!important}
 .pg-badge{display:inline-block!important;margin:3px 6px!important;padding:2px 6px!important;border-radius:5px!important;background:#fef3c7!important;color:#92400e!important;font:12px/1.4 -apple-system,system-ui,sans-serif!important;vertical-align:middle!important}
 .pg-review{outline:2px solid #d97706!important;outline-offset:2px!important;border-radius:4px!important}
+/* A box that has been dealt with reads as handled, not as still needing attention. */
+.pg-redacted{outline:2px solid #059669!important;outline-offset:2px!important;border-radius:4px!important}
+.pg-badge[data-pg-redacted]{background:#d1fae5!important;color:#065f46!important}
 @media(prefers-color-scheme:dark){
 .pg-panel{background:#23272f!important;color:#f3f4f6!important;border-color:#343a46!important;box-shadow:0 10px 34px #00000066!important;--pg-band:#242a3d;--pg-ink:#a5b4fc;--pg-dim:#8494e0;--pg-accent:#7b8fee;--pg-soft:#1f2331;--pg-border:#3d4a80;--pg-pulse:#323a5c;--pg-warn:#f0a12e;--pg-ok:#34c793;--pg-info:#8b93a1}
 .pg-panel[data-pg-urgency="act_now"]{--pg-band:#b91c1c;--pg-ink:#fff;--pg-dim:#fecaca;--pg-accent:#f87171;--pg-soft:#2f1b1b;--pg-border:#ef4444;--pg-pulse:#ef4444;--pg-warn:#f87171}
@@ -77,4 +80,6 @@
 .pg-secondary{background:#1c1f26!important;color:#f3f4f6!important;border-color:#454c5a!important}
 .pg-primary{background:#3b5bdb!important;border-color:#3b5bdb!important;color:#fff!important}
 .pg-badge{background:#4a3610!important;color:#ffebad!important}
+.pg-badge[data-pg-redacted]{background:#123527!important;color:#6ee7b7!important}
+.pg-redacted{outline-color:#34c793!important}
 }

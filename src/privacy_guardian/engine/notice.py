@@ -26,9 +26,11 @@ from privacy_guardian.core.events import (
 # action, cancelling a second upload because the first was cancelled, or worse,
 # allowing it because the first was allowed — or because they report a moment rather
 # than a standing state, and the second clipboard read is a second exposure.
-ALWAYS_ASK = frozenset(
-    {"file_upload", "form_submit", "form_observed", "policy_document", "clipboard_read"}
-)
+# A form sitting on the page is not in that group. It is a standing state — this form
+# asks for these things — and it reports itself again on every keystroke, so keying it
+# on what it asks for is what makes it one card about the whole form rather than a
+# fresh card per field per pass. Submitting it stays here: that holds up a real send.
+ALWAYS_ASK = frozenset({"file_upload", "form_submit", "policy_document", "clipboard_read"})
 
 
 def notice_signature(event: PrivacyEvent) -> str:

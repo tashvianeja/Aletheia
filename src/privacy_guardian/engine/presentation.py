@@ -52,7 +52,11 @@ ACTION_LABELS: dict[str, dict[str, str]] = {
         "redact": "Create redacted copy",
         "strip_metadata": "Remove location first",
     },
-    "form_observed": {"continue": "Continue", "review_fields": "Review fields"},
+    "form_observed": {
+        "continue": "Continue",
+        "review_fields": "Review fields",
+        "redact_fields": "Redact these fields",
+    },
     "form_submit": {
         "cancel": "Don't send",
         "continue": "Continue",
@@ -104,6 +108,7 @@ REMEDY_ORDER = (
     "unredact",
     "redact",
     "strip_metadata",
+    "redact_fields",
     "clear_fields",
     "review_fields",
     "reject_optional",

@@ -17,7 +17,7 @@
   };
   PG.wait = milliseconds=>new Promise(resolve=>setTimeout(resolve,milliseconds));
   PG.safeRace = (promise,milliseconds,fallback)=>Promise.race([promise,PG.wait(milliseconds).then(()=>fallback)]);
-  const FALLBACK_LABELS={cancel:"Cancel",continue:'Continue',redact:'Create redacted copy',strip_metadata:'Remove location first',review_fields:'Review fields',clear_fields:"Send only what's needed",reject_optional:'Reject optional',block:'Block if possible',open_settings:'Review access',mark_expected:'Expected',view_details:'View details',learn_more:'Learn more',clear_clipboard:'Clear clipboard'};
+  const FALLBACK_LABELS={cancel:"Cancel",continue:'Continue',redact:'Create redacted copy',strip_metadata:'Remove location first',review_fields:'Review fields',clear_fields:"Send only what's needed",redact_fields:'Redact these fields',reject_optional:'Reject optional',block:'Block if possible',open_settings:'Review access',mark_expected:'Expected',view_details:'View details',learn_more:'Learn more',clear_clipboard:'Clear clipboard'};
   // What a notice does not offer, mirroring engine.presentation.NOTICE_SILENT: nothing
   // is held up, so there is nothing to carry on with or refuse, and "Learn more" is
   // the footer's "Why am I seeing this?" by another name.
@@ -276,6 +276,51 @@
       cleared++;
     }
     return cleared;
+  };
+  // Replace what a form has no business asking for with bullets, in the boxes
+  // themselves, before anything is sent. Nothing is read back and nothing is stored:
+  // each box is handed as many bullets as it held characters, so a page that checks
+  // the length of what it was given still sees what it expects, and a box the form
+  // insists on stays filled in — which is why this is offered where blanking cannot be.
+  const BULLET='\u2022';
+  PG.redactFields = fieldIds=>{
+    let redacted=0;
+    for(const id of fieldIds||[]){
+      const element_=PG.queryAll('[data-pg-field-id]').find(node=>node.dataset.pgFieldId===id);
+      if(!element_)continue;
+      const held=element_.isContentEditable?(element_.textContent||''):(element_.value||'');
+      if(!held)continue;
+      const mask=BULLET.repeat(Math.max(1,Math.min(held.length,512)));
+      if(element_.isContentEditable)element_.textContent=mask;else element_.value=mask;
+      // A box that would not take the bullets — one that keeps only dates, or only
+      // numbers — is left exactly as it was rather than quietly emptied.
+      if((element_.isContentEditable?element_.textContent:element_.value)!==mask)continue;
+      // Say so the way typing would, so a page that watches its own fields notices.
+      element_.dispatchEvent(new Event('input',{bubbles:true}));
+      element_.dispatchEvent(new Event('change',{bubbles:true}));
+      element_.classList.remove('pg-review');
+      element_.classList.add('pg-redacted');
+      // Marked on the box itself, so the next inventory pass does not put the
+      // "May be unnecessary" badge back on a box that has already been dealt with.
+      element_.dataset.pgRedacted='1';
+      element_.setAttribute('aria-description','Redacted: this box now holds bullets, not what you typed');
+      // The "May be unnecessary" beside this box has been answered, so it goes and the
+      // mark saying what was done takes its place. Left there, the two sat side by side
+      // and the box read as both dealt with and still outstanding.
+      while(element_.nextElementSibling?.classList?.contains('pg-badge'))element_.nextElementSibling.remove();
+      const tag=document.createElement('span');tag.className='pg-badge';tag.dataset.pgRedacted='1';tag.textContent='Redacted';tag.setAttribute('role','note');
+      element_.insertAdjacentElement('afterend',tag);
+      redacted++;
+    }
+    return redacted;
+  };
+  // Take one card down without answering it. The question it asked has been overtaken
+  // by a larger one about the same thing — the form being looked at is now the form
+  // being sent — and the two of them up together ask the person the same thing twice.
+  // Nothing is recorded, because nothing was answered: the larger card carries it now.
+  PG.putDown = eventId=>{
+    const state=PG.decisionStates.get(eventId);
+    if(state&&!state.resolved)state.dismiss(false);
   };
   // Take every card down at once, each the way its own close control would: the
   // safe answer stands for anything a card was holding. The desktop asks for this

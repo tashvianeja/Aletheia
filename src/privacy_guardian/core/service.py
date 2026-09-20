@@ -812,18 +812,24 @@ class Service:
             with contextlib.suppress(RuntimeError, KeyError):
                 await self.pool.run(release_payload, event.payload_ref)
             event.payload_ref = None
-        if response.action in {"clear_fields", "review_fields"} and isinstance(
+        if response.action in {"clear_fields", "redact_fields", "review_fields"} and isinstance(
             event, FormObservedEvent
         ):
             # Which fields the page should act on, decided here where the form's
-            # necessity judgement lives, so the page blanks exactly what the card
-            # warned about and the report names exactly what was blanked.
-            from privacy_guardian.engine.decision import clearable_fields, form_assessments
+            # necessity judgement lives, so the page blanks or redacts exactly what the
+            # card warned about and the report names exactly what it did.
+            from privacy_guardian.engine.decision import (
+                clearable_fields,
+                form_assessments,
+                redactable_fields,
+            )
 
             _assessments, flagged = form_assessments(event)
             result["fields"] = (
                 clearable_fields(event, flagged)
                 if response.action == "clear_fields"
+                else redactable_fields(event, flagged)
+                if response.action == "redact_fields"
                 else [
                     field.field_id
                     for field in event.fields

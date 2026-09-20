@@ -32,6 +32,7 @@ REPORTED = frozenset(
         "reject_optional",
         "block",
         "clear_fields",
+        "redact_fields",
         "review_fields",
         "clear_clipboard",
         "open_settings",
@@ -132,6 +133,15 @@ def report_for(
             tr("done_clear_fields_body", names=capitalised(sentence_list(cleared)))
             if cleared
             else tr("done_clear_fields_body_plain")
+        )
+    elif action == "redact_fields":
+        redacted = _field_names(event, list(result.get("fields", [])))
+        count = len(result.get("fields", []))
+        headline = tr("done_redact_fields", count=count) if count != 1 else tr("done_redact_field")
+        body = (
+            tr("done_redact_fields_body", names=capitalised(sentence_list(redacted)), site=who)
+            if redacted
+            else tr("done_redact_fields_body_plain", site=who)
         )
     elif action == "review_fields":
         count = len(result.get("fields", []))

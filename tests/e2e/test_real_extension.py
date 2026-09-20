@@ -535,6 +535,75 @@ async def test_survey_built_from_aria_labels_flags_the_password_and_the_card(
 
 
 @pytest.mark.asyncio
+async def test_one_card_offers_to_redact_every_box_the_survey_should_not_have_asked_for(
+    real_browser: RealBrowser, fixture_site: tuple[str, object]
+) -> None:
+    """The user's report: a badge appeared beside the password box and beside the card
+    box, and neither offered to do anything about it.
+
+    One card now covers the whole form — not one per field — and the workflow it offers
+    fills every box it is warning about with bullets, in place of what was typed, so the
+    survey never sees either answer. What the survey does need is left exactly as it was.
+    """
+    base_url, _ = fixture_site
+    page = await real_browser.context.new_page()
+    await page.goto(f"{base_url}/fixtures/aria-survey-form")
+    typed = {
+        "q1": "Morgan Synthetic",
+        "q2": "morgan@example.test",
+        "q3": "synthetic-secret",
+        "q4": "4111111111111111",
+    }
+    for question, answer in typed.items():
+        await page.locator(f'[aria-labelledby="{question}"]').fill(answer)
+
+    redact = page.locator('.pg-panel [data-pg-action="redact_fields"]')
+    await redact.wait_for(timeout=10_000)
+    assert (await redact.inner_text()).strip() == "Redact these fields"
+    await page.wait_for_timeout(TYPING_PAUSE_MS * 2)
+    assert await page.locator(".pg-panel:not([data-pg-result])").count() == 1, (
+        "one card for the whole form, not one per field"
+    )
+    card = await page.locator(".pg-panel").inner_text()
+    assert "asking for more than it needs" in card
+    assert "Password" in card and "Card number" in card
+
+    await redact.click()
+
+    receipt = page.locator(".pg-panel[data-pg-result]")
+    await receipt.wait_for(timeout=5_000)
+    text = await receipt.inner_text()
+    assert "2 fields replaced with bullets" in text
+    assert "never sees what you typed" in text
+
+    left = {
+        question: await page.locator(f'[aria-labelledby="{question}"]').input_value()
+        for question in typed
+    }
+    assert left["q1"] == typed["q1"], "what the survey does need is untouched"
+    assert left["q2"] == typed["q2"]
+    # As many bullets as there were characters, so a box that checks the length of what
+    # it was given still sees what it expects.
+    assert left["q3"] == "\u2022" * len(typed["q3"])
+    assert left["q4"] == "\u2022" * len(typed["q4"])
+
+    marked = await page.evaluate(
+        "[...document.querySelectorAll('.pg-badge[data-pg-redacted]')]"
+        ".map(node => node.previousElementSibling.getAttribute('aria-labelledby'))"
+    )
+    assert sorted(marked) == ["q3", "q4"]
+    # The page re-reads its fields on every keystroke; the mark on a box already dealt
+    # with has to survive that, and "May be unnecessary" must not come back over it.
+    await page.locator('[aria-labelledby="q1"]').fill("Morgan Synthetic II")
+    await page.wait_for_timeout(TYPING_PAUSE_MS * 3)
+    assert await page.locator(".pg-badge[data-pg-redacted]").count() == 2
+    assert await page.locator(".pg-badge:not([data-pg-redacted])").count() == 0
+    assert await page.locator(".pg-panel:not([data-pg-result])").count() == 0, (
+        "a card that has been answered is not raised again for the same form"
+    )
+
+
+@pytest.mark.asyncio
 async def test_hidden_reject_desktop_action_rejects_only_optional_cookies(
     real_browser: RealBrowser, fixture_site: tuple[str, object]
 ) -> None:

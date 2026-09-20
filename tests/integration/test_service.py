@@ -607,3 +607,85 @@ async def test_a_document_read_is_recorded_with_how_much_was_read(service: Servi
         request("again", "context", {"origin": origin, "terms": {"text": terms}})
     )
     assert service.store.tally()["document_words"] == len(terms.split())
+
+
+def survey_field(field_id: str, label: str, filled: bool = True) -> FormField:
+    return FormField(field_id=field_id, label=label, filled=filled)
+
+
+def survey_form(*fields: FormField) -> FormObservedEvent:
+    from privacy_guardian.core.events import FormContext
+
+    return FormObservedEvent(
+        requester=Requester(
+            origin="https://feedback.example",
+            display_name="feedback.example",
+            purpose="survey",
+            purpose_confidence=0.9,
+        ),
+        fields=list(fields),
+        context=FormContext(
+            heading="Customer feedback survey",
+            submit_text="Submit",
+            page_title="Untitled form",
+            nearby_text="Customer feedback survey. Tell us what you think of our service.",
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_survey_asking_for_a_password_and_a_card_raises_one_card_for_both(
+    service: Service,
+) -> None:
+    """The user's report: each box got a badge and nothing offered to do anything.
+
+    The page re-inventories its fields on every keystroke, so the same form arrives
+    over and over. It is one card about the whole form — the second look sharpens the
+    first rather than stacking under it — and answering it hands the page every field
+    to redact at once.
+    """
+    from privacy_guardian.core.events import UserResponse
+
+    typing = survey_form(
+        survey_field("f1", "Your name"),
+        survey_field("f2", "Email address"),
+        survey_field("f3", "What is your password?"),
+        survey_field("f4", "Credit card number", filled=False),
+    )
+    first = await service.process_event(typing, session="page")
+
+    finished = survey_form(
+        survey_field("f1", "Your name"),
+        survey_field("f2", "Email address"),
+        survey_field("f3", "What is your password?"),
+        survey_field("f4", "Credit card number"),
+    )
+    second = await service.process_event(finished, session="page")
+
+    assert second.event_id == first.event_id, "one card for the form, not one per pass"
+    assert [event.event_type for event in service.events.values()].count("form_observed") == 1
+    assert second.outcome.value == "INFORM"
+    assert second.primary_action == "redact_fields"
+    assert second.action_labels["redact_fields"] == "Redact these fields"
+
+    result = await service.respond(UserResponse(event_id=second.event_id, action="redact_fields"))
+
+    # The service names the boxes; the page only fills in what it is handed.
+    assert result["fields"] == ["f3", "f4"]
+    assert result["report"]["headline"] == "2 fields replaced with bullets"
+    assert "never sees what you typed" in result["report"]["body"]
+
+
+@pytest.mark.asyncio
+async def test_an_untouched_form_is_not_offered_a_workflow_that_would_do_nothing(
+    service: Service,
+) -> None:
+    """Redaction replaces contents. Before anything has been typed there are none, and
+    the card says so by not offering the button at all."""
+    untouched = survey_form(
+        survey_field("f1", "Your name", filled=False),
+        survey_field("f3", "What is your password?", filled=False),
+        survey_field("f4", "Credit card number", filled=False),
+    )
+    decision = await service.process_event(untouched, session="page")
+    assert "redact_fields" not in decision.actions

@@ -42,7 +42,11 @@ _ACTIONS: dict[str, tuple[list[str], str]] = {
     # "clear_fields" is the remedy: blank what the form has no business asking for and
     # send the rest. It is withdrawn below when nothing on the form could be blanked.
     "form_submit": (["cancel", "continue", "clear_fields", "review_fields"], "cancel"),
-    "form_observed": (["review_fields", "continue"], "review_fields"),
+    # A form merely being on the page holds nothing up, so this card asks nothing. It
+    # offers the remedy instead: replace what the form has no business asking for with
+    # bullets, there and then, before anything is sent. Withdrawn below when there is
+    # nothing typed in to replace.
+    "form_observed": (["redact_fields", "review_fields", "continue"], "review_fields"),
     "consent_banner": (["reject_optional", "continue", "view_details"], "reject_optional"),
     # "continue" is how a card gets put down: without it, closing the advertising
     # card could not be recorded, and an unanswered warning is raised again.
@@ -77,6 +81,48 @@ def clearable_fields(event: FormObservedEvent, flagged: set[DataCategory]) -> li
         and field.filled
         and not field.required
         and not field.asserted_required
+    ]
+
+
+# Boxes that keep only the shapes of value they recognise: a tick, a dropdown, a date
+# picker. Bullets written into one are either discarded or empty it, so a field like
+# that is for "Send only what's needed" to blank rather than for this to redact.
+_UNREDACTABLE_INPUTS = frozenset(
+    {
+        "checkbox",
+        "radio",
+        "select-one",
+        "select-multiple",
+        "file",
+        "range",
+        "color",
+        "number",
+        "date",
+        "datetime-local",
+        "month",
+        "week",
+        "time",
+    }
+)
+
+
+def redactable_fields(event: FormObservedEvent, flagged: set[DataCategory]) -> list[str]:
+    """The fields "Redact these fields" would fill with bullets, by the page's own ids.
+
+    The fields the card is warning about that the person has actually typed something
+    into: what is redacted is the contents, so a box still empty has nothing to hide.
+
+    Unlike blanking, this leaves the box filled, so it is offered for a field the form
+    insists on as readily as for an optional one — the form still gets an answer of the
+    length it asked for, and the site never sees the password or the card number.
+    """
+    return [
+        field.field_id
+        for field in event.fields
+        if field.category is not None
+        and field.category in flagged
+        and field.filled
+        and field.input_type not in _UNREDACTABLE_INPUTS
     ]
 
 
@@ -341,6 +387,14 @@ def decide(
         # Every field worth blanking is one the form insists on, so there is nothing
         # this button could do. A button that does nothing is worse than none.
         actions.remove("clear_fields")
+    if (
+        "redact_fields" in actions
+        and isinstance(event, FormObservedEvent)
+        and not redactable_fields(event, flagged or set())
+    ):
+        # Nothing has been typed into the boxes being warned about yet, so there are no
+        # contents to replace. The offer returns the moment there are.
+        actions.remove("redact_fields")
     if event.event_type == "file_upload" and DataCategory.LOCATION_PRECISE in categories:
         actions.insert(0, "strip_metadata")
         if categories == {DataCategory.LOCATION_PRECISE}:
