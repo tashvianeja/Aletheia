@@ -21,6 +21,9 @@
         record.replacement=replacement;
       }
       record.action=action.action;
+      // Only now, with the safe copy actually in the page's file input: a receipt
+      // for a copy that failed to arrive would be a receipt for nothing.
+      if(action.report)PG.showResult(action.report);
     })();
     try{await record.actionPromise;}catch(error){record.action='cancel';throw error;}
   }

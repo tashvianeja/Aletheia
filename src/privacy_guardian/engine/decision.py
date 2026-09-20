@@ -38,7 +38,9 @@ AUTOMATIC_BODIES = {
 }
 _ACTIONS: dict[str, tuple[list[str], str]] = {
     "file_upload": (["cancel", "continue", "redact"], "cancel"),
-    "form_submit": (["cancel", "continue", "review_fields"], "cancel"),
+    # "clear_fields" is the remedy: blank what the form has no business asking for and
+    # send the rest. It is withdrawn below when nothing on the form could be blanked.
+    "form_submit": (["cancel", "continue", "clear_fields", "review_fields"], "cancel"),
     "form_observed": (["review_fields", "continue"], "review_fields"),
     "consent_banner": (["reject_optional", "continue", "view_details"], "reject_optional"),
     # "continue" is how a card gets put down: without it, closing the advertising
@@ -53,6 +55,26 @@ _ACTIONS: dict[str, tuple[list[str], str]] = {
     "clipboard_read": (["clear_clipboard", "open_settings", "continue"], "clear_clipboard"),
     "policy_document": (["cancel", "continue", "view_details"], "cancel"),
 }
+
+
+def clearable_fields(event: FormObservedEvent, flagged: set[DataCategory]) -> list[str]:
+    """The fields "Send only what's needed" would blank, by the page's own ids.
+
+    A field the form insists on cannot be sent empty, and blanking it would only hand
+    the person a validation error with their answer gone. So the remedy takes the
+    fields the card is warning about that are filled in and not required, and no
+    others: a blank optional box is not worth mentioning, and a required one is the
+    form's decision to make, not this app's.
+    """
+    return [
+        field.field_id
+        for field in event.fields
+        if field.category is not None
+        and field.category in flagged
+        and field.filled
+        and not field.required
+        and not field.asserted_required
+    ]
 
 
 def form_assessments(
@@ -305,8 +327,21 @@ def decide(
     if isinstance(event, ConsentBannerEvent) and not preferences.reject_optional_cookies:
         actions = ["view_details", "reject_optional", "continue"]
         default_action = "view_details"
+    if (
+        "clear_fields" in actions
+        and isinstance(event, FormObservedEvent)
+        and not clearable_fields(event, flagged or set())
+    ):
+        # Every field worth blanking is one the form insists on, so there is nothing
+        # this button could do. A button that does nothing is worse than none.
+        actions.remove("clear_fields")
     if event.event_type == "file_upload" and DataCategory.LOCATION_PRECISE in categories:
         actions.insert(0, "strip_metadata")
+        if categories == {DataCategory.LOCATION_PRECISE}:
+            # Nothing in the picture to redact: the only thing to take out is where
+            # it was taken. Offering a "redacted copy" as well put the filled button
+            # on the remedy that would do nothing.
+            actions.remove("redact")
     automatic = (
         default_action
         if default_action in preferences.automatic_actions and default_action in actions

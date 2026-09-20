@@ -46,6 +46,41 @@ EN: dict[str, str] = {
     "done": "Done",
     # A notice asks for nothing, so its one button only says the person has read it.
     "acknowledge": "OK",
+    # The band on the card that reports a workflow the person asked for has run.
+    "urgency_done": "Done",
+    # What each workflow says for itself once it has run: the headline is what was
+    # done, the body is what that means and what it did not do.
+    "done_redact": "Redacted copy ready: {filename}",
+    "done_redact_body": "{removed} removed. Nothing left this device.",
+    "done_redact_body_plain": "The personal details in it were removed. Nothing left this device.",
+    "done_strip": "Location removed from {filename}",
+    "done_strip_body": "The picture itself is unchanged. Nothing left this device.",
+    "done_reject": "Optional cookies rejected on {site}",
+    "done_reject_body": "Necessary cookies were kept.",
+    "done_reject_remembered": "Necessary cookies were kept. Remembered for next time.",
+    "done_block": "Tracking limited on {site}",
+    "done_block_body": "Requests to {count} tracking companies are now blocked on this site, and the identifiers they set were cleared.",
+    "done_block_body_one": "Requests to 1 tracking company are now blocked on this site, and the identifier it set was cleared.",
+    "done_block_body_none": "The identifiers this site set to follow you were cleared.",
+    "done_clear_fields": "{count} fields left blank before sending",
+    "done_clear_field": "1 field left blank before sending",
+    "done_clear_fields_body": "{names} stayed with you. The rest was sent as normal.",
+    "done_clear_fields_body_plain": "What the form did not need stayed with you. The rest was sent as normal.",
+    "done_review": "{count} fields marked as not needed",
+    "done_review_one": "1 field marked as not needed",
+    "done_review_body": "They are outlined on the page. Nothing has been sent yet.",
+    "done_clipboard": "Clipboard cleared",
+    "done_clipboard_body": "What looked like {what} is no longer on it, so {app} cannot read it again.",
+    "done_clipboard_body_plain": "Nothing is left on it for {app} to read.",
+    "done_settings": "System Settings opened",
+    "done_settings_body": "{access} for {app} can be turned off there.",
+    "done_settings_body_plain": "What {app} can reach can be reviewed there.",
+    "done_expected": "Marked as expected for {app}",
+    "done_expected_body": "{access} by {app} will not be raised again.",
+    "done_expected_body_plain": "This access by {app} will not be raised again.",
+    # What the page says when a workflow it runs itself could not finish.
+    "reject_not_found": "The banner's reject control could not be found",
+    "reject_not_found_body": "Its cookie choices are unchanged. You can still reject them in the banner yourself.",
     # What the thorough check is doing right now, so the card is visibly working
     # rather than a list that sits still until every answer arrives at once.
     "checking_start": "Getting ready\u2026",

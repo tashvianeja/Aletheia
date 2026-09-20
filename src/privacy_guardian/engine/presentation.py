@@ -56,6 +56,7 @@ ACTION_LABELS: dict[str, dict[str, str]] = {
     "form_submit": {
         "cancel": "Don't send",
         "continue": "Continue",
+        "clear_fields": "Send only what's needed",
         "review_fields": "Review fields",
     },
     "consent_banner": {
@@ -101,6 +102,7 @@ ACTION_LABELS: dict[str, dict[str, str]] = {
 REMEDY_ORDER = (
     "redact",
     "strip_metadata",
+    "clear_fields",
     "review_fields",
     "reject_optional",
     "clear_clipboard",
@@ -111,6 +113,15 @@ REMEDY_ORDER = (
 )
 # The "do it anyway" escape hatch, rendered as plain text away from the real buttons.
 ESCAPES = ("continue", "mark_expected", "learn_more")
+# What a notice does not offer. A notice holds nothing up, so there is nothing to carry
+# on with or refuse; "Learn more" is the footer's "Why am I seeing this?" by another
+# name. Everything else on it is a workflow the person may want, and is offered.
+NOTICE_SILENT = frozenset({"continue", "cancel", "learn_more"})
+
+
+def notice_actions(actions: list[str]) -> list[str]:
+    """The workflows a card that asks nothing still offers, in the order given."""
+    return [action for action in actions if action not in NOTICE_SILENT]
 
 
 def action_labels(event_type: str, actions: list[str]) -> dict[str, str]:

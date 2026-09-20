@@ -109,8 +109,22 @@
   PG.submitChecks.push(async form=>{
     const items=fields(form);if(!items.some(field=>field.filled))return true;
     const result=await PG.safeRace(PG.request('event',{event:{event_type:'form_submit',fields:items,context:context(form)}}),4000,null);if(!result)return true;
-    const action=await PG.awaitDecision(result.decision,selected=>{if(selected.action!=='review_fields')return;const flagged=assessments.filter(assessment=>assessment.badge).map(assessment=>assessment.field).filter(field=>items.some(item=>item.field_id===field.field_id));PG.highlight(flagged);PG.confirm(`${flagged.length} field${flagged.length===1?'':'s'} marked as not needed`);});
-    return action.action==='continue';
+    const action=await PG.awaitDecision(result.decision,selected=>{
+      if(selected.action==='review_fields'){
+        const flagged=assessments.filter(assessment=>assessment.badge).map(assessment=>assessment.field).filter(field=>items.some(item=>item.field_id===field.field_id));
+        PG.highlight(flagged);
+        PG.showResult(selected.report||{headline:`${flagged.length} field${flagged.length===1?'':'s'} marked as not needed`,body:'They are outlined on the page. Nothing has been sent yet.'});
+      }
+      if(selected.action==='clear_fields'){
+        // The service names the fields: the ones the card warned about that are
+        // filled in and not required. They are blanked here, before the submission
+        // below goes ahead with what is left.
+        PG.clearFields(selected.fields||[]);
+        // The submission below may be a whole new page; the receipt goes with it.
+        if(selected.report)PG.showResult(selected.report,{carry:true});
+      }
+    });
+    return action.action==='continue'||action.action==='clear_fields';
   });
   // Open shadow roots attached later are inventoried by the regular mutation pass and a low-frequency check.
   window.addEventListener('message',event=>{if(event.source===window&&event.data?.pgBridge==='shadow_attached'){observeRoots();schedule();}});

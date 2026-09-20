@@ -21,7 +21,13 @@
     const manage=Array.from(current.banner.querySelectorAll('button,a')).find(button=>/manage|preferences|settings/i.test(button.textContent||''));if(manage){manage.click();await PG.wait(150);const reject=PG.queryAll('button,a').find(button=>PG.visible(button)&&/reject all|necessary only|decline all/i.test(button.textContent||''));if(reject){reject.click();return true;}manage.classList.add('pg-review');}
     return false;
   };
-  async function analyze(){try{const value=await snapshot();if(!value)return;const fingerprint=JSON.stringify(value);if(last===fingerprint)return;last=fingerprint;const result=await PG.request('context',{consent:{snapshot:value}});if(result.consent?.decision)PG.showDecision(result.consent.decision,async action=>{if(action.action==='reject_optional')await PG.rejectConsent();});}catch(_){}}
+  async function analyze(){try{const value=await snapshot();if(!value)return;const fingerprint=JSON.stringify(value);if(last===fingerprint)return;last=fingerprint;const result=await PG.request('context',{consent:{snapshot:value}});if(result.consent?.decision)PG.showDecision(result.consent.decision,async action=>{
+        if(action.action!=='reject_optional')return;
+        const rejected=await PG.rejectConsent();
+        // The receipt says what happened, which is not always what was asked: a
+        // banner with no reject control this page can find is reported as exactly that.
+        if(action.report)PG.showResult(rejected?action.report:(action.report.failed||{headline:"The banner's reject control could not be found"}));
+      });}catch(_){}}
   function schedule(){clearTimeout(timer);timer=setTimeout(analyze,150);}
   PG.collectors.push(async()=>{const value=await snapshot();return {consent:{snapshot:value||{text:"",cmp:"none",buttons:[],toggles:[],fixed_or_sticky:false}}};});
   const start=()=>{new MutationObserver(records=>{if(records.some(record=>!record.target.closest?.('.pg-panel,.pg-stack')))schedule();}).observe(document.documentElement,{childList:true,subtree:true});schedule();};

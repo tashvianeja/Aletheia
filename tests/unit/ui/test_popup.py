@@ -53,6 +53,8 @@ def test_widgets_stay_up_until_they_are_answered(qtbot) -> None:
 
 
 def test_informational_card_can_be_closed_and_closing_it_does_nothing_else(qtbot) -> None:
+    """A notice holds nothing up, so closing it only records that it was read — never
+    the refusal or the remedy it was offering, which the person did not choose."""
     actions: list[tuple[str, str, bool]] = []
     inform = InterventionPopup(
         decision("inform", Outcome.INFORM), lambda *args: actions.append(args)
@@ -64,7 +66,7 @@ def test_informational_card_can_be_closed_and_closing_it_does_nothing_else(qtbot
     qtbot.mouseClick(inform.card.close_button, Qt.MouseButton.LeftButton)
 
     assert not inform.isVisible()
-    assert actions == [("inform", "cancel", False)]
+    assert actions == [("inform", "continue", False)]
 
 
 def test_a_notice_offers_the_way_out_as_a_button_and_not_only_as_a_cross(qtbot) -> None:
@@ -92,7 +94,135 @@ def test_a_notice_offers_the_way_out_as_a_button_and_not_only_as_a_cross(qtbot) 
     qtbot.mouseClick(with_cross.card.close_button, Qt.MouseButton.LeftButton)
 
     assert not with_button.isVisible()
-    assert by_button == by_cross == [("inform", "cancel", False)]
+    assert by_button == by_cross == [("inform", "continue", False)]
+
+
+def test_a_notice_offers_its_remedy_as_a_workflow_beside_ok(qtbot) -> None:
+    """The user's report: a card that only told them about an advertising profile
+    gave them nothing to do about it. The remedy is the filled button; OK is a plain
+    one beside it, and the two record different things."""
+    from privacy_guardian.core.events import DataCategory, Requester, TrackingEvent
+    from privacy_guardian.engine.decision import decide
+
+    def notice() -> Decision:
+        return decide(
+            TrackingEvent(
+                requester=Requester(origin="https://news.test", display_name="news.test"),
+                data_categories=[DataCategory.DEVICE_IDENTIFIERS],
+                tracker_domains=["tracker-one.test", "ads-two.test"],
+                confidence=0.8,
+                signals=["tracking_pixels"],
+            )
+        )
+
+    blocked: list[tuple[str, str, bool]] = []
+    read: list[tuple[str, str, bool]] = []
+    first = InterventionPopup(notice(), lambda *args: blocked.append(args))
+    second = InterventionPopup(notice(), lambda *args: read.append(args))
+    qtbot.addWidget(first)
+    qtbot.addWidget(second)
+    first.show()
+    second.show()
+    assert first.decision.outcome == Outcome.INFORM
+
+    assert set(first.buttons) == {"acknowledge", "block"}
+    assert first.buttons["block"].property("tier") == "primary"
+    assert first.buttons["acknowledge"].property("tier") == "secondary"
+    assert first.buttons["block"].text() == "Block if possible"
+    qtbot.mouseClick(first.buttons["block"], Qt.MouseButton.LeftButton)
+    qtbot.mouseClick(second.buttons["acknowledge"], Qt.MouseButton.LeftButton)
+
+    assert [action for _id, action, _r in blocked] == ["block"]
+    assert [action for _id, action, _r in read] == ["continue"], (
+        "OK beside a remedy must never record the remedy"
+    )
+
+
+def test_a_notice_with_several_remedies_wraps_them_rather_than_clipping_them(qtbot) -> None:
+    """Three buttons are wider than the card; on one row the last was cut mid-word."""
+    from PySide6.QtWidgets import QHBoxLayout
+
+    from privacy_guardian.core.events import DataCategory, FileUploadEvent, Requester
+    from privacy_guardian.engine.decision import decide
+
+    photo = decide(
+        FileUploadEvent(
+            filename="beach.jpg",
+            requester=Requester(origin="https://pics.test", display_name="pics.test"),
+            data_categories=[DataCategory.LOCATION_PRECISE, DataCategory.FULL_NAME],
+        )
+    )
+    popup = InterventionPopup(photo, mode="light")
+    qtbot.addWidget(popup)
+    popup.show()
+
+    assert {"acknowledge", "strip_metadata", "redact"} <= set(popup.buttons)
+    rows = [
+        layout
+        for layout in popup.card.findChildren(QHBoxLayout)
+        if any(layout.indexOf(button) >= 0 for button in popup.buttons.values())
+    ]
+    assert len(rows) >= 2, "buttons that do not fit across the card take another row"
+    for button in popup.buttons.values():
+        assert button.sizeHint().width() <= button.width() + 1, button.text()
+
+
+def test_a_photo_whose_only_problem_is_its_location_gets_the_location_remedy(qtbot) -> None:
+    from privacy_guardian.core.events import DataCategory, FileUploadEvent, Requester
+    from privacy_guardian.engine.decision import decide
+
+    photo = decide(
+        FileUploadEvent(
+            filename="beach.jpg",
+            requester=Requester(origin="https://pics.test", display_name="pics.test"),
+            data_categories=[DataCategory.LOCATION_PRECISE],
+        )
+    )
+    assert "redact" not in photo.actions, "nothing in the picture to redact"
+    assert photo.primary_action == "strip_metadata"
+
+
+def test_a_finished_workflow_shows_a_receipt_with_ok_and_records_nothing(
+    qtbot, ui_controller
+) -> None:
+    """The mockups end every workflow on a green card saying what was done. It is a
+    receipt, not a question: OK puts it down and nothing goes back to the service."""
+    queue = PopupQueue(ui_controller)
+    qtbot.addWidget(queue)
+    queue.enqueue(decision("waiting"))
+    assert queue.current is not None and queue.current.decision.event_id == "waiting"
+    queue.current.choose("cancel")
+    qtbot.waitUntil(lambda: queue.current is None)
+
+    queue.show_result(
+        {
+            "headline": "Redacted copy ready: redacted-document.pdf",
+            "body": "Passport number and date of birth removed. Nothing left this device.",
+            "subject": "passport.pdf",
+            "destination": "shrinkpix.example",
+        }
+    )
+
+    qtbot.waitUntil(lambda: queue.current is not None)
+    card = queue.current
+    assert card.card.urgency == "all_clear"
+    assert card.card.band_label is not None and card.card.band_label.text() == "Done"
+    assert card.headline.text() == "Redacted copy ready: redacted-document.pdf"
+    assert list(card.buttons) == ["acknowledge"]
+    before = list(ui_controller.calls)
+    qtbot.mouseClick(card.buttons["acknowledge"], Qt.MouseButton.LeftButton)
+    qtbot.waitUntil(lambda: queue.current is None)
+    assert ui_controller.calls == before, "a receipt is never answered"
+
+
+def test_a_receipt_goes_in_front_of_whatever_else_is_waiting(qtbot, ui_controller) -> None:
+    queue = PopupQueue(ui_controller)
+    qtbot.addWidget(queue)
+    queue.hold()
+    queue.enqueue(decision("later"))
+    queue.show_result({"headline": "Clipboard cleared", "body": ""})
+
+    assert [item.event_id.split(":")[0] for item in queue.queue] == ["result", "later"]
 
 
 def test_a_card_that_asks_for_a_decision_is_not_given_an_ok_button(qtbot) -> None:
@@ -262,9 +392,9 @@ def test_an_informational_card_still_lists_what_was_found(qtbot) -> None:
     assert popup.card.findings_box is not None
     texts = [label.text() for label in popup.card.findings_box.findChildren(QLabel)]
     assert "Shares what you do here with 4 other companies" in texts
-    assert list(popup.buttons) == ["acknowledge"], (
-        "a notice still asks nothing: its one button only says it has been read"
-    )
+    # It asks nothing — no "carry on", no "refuse" — but it offers what it can do.
+    assert set(popup.buttons) == {"acknowledge", "redact"}
+    assert "cancel" not in popup.buttons and "continue" not in popup.buttons
 
 
 def test_the_band_pulses_when_an_act_now_card_lands_and_then_rests(qtbot) -> None:

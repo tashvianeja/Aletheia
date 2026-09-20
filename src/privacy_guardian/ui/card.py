@@ -438,33 +438,83 @@ class GuardianCard(QFrame):
             above.addStretch(1)
             above.addWidget(escape)
             self._content.addLayout(above)
-        row = QHBoxLayout()
-        row.setSpacing(8)
-        row.addStretch(1)
-        for widget in widgets:
-            row.addWidget(widget)
-        self._content.addLayout(row)
+        self._pack_buttons(widgets)
 
-    def add_acknowledgement(self, label: str, on_click: Callable[[], None]) -> QPushButton:
-        """The single button on a card that is only reporting something.
+    def _pack_buttons(self, widgets: list[QPushButton]) -> None:
+        """Lay buttons out right-aligned, on as many rows as they need.
 
-        A notice asks for no decision, so it gets no row of choices. It still needs a
-        way out that looks like one: a card whose only control is the cross in its
-        corner reads as a card still waiting for something, and the person is left
-        hunting for the button that would put it down. This is that button, and it
-        does exactly what the cross does.
+        Three remedies do not fit across the card. Squeezed into one row they were
+        clipped mid-word — "Send only what's n" — and a button that cannot be read
+        cannot be chosen. Later buttons go on later rows, so the filled primary
+        always ends the last row, where the eye goes for it.
         """
-        button = QPushButton(label)
-        button.setProperty("tier", "primary")
-        button.setAccessibleName(label)
+        available = CARD_WIDTH - 36
+        rows: list[list[QPushButton]] = [[]]
+        used = 0
+        for widget in widgets:
+            width = widget.sizeHint().width()
+            if rows[-1] and used + 8 + width > available:
+                rows.append([])
+                used = 0
+            rows[-1].append(widget)
+            used += width + (8 if len(rows[-1]) > 1 else 0)
+        for group in rows:
+            row = QHBoxLayout()
+            row.setSpacing(8)
+            row.addStretch(1)
+            for widget in group:
+                row.addWidget(widget)
+            self._content.addLayout(row)
+
+    def add_acknowledgement(
+        self,
+        label: str,
+        on_click: Callable[[], None],
+        actions: list[str] | None = None,
+        labels: dict[str, str] | None = None,
+        primary: str = "",
+        on_action: Callable[[str], None] | None = None,
+    ) -> QPushButton:
+        """The buttons on a card that is only reporting something.
+
+        A notice asks for no decision, so it gets no "carry on" and no "refuse": it
+        holds nothing up for either to apply to. It still needs a way out that looks
+        like one — a card whose only control is the cross in its corner reads as a
+        card still waiting for something — so it always has OK, which does exactly
+        what the cross does.
+
+        What a notice does offer is its remedies: the workflows the person might want
+        run for them now they know. Those sit where a card's buttons always sit, with
+        the best of them filled, and OK steps aside to the left as a plain button. A
+        notice with nothing to offer keeps OK as its one filled button.
+        """
+        offered = list(actions or [])
+        ok = QPushButton(label)
+        ok.setProperty("tier", "primary" if not offered else "secondary")
+        ok.setAccessibleName(label)
+        ok.setCursor(Qt.CursorShape.PointingHandCursor)
+        ok.clicked.connect(lambda _checked=False: on_click())
+        self.buttons["acknowledge"] = ok
+        widgets = [ok]
+        table = labels or {}
+        for action in offered:
+            if action == primary or on_action is None:
+                continue
+            widgets.append(self._action_button(action, table, "secondary", on_action))
+        if primary in offered and on_action is not None:
+            widgets.append(self._action_button(primary, table, "primary", on_action))
+        self._pack_buttons(widgets)
+        return ok
+
+    def _action_button(
+        self, action: str, labels: dict[str, str], tier: str, on_click: Callable[[str], None]
+    ) -> QPushButton:
+        button = QPushButton(labels.get(action, tr(action)))
+        button.setProperty("tier", tier)
+        button.setAccessibleName(button.text())
         button.setCursor(Qt.CursorShape.PointingHandCursor)
-        button.clicked.connect(lambda _checked=False: on_click())
-        self.buttons["acknowledge"] = button
-        row = QHBoxLayout()
-        row.setSpacing(8)
-        row.addStretch(1)
-        row.addWidget(button)
-        self._content.addLayout(row)
+        button.clicked.connect(lambda _checked=False, value=action: on_click(value))
+        self.buttons[action] = button
         return button
 
     # -- footer ---------------------------------------------------------------

@@ -42,7 +42,9 @@ def create_fixture_app(state: FixtureState | None = None) -> web.Application:
                     (str(value.filename), str(value.content_type), content)
                 )
             else:
-                safe_record[key] = "present"
+                # Presence and emptiness only, never the value: enough to tell a field
+                # that was sent blank from one that was sent filled in.
+                safe_record[key] = "present" if str(value) else "blank"
         fixture_state.submissions.append(safe_record)
         return web.Response(text="received")
 

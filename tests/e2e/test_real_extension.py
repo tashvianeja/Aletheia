@@ -289,6 +289,131 @@ async def test_known_cmp_reject_optional_action_actuates_fixture(
 
 
 @pytest.mark.asyncio
+async def test_rejecting_cookies_ends_on_a_receipt_that_says_what_was_kept(
+    real_browser: RealBrowser, fixture_site: tuple[str, object]
+) -> None:
+    """The user's report: pressing the button did the thing and then nothing said so.
+    Every workflow now ends on a green "Done" card with OK, the same card on every
+    surface, saying what was done and what it means."""
+    base_url, _ = fixture_site
+    page = await real_browser.context.new_page()
+    await page.goto(f"{base_url}/fixtures/cmp-onetrust")
+    reject = page.locator('.pg-panel [data-pg-action="reject_optional"]')
+    await reject.wait_for(timeout=5_000)
+    await reject.click()
+    await page.locator(".cmp").wait_for(state="detached", timeout=3_000)
+
+    receipt = page.locator(".pg-panel[data-pg-result]")
+    await receipt.wait_for(timeout=3_000)
+    text = await receipt.inner_text()
+    assert "Optional cookies rejected on" in text
+    assert "Necessary cookies were kept." in text
+    assert await receipt.get_attribute("data-pg-urgency") == "all_clear"
+    assert "Done" in (await receipt.locator(".pg-band-label").inner_text())
+    await receipt.locator("[data-pg-ack]").click()
+    await receipt.wait_for(state="detached", timeout=3_000)
+
+
+@pytest.mark.asyncio
+async def test_sending_only_what_is_needed_blanks_the_unneeded_fields_and_sends_the_rest(
+    real_browser: RealBrowser, fixture_site: tuple[str, object]
+) -> None:
+    """The remedy the form card offers: the fields the download has no business
+    asking for are blanked, the form goes with what is left, and the receipt names
+    what stayed behind."""
+    base_url, state = fixture_site
+    page = await real_browser.context.new_page()
+    await page.goto(f"{base_url}/fixtures/free-pdf-download")
+    await fill_free_download(page)
+    await page.locator(".pg-badge").first.wait_for(timeout=5_000)
+    await page.locator("#lead-form button[type=submit]").click()
+    clear = page.locator('.pg-panel [data-pg-action="clear_fields"]')
+    await clear.wait_for(timeout=5_000)
+    assert (await clear.inner_text()).strip() == "Send only what's needed"
+    await clear.click()
+
+    for _attempt in range(100):
+        if state.submissions:
+            break
+        await asyncio.sleep(0.05)
+    assert state.submissions == [
+        {
+            "name": "present",
+            "email": "present",
+            "phone": "blank",
+            "date_of_birth": "blank",
+            "home_address": "blank",
+        }
+    ]
+    # The form was a whole new page; the receipt comes with it.
+    receipt = page.locator(".pg-panel[data-pg-result]")
+    await receipt.wait_for(timeout=5_000)
+    text = await receipt.inner_text()
+    assert "3 fields left blank before sending" in text
+    assert "Phone number, date of birth and home address stayed with you." in text
+    await receipt.locator("[data-pg-ack]").click()
+    await receipt.wait_for(state="detached", timeout=3_000)
+    await page.reload()
+    await page.wait_for_timeout(1_000)
+    assert await page.locator(".pg-panel[data-pg-result]").count() == 0, (
+        "a receipt is shown once, on the page the workflow led to, and never again"
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_redacted_copy_ends_on_a_receipt_naming_what_was_removed(
+    real_browser: RealBrowser, fixture_site: tuple[str, object]
+) -> None:
+    base_url, _ = fixture_site
+    page = await real_browser.context.new_page()
+    await page.goto(f"{base_url}/fixtures/image-compressor")
+    passport = Path(__file__).resolve().parents[1] / "fixtures/passport_synthetic.pdf"
+    await page.locator("#file").set_input_files(passport)
+    redact = page.locator('.pg-panel [data-pg-action="redact"]')
+    await redact.wait_for(timeout=10_000)
+    await redact.click()
+    await page.wait_for_function(
+        "document.querySelector('#file').files[0]?.name !== 'passport_synthetic.pdf'"
+    )
+
+    receipt = page.locator(".pg-panel[data-pg-result]")
+    await receipt.wait_for(timeout=5_000)
+    text = await receipt.inner_text()
+    assert "Redacted copy ready: redacted-document.pdf" in text
+    assert "removed. Nothing left this device." in text
+    assert "passport_synthetic.pdf" in text, "the receipt says which file it was about"
+
+
+@pytest.mark.asyncio
+async def test_an_advertising_notice_offers_to_block_and_reports_when_it_has(
+    real_browser: RealBrowser, fixture_site: tuple[str, object]
+) -> None:
+    """A notice asks nothing, and used to offer nothing either: the card said a profile
+    was being built and left the person with OK. It offers the remedy now, filled,
+    beside OK, and the receipt says what the remedy did."""
+    base_url, _ = fixture_site
+    page = await real_browser.context.new_page()
+    await page.goto(f"{base_url}/fixtures/tracker-late-fingerprint")
+    panel = page.locator(".pg-panel:not([data-pg-result])").first
+    await panel.wait_for(timeout=10_000)
+    decision = await latest_decision(real_browser, "tracking")
+    assert decision is not None and decision[1] == "INFORM"
+
+    assert await panel.locator("[data-pg-ack]").count() == 1
+    block = panel.locator('[data-pg-action="block"]')
+    assert await block.count() == 1 and "pg-primary" in (await block.get_attribute("class"))
+    assert await panel.locator('[data-pg-action="continue"]').count() == 0, "nothing to carry on"
+    await block.click()
+    await panel.wait_for(state="detached", timeout=5_000)
+
+    receipt = page.locator(".pg-panel[data-pg-result]")
+    await receipt.wait_for(timeout=5_000)
+    text = await receipt.inner_text()
+    assert "Tracking limited on" in text
+    assert "tracking compan" in text and "were cleared" in text
+
+
+@pytest.mark.asyncio
 async def test_free_download_review_highlights_only_three_unnecessary_fields(
     real_browser: RealBrowser, fixture_site: tuple[str, object]
 ) -> None:
@@ -633,7 +758,10 @@ async def test_a_notice_in_the_page_offers_a_way_out_that_is_not_only_a_cross(
     await panel.wait_for(timeout=10_000)
     before = answered(real_browser)
 
-    assert await panel.locator("[data-pg-action]").count() == 0, "a notice still asks nothing"
+    # It still asks nothing — no "carry on", no "refuse" — but it offers what it can do.
+    assert await panel.locator('[data-pg-action="continue"]').count() == 0
+    assert await panel.locator('[data-pg-action="cancel"]').count() == 0
+    assert await panel.locator('[data-pg-action="block"]').count() == 1
     ok = panel.locator("[data-pg-ack]")
     assert (await ok.inner_text()).strip() == "OK"
 

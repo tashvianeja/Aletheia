@@ -713,6 +713,8 @@ class Service:
             return await self._respond_once(response)
 
     async def _respond_once(self, response: UserResponse) -> dict[str, Any]:
+        from privacy_guardian.core.events import FormObservedEvent
+
         if response.event_id not in self.decisions:
             raise ValueError("Unknown decision")
         decision = self.decisions[response.event_id]
@@ -781,6 +783,34 @@ class Service:
             with contextlib.suppress(RuntimeError, KeyError):
                 await self.pool.run(release_payload, event.payload_ref)
             event.payload_ref = None
+        if response.action in {"clear_fields", "review_fields"} and isinstance(
+            event, FormObservedEvent
+        ):
+            # Which fields the page should act on, decided here where the form's
+            # necessity judgement lives, so the page blanks exactly what the card
+            # warned about and the report names exactly what was blanked.
+            from privacy_guardian.engine.decision import clearable_fields, form_assessments
+
+            _assessments, flagged = form_assessments(event)
+            result["fields"] = (
+                clearable_fields(event, flagged)
+                if response.action == "clear_fields"
+                else [
+                    field.field_id
+                    for field in event.fields
+                    if field.category is not None and field.category in flagged
+                ]
+            )
+        if response.remember:
+            result["remembered"] = True
+        from privacy_guardian.engine.outcome import report_for
+
+        report = report_for(event, decision, response.action, result)
+        if report is not None:
+            # What the workflow says for itself once it has run, for whichever
+            # surface carries it out: the page shows it after acting, the desktop
+            # after acting on its own events.
+            result["report"] = report
         self.actions[event.id] = result
         self._mark_answered(event)
         self.pending_since.pop(event.id, None)

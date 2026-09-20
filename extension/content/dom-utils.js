@@ -17,7 +17,11 @@
   };
   PG.wait = milliseconds=>new Promise(resolve=>setTimeout(resolve,milliseconds));
   PG.safeRace = (promise,milliseconds,fallback)=>Promise.race([promise,PG.wait(milliseconds).then(()=>fallback)]);
-  const FALLBACK_LABELS={cancel:"Cancel",continue:'Continue',redact:'Create redacted copy',strip_metadata:'Remove location first',review_fields:'Review fields',reject_optional:'Reject optional',block:'Block if possible',open_settings:'Review access',mark_expected:'Expected',view_details:'View details',learn_more:'Learn more',clear_clipboard:'Clear clipboard'};
+  const FALLBACK_LABELS={cancel:"Cancel",continue:'Continue',redact:'Create redacted copy',strip_metadata:'Remove location first',review_fields:'Review fields',clear_fields:"Send only what's needed",reject_optional:'Reject optional',block:'Block if possible',open_settings:'Review access',mark_expected:'Expected',view_details:'View details',learn_more:'Learn more',clear_clipboard:'Clear clipboard'};
+  // What a notice does not offer, mirroring engine.presentation.NOTICE_SILENT: nothing
+  // is held up, so there is nothing to carry on with or refuse, and "Learn more" is
+  // the footer's "Why am I seeing this?" by another name.
+  const NOTICE_SILENT=new Set(['continue','cancel','learn_more']);
   const SVG='http://www.w3.org/2000/svg';
   // Same glyph set as the desktop widget, drawn inline so no network request is needed.
   const GLYPHS={
@@ -105,38 +109,41 @@
       if(decision.destination){context.append(icon('arrow'),element('span',null,decision.destination));}
       panel.append(context);
     }
+    const labels=decision.action_labels||{};
+    const primary=decision.primary_action||decision.default_action;
+    const tertiary=decision.tertiary_action||'';
+    const make=(action,tier)=>{
+      const button=element('button','pg-'+tier,labels[action]||FALLBACK_LABELS[action]||action);
+      button.type='button';button.dataset.pgAction=action;
+      button.addEventListener('click',async()=>{
+        button.disabled=true;
+        try{await state.apply(await PG.request('action',{event_id:decision.event_id,action,remember:check.checked}));}
+        catch(_){body.textContent=informational?'That could not be done. Nothing on this page has changed.':'That action could not be completed. Your submission remains held.';}
+        finally{button.disabled=false;}
+      });
+      return button;
+    };
+    const actions=element('div','pg-actions');
     if(!informational){
-      const labels=decision.action_labels||{};
-      const primary=decision.primary_action||decision.default_action;
-      const tertiary=decision.tertiary_action||'';
-      const make=(action,tier)=>{
-        const button=element('button','pg-'+tier,labels[action]||FALLBACK_LABELS[action]||action);
-        button.type='button';button.dataset.pgAction=action;
-        button.addEventListener('click',async()=>{
-          button.disabled=true;
-          try{await state.apply(await PG.request('action',{event_id:decision.event_id,action,remember:check.checked}));}
-          catch(_){body.textContent='That action could not be completed. Your submission remains held.';}
-          finally{button.disabled=false;}
-        });
-        return button;
-      };
-      const actions=element('div','pg-actions');
       for(const action of decision.actions||[]){if(action===tertiary||action===primary)continue;actions.append(make(action,'secondary'));}
       if((decision.actions||[]).includes(primary))actions.append(make(primary,'primary'));
       if(tertiary&&(decision.actions||[]).includes(tertiary))actions.prepend(make(tertiary,'tertiary'));
-      panel.append(actions);
     }else{
-      // A notice asks for no decision, so it gets no row of choices. It still needs a
-      // way out that looks like one: a card whose only control is the cross in its
-      // corner reads as a card still waiting for something, and the person is left
-      // hunting for the button that would put it down. This is that cross, said out
-      // loud, and it does exactly what the cross does.
-      const actions=element('div','pg-actions');
-      const ok=element('button','pg-primary','OK');
+      // A notice asks for no decision, so it has no "carry on" and no "refuse": it
+      // holds nothing up for either to apply to. It does offer its remedies — the
+      // workflows the person may want run now they know: block the trackers, take
+      // the location out of the photo, reject the optional cookies — and it always
+      // has OK, because a card whose only control is the cross in its corner reads
+      // as a card still waiting for something. OK does exactly what the cross does.
+      const offered=(decision.actions||[]).filter(action=>!NOTICE_SILENT.has(action));
+      const ok=element('button',offered.length?'pg-secondary':'pg-primary','OK');
       ok.type='button';ok.dataset.pgAck='1';ok.setAttribute('aria-label','OK');
       ok.addEventListener('click',()=>state.dismiss());
-      actions.append(ok);panel.append(actions);
+      actions.append(ok);
+      for(const action of offered){if(action!==primary)actions.append(make(action,'secondary'));}
+      if(offered.includes(primary))actions.append(make(primary,'primary'));
     }
+    panel.append(actions);
     const foot=element('div','pg-foot');
     foot.append(icon('shield'),element('span',null,'Analysed on this device'));
     // Everything the card does not say out loud lives behind this: how it is being
@@ -209,21 +216,66 @@
     if(!decision||decision.outcome!=='INTERVENE'){PG.showDecision(decision,onAction);return {action:'continue'};}
     return PG.showDecision(decision,onAction);
   };
-  // The compact bar from the component set: what just happened, and a way to dismiss it.
-  PG.confirm = message=>{
-    document.querySelector('.pg-panel[data-pg-confirm]')?.remove();
-    const panel=element('section','pg-panel');panel.dataset.pgConfirm='1';panel.dataset.pgUrgency='all_clear';
-    panel.setAttribute('role','status');panel.style.width='auto';panel.style.padding='12px 14px';
-    const row=element('div','pg-head');row.style.margin='0';
-    const tick=icon('ok');tick.classList.add('pg-tick');
-    row.append(tick,element('span','pg-row-label',message));
-    const done=element('button','pg-primary','Done');done.type='button';
-    done.style.marginLeft='14px';
-    done.addEventListener('click',()=>panel.remove());
-    row.append(done);panel.append(row);
+  // The card a finished workflow shows for itself: the same card as every other, in
+  // the green register, with "Done" on the band and OK as its one button. It stays
+  // until it is read — a receipt that removes itself after a few seconds is one the
+  // person may never have finished reading. The service composes the words, so the
+  // desktop and the page report the same workflow in the same sentence.
+  // A workflow that hands the page over the moment it has run — blanking a form's
+  // fields and sending it — shows its receipt on a page that is about to be replaced.
+  // It is carried across to the next page in this tab, for a few seconds only: a
+  // receipt turning up on some later visit would be a receipt for nothing anyone
+  // remembers doing. Session storage is the page's own, and holds nothing the page
+  // did not already know: which of its fields went, never what was in them.
+  const CARRY_KEY='pg-receipt',CARRY_MS=15000;
+  PG.showResult = (report,options={})=>{
+    const headline=String(report?.headline||'');if(!headline)return null;
+    if(options.carry){try{sessionStorage.setItem(CARRY_KEY,JSON.stringify({report,at:Date.now()}));}catch(_){}}
+    for(const existing of document.querySelectorAll('.pg-panel[data-pg-result]')){
+      // The same receipt twice is one receipt: replace it rather than stack it.
+      if(existing.dataset.pgHeadline===headline)existing.remove();
+    }
+    const panel=element('section','pg-panel');panel.dataset.pgResult='1';panel.dataset.pgUrgency='all_clear';panel.dataset.pgHeadline=headline;
+    panel.setAttribute('role','status');panel.setAttribute('aria-live','polite');
+    panel.setAttribute('aria-label','Privacy Guardian: Done');
+    const close=()=>panel.remove();
+    panel.append(band('all_clear','Done',close),element('p','pg-headline',headline));
+    if(report.body)panel.append(element('p','pg-body',String(report.body)));
+    if(report.subject||report.destination){
+      panel.append(element('hr','pg-rule'));
+      const context=element('div','pg-context');
+      context.append(element('strong',null,String(report.subject||'')));
+      if(report.destination){context.append(icon('arrow'),element('span',null,String(report.destination)));}
+      panel.append(context);
+    }
+    const actions=element('div','pg-actions');
+    const ok=element('button','pg-primary','OK');ok.type='button';ok.dataset.pgAck='1';ok.setAttribute('aria-label','OK');
+    ok.addEventListener('click',close);actions.append(ok);panel.append(actions);
+    const foot=element('div','pg-foot');
+    foot.append(icon('shield'),element('span',null,'Analysed on this device'));
+    panel.append(foot);
     PG.stack().append(panel);
-    setTimeout(()=>panel.remove(),8000);
     return panel;
+  };
+  // Blank the fields a form has no business asking for, and mark them so the person
+  // can see which. What is removed is only ever the box's contents; nothing is read.
+  PG.clearFields = fieldIds=>{
+    let cleared=0;
+    for(const id of fieldIds||[]){
+      const element_=PG.queryAll('[data-pg-field-id]').find(node=>node.dataset.pgFieldId===id);
+      if(!element_)continue;
+      if(element_.isContentEditable)element_.textContent='';
+      else if(['checkbox','radio'].includes(element_.type))element_.checked=false;
+      else element_.value='';
+      // Say so the way typing would, so a page that watches its own fields notices.
+      element_.dispatchEvent(new Event('input',{bubbles:true}));
+      element_.dispatchEvent(new Event('change',{bubbles:true}));
+      element_.classList.add('pg-review');element_.setAttribute('aria-description','Left blank: not needed for this');
+      const tag=document.createElement('span');tag.className='pg-badge';tag.dataset.pgCleared='1';tag.textContent='Left blank';tag.setAttribute('role','note');
+      element_.insertAdjacentElement('afterend',tag);
+      cleared++;
+    }
+    return cleared;
   };
   // Take every card down at once, each the way its own close control would: the
   // safe answer stands for anything a card was holding. The desktop asks for this
@@ -232,7 +284,7 @@
     // The check card needs this corner; the person has not said anything about what
     // was in it. An informational card is owed to them again on the next page.
     for(const state of PG.decisionStates.values())if(!state.resolved)state.dismiss(false);
-    document.querySelectorAll('.pg-panel[data-pg-confirm]').forEach(panel=>panel.remove());
+    document.querySelectorAll('.pg-panel[data-pg-result]').forEach(panel=>panel.remove());
   };
   // "Show me where": find the quoted clause on the page and take the reader to it.
   PG.showClauses = citations=>{
@@ -254,10 +306,19 @@
       }
     }
     if(first)first.scrollIntoView({behavior:'smooth',block:'center'});
-    PG.confirm(found?`${found} clause${found===1?'':'s'} highlighted on this page`:'The clause text could not be located on this page');
+    PG.showResult(found
+      ?{headline:`${found} clause${found===1?'':'s'} highlighted on this page`,body:'Each one is outlined in amber where it appears. Nothing has been agreed to yet.'}
+      :{headline:'The clause text could not be located on this page',body:'Read the terms yourself before agreeing to them. Nothing has been agreed to yet.'});
     return found;
   };
   PG.highlight = fields=>{for(const field of fields||[]){const element=PG.queryAll('[data-pg-field-id]').find(node=>node.dataset.pgFieldId===field.field_id);if(element){element.classList.add('pg-review');element.setAttribute('aria-description','Review this information before sharing');}}};
+  const carried=()=>{
+    let raw=null;
+    try{raw=sessionStorage.getItem(CARRY_KEY);if(raw)sessionStorage.removeItem(CARRY_KEY);}catch(_){return;}
+    if(!raw)return;
+    try{const {report,at}=JSON.parse(raw);if(Date.now()-Number(at)<CARRY_MS&&report&&typeof report==='object')PG.showResult(report);}catch(_){}
+  };
+  if(window.top===window){if(document.body)carried();else document.addEventListener('DOMContentLoaded',carried,{once:true});}
   PG.collectContext = async(requestId)=>{
     const payload={origin:location.origin,request_id:requestId};
     for(const collector of PG.collectors){try{Object.assign(payload,await collector());}catch(_){}}

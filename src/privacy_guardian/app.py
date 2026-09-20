@@ -343,15 +343,23 @@ def main() -> int:
             return future
 
         def actuate(self, event_id: str, action: str) -> None:
+            """Carry out the part of an answer that only the desktop can, then say so.
+
+            A page carries out its own workflows and reports on them itself, so the
+            result card here is only for the events the desktop announced: the page's
+            answer arriving twice would be the same thing said in two corners.
+            """
             if action == "open_settings":
                 self.open_settings(
                     getattr(self.core.events.get(event_id), "permission", "full_disk")
                 )
             elif action == "clear_clipboard" and self.core.adapter:
                 self.core.adapter.backend.clear_clipboard()
-                self.confirm(tr("clipboard_cleared"))
             elif action in {"learn_more", "view_details"}:
                 self.show_dashboard("events")
+            report = self.core.actions.get(event_id, {}).get("report")
+            if report and event_id not in self.core.event_owners:
+                self.popups.show_result(report)
             self.refresh_tray()
 
         def confirm(self, message: str) -> None:

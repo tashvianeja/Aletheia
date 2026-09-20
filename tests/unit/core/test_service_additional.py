@@ -245,7 +245,11 @@ async def test_response_persists_mark_expected_remember_and_is_idempotent(
     result = await service.respond(response)
     repeated = await service.respond(response)
 
-    assert repeated == result == {"action": "mark_expected", "event_id": event.id}
+    assert repeated == result
+    assert (result["action"], result["event_id"]) == ("mark_expected", event.id)
+    # The answer carries what the workflow says for itself, for the card that follows.
+    assert result["report"]["headline"] == "Marked as expected for Unknown requester"
+    assert result["report"]["body"] == "Camera by Unknown requester will not be raised again."
     assert service.preferences.expected_permissions[event.requester.key] == [DataCategory.CAMERA]
     assert service.preferences.requester_overrides[event.requester.key] == "ask"
     assert notified == [(event.id, "mark_expected")]

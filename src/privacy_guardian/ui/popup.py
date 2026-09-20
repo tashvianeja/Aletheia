@@ -8,7 +8,8 @@ from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from privacy_guardian.core.events import Decision, Outcome
-from privacy_guardian.engine.presentation import urgency_for
+from privacy_guardian.engine.explain import summarize
+from privacy_guardian.engine.presentation import notice_actions, urgency_for
 from privacy_guardian.ui import icons
 from privacy_guardian.ui.card import (
     CARD_WIDTH,
@@ -31,6 +32,38 @@ PROTECTIVE_DEFAULTS = frozenset({"cancel", "reject_optional", "block"})
 # How many times the band pulses when a card of each tier arrives. Bounded, always:
 # a light that never stops flashing is one people learn to stop seeing.
 PULSES = {"act_now": 3, "attention": 1}
+# The event id a result card carries. It answers for no event of its own — it reports
+# on a workflow that has already run — so nothing about it is ever sent back.
+RESULT_PREFIX = "result:"
+
+
+def is_result(decision: Decision) -> bool:
+    return decision.event_id.startswith(RESULT_PREFIX)
+
+
+def result_decision(report: dict[str, Any]) -> Decision:
+    """The card a finished workflow shows for itself, built from the service's report.
+
+    It is a notice in every respect but one: its band says "Done" rather than a tier,
+    because it is not a reading of the situation, it is a receipt.
+    """
+    from uuid import uuid4
+
+    headline = str(report.get("headline", ""))
+    body = str(report.get("body", ""))
+    return Decision(
+        event_id=RESULT_PREFIX + str(uuid4()),
+        outcome=Outcome.INFORM,
+        risk=0.0,
+        explanation=summarize(headline, body),
+        headline=headline,
+        body=body,
+        subject=str(report.get("subject", "")),
+        destination=str(report.get("destination", "")),
+        actions=[],
+        default_action="",
+        urgency="all_clear",
+    )
 
 
 class InterventionPopup(QWidget):
@@ -81,6 +114,8 @@ class InterventionPopup(QWidget):
         return self.decision.urgency or urgency_for(self.decision)
 
     def _band_label(self) -> str:
+        if is_result(self.decision):
+            return tr("urgency_done")
         return urgency_label(self.urgency(), handled=bool(self.decision.auto_action))
 
     def _build(self) -> None:
@@ -93,10 +128,11 @@ class InterventionPopup(QWidget):
         if informational:
             # A notice reports a fact: the band says how much it matters, the headline
             # says what, the rows say exactly which things, the context line says
-            # where. Nothing on it needs deciding, so it is given no row of choices —
-            # but it is given the one button there is to give, because a card whose
-            # only control is a cross reads as a card still waiting for an answer, and
-            # leaves the person hunting for the way to put it down.
+            # where. Nothing on it needs deciding, so it has no "carry on" and no
+            # "refuse" — but it does offer the workflows it can run now the person
+            # knows (block the trackers, take the location out of the photo), and it
+            # always has OK, because a card whose only control is a cross reads as a
+            # card still waiting for an answer.
             self.explanation = card.add_body(decision.detail) if decision.detail else self.headline
             if decision.findings:
                 card.add_rows(decision.findings)
@@ -109,8 +145,17 @@ class InterventionPopup(QWidget):
             self.remember.hide()
             card.add_widget(self.remember)
             card.add_context(decision.subject, decision.destination)
-            acknowledge = card.add_acknowledgement(tr("acknowledge"), self.acknowledge)
-            acknowledge.installEventFilter(self)
+            offered = notice_actions(decision.actions)
+            card.add_acknowledgement(
+                tr("acknowledge"),
+                self.acknowledge,
+                actions=offered,
+                labels=decision.action_labels,
+                primary=decision.primary_action if decision.primary_action in offered else "",
+                on_action=self.choose,
+            )
+            for button in card.buttons.values():
+                button.installEventFilter(self)
             card.add_footer(on_why=self.toggle_rationale if decision.rationale else None)
             if card.why_button is not None:
                 card.why_button.installEventFilter(self)
@@ -207,9 +252,19 @@ class InterventionPopup(QWidget):
         self.dismiss()
 
     def dismiss_action(self) -> str:
-        """What stepping away means, when it means anything at all."""
+        """What stepping away means, when it means anything at all.
+
+        A card that is holding something up keeps holding it: the safe default
+        stands. A notice holds nothing up, so putting it down only says it was read —
+        it must not record the remedy it was offering as though it had been chosen,
+        least of all now that the remedy is a button beside OK.
+        """
         default = self.decision.default_action
-        if default in PROTECTIVE_DEFAULTS and default in self.decision.actions:
+        if (
+            self.decision.outcome != Outcome.INFORM
+            and default in PROTECTIVE_DEFAULTS
+            and default in self.decision.actions
+        ):
             return default
         return "continue" if "continue" in self.decision.actions else ""
 
@@ -290,6 +345,16 @@ class PopupQueue(QWidget):
             )
             return
         self.queue.append(decision)
+        self._next()
+
+    def show_result(self, report: dict[str, Any]) -> None:
+        """Put up the card a finished workflow shows for itself.
+
+        It goes to the front of the queue rather than the back: the person has just
+        pressed the button, and the receipt for it belongs before anything that
+        happened to arrive in the meantime.
+        """
+        self.queue.appendleft(result_decision(report))
         self._next()
 
     def _next(self) -> None:
