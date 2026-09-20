@@ -95,11 +95,13 @@ ACTION_LABELS: dict[str, dict[str, str]] = {
         "open_settings": "Review access",
         "continue": "Not now",
     },
+    "redacted_document": {"unredact": "Restore original", "continue": "Leave it"},
 }
 
 # The safe option is the easy one: a remedy that still lets the user finish the task beats
 # a plain refusal, and a refusal beats carrying on.
 REMEDY_ORDER = (
+    "unredact",
     "redact",
     "strip_metadata",
     "clear_fields",

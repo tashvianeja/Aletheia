@@ -13,6 +13,7 @@ from privacy_guardian.core.events import (
     PermissionRequestEvent,
     PolicyDocumentEvent,
     PrivacyEvent,
+    RedactedDocumentEvent,
     ScreenCaptureEvent,
     SystemAccessEvent,
     TrackingEvent,
@@ -255,6 +256,17 @@ def _headline(
         )
         return headline, body
 
+    if isinstance(event, RedactedDocumentEvent):
+        count = event.marks
+        boxes = "one redaction box" if count == 1 else f"{count} redaction boxes"
+        headline = f"{event.filename or 'This file'} has {boxes} drawn by Privacy Guardian."
+        body = (
+            "The details are covered, not removed, so a copy with the boxes taken off can "
+            "be made beside it. Everything else in the file, including any compression, stays "
+            "as it is. Nothing leaves this device."
+        )
+        return headline, body
+
     if isinstance(event, ScreenCaptureEvent):
         headline = f"{who} can record your screen."
         body = "Everything visible on your display can be captured while this is active."
@@ -421,8 +433,9 @@ def explain(
     # Whether a request was necessary is the question a form or an upload is judged on.
     # A page that is tracking you, a cookie banner and a policy are not judged on it,
     # and the caveat only made those cards longer without answering anything they ask.
+    # An offer to restore a file we redacted is not a request at all, so it is not judged either.
     judged_on_necessity = not isinstance(
-        event, TrackingEvent | ConsentBannerEvent | PolicyDocumentEvent
+        event, TrackingEvent | ConsentBannerEvent | PolicyDocumentEvent | RedactedDocumentEvent
     )
     uncertain = event.requester.purpose == "unknown" or event.requester.purpose_confidence < 0.35
     # A form is judged on what it is for, not on what the site sells. Where its own

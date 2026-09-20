@@ -210,6 +210,16 @@ class StartupRegistrationEvent(PrivacyEvent):
     modified: bool = False
 
 
+class RedactedDocumentEvent(PrivacyEvent):
+    """A file carrying Privacy Guardian's own redaction boxes has been opened."""
+
+    event_type: Literal["redacted_document"] = "redacted_document"
+    source: Literal["browser", "os", "clipboard", "manual"] = "os"
+    path: str = ""
+    filename: str = ""
+    marks: int = Field(default=0, ge=0)
+
+
 class DeepCheckRequestEvent(PrivacyEvent):
     event_type: Literal["deep_check"] = "deep_check"
     source: Literal["browser", "os", "clipboard", "manual"] = "manual"
@@ -227,6 +237,7 @@ Event = Annotated[
     | ClipboardReadEvent
     | ScreenCaptureEvent
     | StartupRegistrationEvent
+    | RedactedDocumentEvent
     | DeepCheckRequestEvent,
     Field(discriminator="event_type"),
 ]

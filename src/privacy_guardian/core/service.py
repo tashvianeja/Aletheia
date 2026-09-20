@@ -753,6 +753,35 @@ class Service:
             )
             # Native message cap: extension fetches sanitized artifact in chunks.
             self.actions[event.id] = result
+        if response.action == "unredact":
+            from privacy_guardian.analysis.worker import unredact_payload
+            from privacy_guardian.core.events import RedactedDocumentEvent
+
+            if not isinstance(event, RedactedDocumentEvent) or not event.path:
+                raise ValueError("No redacted file to restore")
+            source = Path(event.path)
+            restored = await self.pool.run(unredact_payload, source.read_bytes(), source.name)
+            # Beside the file it came from, where the person will look for it; the
+            # download folder only if that folder cannot be written to.
+            name = Path(restored.filename).name
+            target = source.with_name(name)
+            try:
+                target.write_bytes(restored.content)
+            except OSError:
+                folder = Path.home() / "Downloads/PrivacyGuardian"
+                folder.mkdir(parents=True, exist_ok=True, mode=0o700)
+                target = folder / name
+                target.write_bytes(restored.content)
+            result.update(
+                {
+                    "path": str(target),
+                    "filename": name,
+                    "folder": str(target.parent),
+                    "mime": restored.mime,
+                    "size": len(restored.content),
+                    "boxes": restored.boxes,
+                }
+            )
         if response.action == "mark_expected":
             self.preferences.expected_permissions[public_identity(event.requester.key)] = list(
                 set(

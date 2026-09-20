@@ -27,6 +27,7 @@ from privacy_guardian.util.i18n import tr
 REPORTED = frozenset(
     {
         "redact",
+        "unredact",
         "strip_metadata",
         "reject_optional",
         "block",
@@ -104,6 +105,9 @@ def report_for(
             if removed
             else tr("done_redact_body_plain")
         )
+    elif action == "unredact":
+        headline = tr("done_unredact", filename=str(result.get("filename", "")))
+        body = tr("done_unredact_body", folder=str(result.get("folder", "")))
     elif action == "strip_metadata":
         headline = tr("done_strip", filename=str(result.get("filename", "")))
         body = tr("done_strip_body")

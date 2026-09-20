@@ -58,6 +58,7 @@ DECISION_WORDS = {
     "continue": "Allowed",
     "redact": "Created redacted copy",
     "strip_metadata": "Removed location first",
+    "unredact": "Restored original",
     "review_fields": "Reviewed fields",
     "reject_optional": "Rejected optional",
     "block": "Blocked identifiers",

@@ -47,7 +47,10 @@ def test_a_redacted_copy_names_what_it_took_out_and_where_it_stayed() -> None:
     report = report_for(upload, decide(upload), "redact", {"filename": "redacted-document.pdf"})
     assert report is not None
     assert report["headline"] == "Redacted copy ready: redacted-document.pdf"
-    assert report["body"] == "Passport number and date of birth removed. Nothing left this device."
+    assert (
+        report["body"]
+        == "Passport number and date of birth covered with black boxes. Nothing left this device."
+    )
     assert (report["subject"], report["destination"]) == ("passport.pdf", "shrinkpix.example")
 
 

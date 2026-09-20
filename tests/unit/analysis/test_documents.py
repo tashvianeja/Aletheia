@@ -3,8 +3,15 @@ from __future__ import annotations
 from pathlib import Path
 
 from privacy_guardian.analysis.documents import extract_document
+from privacy_guardian.analysis.documents.extract import ExtractedDocument, Page
+from privacy_guardian.analysis.documents.redact import redact_document, unredact_document
 from privacy_guardian.analysis.pii import detect_pii
-from privacy_guardian.analysis.worker import analyze_payload, redact_payload
+from privacy_guardian.analysis.worker import (
+    analyze_payload,
+    count_redaction_marks,
+    redact_payload,
+    unredact_payload,
+)
 from privacy_guardian.core.events import DataCategory
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
@@ -30,6 +37,7 @@ def test_synthetic_passport_extracts_required_identity_categories() -> None:
 
 
 def test_analyze_redact_rescan_removes_all_detected_passport_pii() -> None:
+    """A redacted copy is the same file with black boxes over it, and can be restored."""
     path = FIXTURES / "passport_synthetic.pdf"
     analysis = analyze_payload(
         {"kind": "document", "filename": path.name, "data": path.read_bytes()}
@@ -44,10 +52,82 @@ def test_analyze_redact_rescan_removes_all_detected_passport_pii() -> None:
     assert analysis.payload_ref is not None
     redacted = redact_payload(analysis.payload_ref)
     assert redacted.verified is True
-    rescanned = analyze_payload(
-        {"kind": "document", "filename": redacted.filename, "data": redacted.content}
+    assert redacted.boxes >= 1
+    assert count_redaction_marks(redacted.content, redacted.filename) == redacted.boxes
+    # The boxes are drawn on the original, so the original's own text is still what
+    # lies beneath them; that is what makes restoring possible.
+    restored = unredact_payload(redacted.content, redacted.filename)
+    assert restored.boxes == redacted.boxes
+    assert count_redaction_marks(restored.content, restored.filename) == 0
+    before = "\n".join(page.text for page in extract_document(path.read_bytes(), path.name).pages)
+    after = "\n".join(
+        page.text for page in extract_document(restored.content, restored.filename).pages
     )
-    assert rescanned.findings == []
+    assert after == before
+
+
+def test_pdf_with_text_gets_a_box_per_detail_and_keeps_the_rest_intact() -> None:
+    import io
+
+    from pypdf import PdfReader
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfgen.canvas import Canvas
+
+    buffer = io.BytesIO()
+    canvas = Canvas(buffer, pagesize=A4)
+    canvas.drawString(72, 700, "Quarterly notes for the team")
+    canvas.drawString(72, 680, "Contact: casey.person@example.test for details")
+    canvas.drawString(72, 660, "Nothing else of note on this page.")
+    canvas.showPage()
+    canvas.save()
+    data = buffer.getvalue()
+    document = extract_document(data, "notes.pdf")
+    result = redact_document(data, "notes.pdf", document)
+    assert result.verified and result.boxes == 1
+    reader = PdfReader(io.BytesIO(result.content))
+    annotation = reader.pages[0]["/Annots"][0].get_object()
+    assert annotation["/Subtype"] == "/Square" and annotation["/T"] == "Privacy Guardian"
+    x0, y0, x1, y1 = (float(value) for value in annotation["/Rect"])
+    # The bar sits on the contact line, around the address, and nowhere else.
+    assert 675 < y0 < 682 and 688 < y1 < 696 and x0 > 100 and x1 < 400
+    assert "Quarterly notes for the team" in reader.pages[0].extract_text()
+    restored = unredact_document(result.content, "redacted-document.pdf")
+    assert (
+        restored.boxes == 1
+        and "/Annots" not in PdfReader(io.BytesIO(restored.content)).pages[0]
+        or not PdfReader(io.BytesIO(restored.content)).pages[0]["/Annots"]
+    )
+
+
+def test_image_redaction_paints_boxes_and_can_restore_the_pixels() -> None:
+    import io
+
+    from PIL import Image
+
+    original = Image.new("RGB", (200, 60), "white")
+    for x in range(40, 160):
+        for y in range(20, 40):
+            original.putpixel((x, y), (200, 30, 30))
+    buffer = io.BytesIO()
+    original.save(buffer, format="PNG")
+    text = "Contact casey.person@example.test now"
+    start = text.index("casey")
+    end = start + len("casey.person@example.test")
+    document = ExtractedDocument(
+        pages=[Page(text, 1, [(0, 7, 2, 22, 30, 16), (start, end, 40, 20, 120, 20)])]
+    )
+    result = redact_document(buffer.getvalue(), "photo.png", document)
+    assert result.verified and result.boxes == 1
+    assert count_redaction_marks(result.content, result.filename) == 1
+    with Image.open(io.BytesIO(result.content)) as redacted:
+        assert redacted.getpixel((100, 30)) == (0, 0, 0)
+        assert redacted.getpixel((10, 10)) == (255, 255, 255)
+    restored = unredact_document(result.content, result.filename)
+    with Image.open(io.BytesIO(restored.content)) as image:
+        assert image.getpixel((100, 30)) == (200, 30, 30)
+        assert image.tobytes() == original.tobytes()
+    assert count_redaction_marks(restored.content, restored.filename) == 0
+    assert count_redaction_marks(buffer.getvalue(), "photo.png") == 0
 
 
 def test_gps_jpeg_metadata_is_detected_and_strip_action_removes_it() -> None:

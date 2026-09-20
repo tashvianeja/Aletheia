@@ -22,6 +22,7 @@ ACTIONS = frozenset(
         "view_details",
         "learn_more",
         "clear_clipboard",
+        "unredact",
     }
 )
 

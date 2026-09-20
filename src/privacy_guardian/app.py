@@ -229,6 +229,7 @@ def main() -> int:
             self.deepcheck_window: DeepCheckWindow | None = None
             self.onboarding: Onboarding | None = None
             self.clipboard: Any = None
+            self.documents: Any = None
             self.confirmation: Any = None
             self.last_report: dict[str, Any] | None = None
             self._closing = False
@@ -293,6 +294,12 @@ def main() -> int:
                     self.core.preferences.clipboard_allowlist,
                 )
                 self.clipboard.start()
+                from privacy_guardian.sensors.documents import OpenDocumentMonitor
+
+                self.documents = OpenDocumentMonitor(
+                    self.core.adapter.backend, self.core.pool, emit
+                )
+                self.documents.start()
 
         def submit(self, coroutine: Coroutine[Any, Any, Any]) -> Future[Any]:
             future = asyncio.run_coroutine_threadsafe(coroutine, self.loop)
@@ -394,6 +401,10 @@ def main() -> int:
                 with contextlib.suppress(Exception):
                     self.clipboard.stop_now()
                 self.clipboard = None
+            if self.documents is not None:
+                with contextlib.suppress(Exception):
+                    self.documents.stop_now()
+                self.documents = None
             self.loop = asyncio.new_event_loop()
             self.core = Service(settings)
             self.core.decision_listeners.append(self.bridge.decision_ready.emit)
@@ -634,6 +645,8 @@ def main() -> int:
             async def stop() -> None:
                 if self.clipboard:
                     await self.clipboard.stop()
+                if self.documents:
+                    await self.documents.stop()
                 await self.core.stop()
 
             try:

@@ -3,7 +3,12 @@ from privacy_guardian.analysis.documents.extract import (
     classify_document,
     extract_document,
 )
-from privacy_guardian.analysis.documents.redact import RedactionResult, redact_document
+from privacy_guardian.analysis.documents.redact import (
+    RedactionResult,
+    redact_document,
+    redaction_marks,
+    unredact_document,
+)
 
 __all__ = [
     "ExtractedDocument",
@@ -11,4 +16,6 @@ __all__ = [
     "classify_document",
     "extract_document",
     "redact_document",
+    "redaction_marks",
+    "unredact_document",
 ]

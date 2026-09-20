@@ -380,7 +380,7 @@ async def test_a_redacted_copy_ends_on_a_receipt_naming_what_was_removed(
     await receipt.wait_for(timeout=5_000)
     text = await receipt.inner_text()
     assert "Redacted copy ready: redacted-document.pdf" in text
-    assert "removed. Nothing left this device." in text
+    assert "covered with black boxes. Nothing left this device." in text
     assert "passport_synthetic.pdf" in text, "the receipt says which file it was about"
 
 

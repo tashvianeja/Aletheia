@@ -3,7 +3,16 @@
   function prepare(){if(preparationSent||!PG.queryAll('input[type=file]').length)return;preparationSent=true;PG.request('context',{uploads_available:true}).catch(()=>{preparationSent=false;});}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',prepare,{once:true});else prepare();
   if(document.documentElement)new MutationObserver(prepare).observe(document.documentElement,{childList:true,subtree:true});
-  const records=new WeakMap(),scanQueue=[];let activeScans=0;
+  // A File is scanned once, however many ways it reaches us. The same pick arrives
+  // here as one object from the input's change event and as another from the page's
+  // fetch, because a File crossing the main-world bridge is a structured clone: a
+  // fresh object with the same name, size, type and stamp. Keyed by identity alone,
+  // that second arrival was a second scan, a second decision, and a second card for
+  // the one file. The safe copy is registered too, so it is never scanned as a new pick.
+  const records=new WeakMap(),fingerprints=new Map(),scanQueue=[];let activeScans=0;
+  const fingerprint=file=>[file.name,file.size,file.lastModified,file.type].join('\u001f');
+  function remember(file,record){records.set(file,record);const key=fingerprint(file);fingerprints.delete(key);fingerprints.set(key,record);while(fingerprints.size>64)fingerprints.delete(fingerprints.keys().next().value);}
+  function lookup(file){let record=records.get(file);if(record)return record;record=fingerprints.get(fingerprint(file));if(record)records.set(file,record);return record;}
   function enqueue(operation){return new Promise((resolve,reject)=>{scanQueue.push({operation,resolve,reject});pump();});}
   function pump(){while(activeScans<2&&scanQueue.length){const job=scanQueue.shift();activeScans++;job.operation().then(job.resolve,job.reject).finally(()=>{activeScans--;pump();});}}
   const bytesToBase64=bytes=>{let binary='';for(let offset=0;offset<bytes.length;offset+=32768)binary+=String.fromCharCode(...bytes.subarray(offset,offset+32768));return btoa(binary);};
@@ -19,6 +28,9 @@
           catch(_){record.action='cancel';return;}
         }
         record.replacement=replacement;
+        // The safe copy is the answer, not a new question: a submit or a fetch that
+        // finds it in the input must let it through without scanning it again.
+        remember(replacement,{file:replacement,action:'continue',replacement:null,decision:{outcome:'IGNORE'},promise:Promise.resolve(null)});
       }
       record.action=action.action;
       // Only now, with the safe copy actually in the page's file input: a receipt
@@ -27,7 +39,7 @@
     })();
     try{await record.actionPromise;}catch(error){record.action='cancel';throw error;}
   }
-  function scan(file){if(records.has(file))return records.get(file);const record={file,action:null,replacement:null,decision:null};records.set(file,record);
+  function scan(file){const known=lookup(file);if(known)return known;const record={file,action:null,replacement:null,decision:null};remember(file,record);
     record.promise=enqueue(async()=>{const upload_id=crypto.randomUUID();await PG.request('file_start',{upload_id,filename:file.name,size:file.size,mime:file.type});let sequence=0;
       for(let offset=0;offset<file.size;offset+=550*1024){const bytes=new Uint8Array(await file.slice(offset,offset+550*1024).arrayBuffer());await PG.request('file_chunk',{upload_id,sequence:sequence++,data:bytesToBase64(bytes)});}
       const result=await PG.request('file_finish',{upload_id});record.decision=result.decision;if(record.expired){await PG.request('disconnect',{event_id:result.decision.event_id,reason:'analysis_timeout'}).catch(()=>{});return record;}PG.showDecision(result.decision,action=>applyAction(record,action));return record;

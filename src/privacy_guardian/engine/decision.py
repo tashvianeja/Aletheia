@@ -15,6 +15,7 @@ from privacy_guardian.core.events import (
     PermissionRequestEvent,
     PolicyDocumentEvent,
     PrivacyEvent,
+    RedactedDocumentEvent,
     ScreenCaptureEvent,
     SystemAccessEvent,
     TrackingEvent,
@@ -54,6 +55,8 @@ _ACTIONS: dict[str, tuple[list[str], str]] = {
     "startup_registration": (["open_settings", "mark_expected", "continue"], "open_settings"),
     "clipboard_read": (["clear_clipboard", "open_settings", "continue"], "clear_clipboard"),
     "policy_document": (["cancel", "continue", "view_details"], "cancel"),
+    # A file with our own boxes on it: the remedy is to take them off again.
+    "redacted_document": (["unredact", "continue"], "unredact"),
 }
 
 
@@ -315,6 +318,9 @@ def decide(
         notes.append("The same request was already shown within the last day.")
         break
     level = max(level, learned_floor)
+    if isinstance(event, RedactedDocumentEvent):
+        # Nothing is at risk here; it is an offer, so it is always worth a card and never a hold.
+        level = 1
     partial_upload = isinstance(event, FileUploadEvent) and event.partial
     if partial_upload:
         level = max(level, 1)

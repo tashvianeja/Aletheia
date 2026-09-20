@@ -14,6 +14,7 @@ from privacy_guardian.core.events import (
     ConsentBannerEvent,
     PermissionRequestEvent,
     PrivacyEvent,
+    RedactedDocumentEvent,
     ScreenCaptureEvent,
     StartupRegistrationEvent,
     SystemAccessEvent,
@@ -55,6 +56,9 @@ def notice_signature(event: PrivacyEvent) -> str:
         parts = [f"active={event.active}"]
     elif isinstance(event, StartupRegistrationEvent):
         parts = [event.mechanism]
+    elif isinstance(event, RedactedDocumentEvent):
+        # One card per file, however many times it is brought to the front.
+        parts = [event.path]
     else:
         parts = sorted(category.value for category in event.data_categories)
     return "\x1f".join([event.event_type, event.requester.key, *parts])

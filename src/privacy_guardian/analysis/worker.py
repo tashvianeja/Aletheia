@@ -13,6 +13,8 @@ from privacy_guardian.analysis.documents import (
     RedactionResult,
     extract_document,
     redact_document,
+    redaction_marks,
+    unredact_document,
 )
 from privacy_guardian.analysis.documents.extract import MAX_BYTES, SAMPLE_BYTES
 from privacy_guardian.analysis.forms import FieldAssessment, analyze_fields
@@ -197,3 +199,12 @@ def redact_payload(
 
 def release_payload(handle: str) -> bool:
     return _PAYLOADS.pop(handle, None) is not None
+
+
+def count_redaction_marks(data: bytes, filename: str) -> int:
+    """How many Privacy Guardian boxes a file on disk carries; 0 when none or unreadable."""
+    return redaction_marks(data, filename)
+
+
+def unredact_payload(data: bytes, filename: str) -> RedactionResult:
+    return unredact_document(data, filename)

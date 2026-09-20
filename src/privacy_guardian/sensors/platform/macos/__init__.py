@@ -76,6 +76,38 @@ class MacBackend:
             exe_path=str(app.executableURL().path() if app.executableURL() else ""),
         )
 
+    def focused_document(self) -> str:
+        """The file shown in the frontmost window, or "" when there is none we can see.
+
+        Preview, and every other document-based app, names its window's file through
+        the accessibility tree; reading it needs the Accessibility grant the app
+        already asks for.
+        """
+        from urllib.parse import unquote, urlparse
+
+        try:
+            from AppKit import NSWorkspace
+            from Quartz import (
+                AXUIElementCopyAttributeValue,
+                AXUIElementCreateApplication,
+                kAXDocumentAttribute,
+                kAXFocusedWindowAttribute,
+            )
+        except ImportError:
+            return ""
+        app = NSWorkspace.sharedWorkspace().frontmostApplication()
+        if not app:
+            return ""
+        element = AXUIElementCreateApplication(app.processIdentifier())
+        error, window = AXUIElementCopyAttributeValue(element, kAXFocusedWindowAttribute, None)
+        if error or window is None:
+            return ""
+        error, document = AXUIElementCopyAttributeValue(window, kAXDocumentAttribute, None)
+        if error or not document:
+            return ""
+        parsed = urlparse(str(document))
+        return unquote(parsed.path) if parsed.scheme == "file" else ""
+
     def accessibility(self) -> bool:
         from Quartz import AXIsProcessTrusted
 

@@ -49,8 +49,10 @@ EN: dict[str, str] = {
     # What each workflow says for itself once it has run: the headline is what was
     # done, the body is what that means and what it did not do.
     "done_redact": "Redacted copy ready: {filename}",
-    "done_redact_body": "{removed} removed. Nothing left this device.",
-    "done_redact_body_plain": "The personal details in it were removed. Nothing left this device.",
+    "done_redact_body": "{removed} covered with black boxes. Nothing left this device.",
+    "done_redact_body_plain": "The personal details in it are covered with black boxes. Nothing left this device.",
+    "done_unredact": "Original restored: {filename}",
+    "done_unredact_body": "The boxes were taken off and saved as a new file in {folder}. The redacted file and its compression are untouched.",
     "done_strip": "Location removed from {filename}",
     "done_strip_body": "The picture itself is unchanged. Nothing left this device.",
     "done_reject": "Optional cookies rejected on {site}",
@@ -168,6 +170,7 @@ EN: dict[str, str] = {
     "decided_continue": "Allowed",
     "decided_redact": "Redacted copies created",
     "decided_strip_metadata": "Location removed before upload",
+    "decided_unredact": "Original restored",
     "decided_review_fields": "Forms reviewed",
     "decided_clear_fields": "Fields left blank before sending",
     "decided_reject_optional": "Optional cookies rejected",
@@ -186,6 +189,7 @@ EN: dict[str, str] = {
     "continue": "Continue",
     "redact": "Create redacted copy",
     "strip_metadata": "Strip location metadata",
+    "unredact": "Restore original",
     "review_fields": "Review fields",
     "reject_optional": "Reject optional",
     "block": "Block if possible",

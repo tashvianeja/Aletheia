@@ -879,6 +879,95 @@
       "title": "PolicyDocumentEvent",
       "type": "object"
     },
+    "RedactedDocumentEvent": {
+      "additionalProperties": false,
+      "description": "A file carrying Privacy Guardian's own redaction boxes has been opened.",
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        },
+        "event_type": {
+          "const": "redacted_document",
+          "default": "redacted_document",
+          "title": "Event Type",
+          "type": "string"
+        },
+        "source": {
+          "default": "os",
+          "enum": [
+            "browser",
+            "os",
+            "clipboard",
+            "manual"
+          ],
+          "title": "Source",
+          "type": "string"
+        },
+        "requester": {
+          "$ref": "#/$defs/Requester"
+        },
+        "data_categories": {
+          "items": {
+            "$ref": "#/$defs/DataCategory"
+          },
+          "title": "Data Categories",
+          "type": "array"
+        },
+        "payload_ref": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Payload Ref"
+        },
+        "platform": {
+          "default": "unknown",
+          "title": "Platform",
+          "type": "string"
+        },
+        "correlation_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Correlation Id"
+        },
+        "path": {
+          "default": "",
+          "title": "Path",
+          "type": "string"
+        },
+        "filename": {
+          "default": "",
+          "title": "Filename",
+          "type": "string"
+        },
+        "marks": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Marks",
+          "type": "integer"
+        }
+      },
+      "title": "RedactedDocumentEvent",
+      "type": "object"
+    },
     "Requester": {
       "additionalProperties": false,
       "properties": {
@@ -1312,6 +1401,7 @@
       "form_submit": "#/$defs/FormSubmitEvent",
       "permission_request": "#/$defs/PermissionRequestEvent",
       "policy_document": "#/$defs/PolicyDocumentEvent",
+      "redacted_document": "#/$defs/RedactedDocumentEvent",
       "screen_capture": "#/$defs/ScreenCaptureEvent",
       "startup_registration": "#/$defs/StartupRegistrationEvent",
       "system_access": "#/$defs/SystemAccessEvent",
@@ -1352,6 +1442,9 @@
     },
     {
       "$ref": "#/$defs/StartupRegistrationEvent"
+    },
+    {
+      "$ref": "#/$defs/RedactedDocumentEvent"
     },
     {
       "$ref": "#/$defs/DeepCheckRequestEvent"
