@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from collections import OrderedDict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -41,6 +41,8 @@ class _Payload:
     filename: str
     document: ExtractedDocument
     expires: float
+    # What the analysis flagged, kept so the redaction covers exactly that.
+    findings: list[Finding] = field(default_factory=list)
 
 
 _PAYLOADS: OrderedDict[str, _Payload] = OrderedDict()
@@ -105,7 +107,9 @@ def analyze_payload(payload: dict[str, object]) -> AnalysisResult:
                 )
             )
         handle = str(uuid4())
-        _PAYLOADS[handle] = _Payload(data, filename, document, time.monotonic() + 120)
+        _PAYLOADS[handle] = _Payload(
+            data, filename, document, time.monotonic() + 120, list(findings)
+        )
         _expire()
         return AnalysisResult(
             payload_ref=handle,
@@ -191,7 +195,12 @@ def redact_payload(
         {DataCategory(category) for category in categories} if categories is not None else None
     )
     result = redact_document(
-        stored.data, stored.filename, stored.document, selected, strip_metadata=strip_metadata
+        stored.data,
+        stored.filename,
+        stored.document,
+        selected,
+        strip_metadata=strip_metadata,
+        findings=stored.findings,
     )
     del _PAYLOADS[handle]
     return result

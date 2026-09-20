@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
+
+import pytest
 
 from privacy_guardian.analysis.documents import extract_document
 from privacy_guardian.analysis.documents.extract import ExtractedDocument, Page
@@ -66,36 +69,175 @@ def test_analyze_redact_rescan_removes_all_detected_passport_pii() -> None:
     assert after == before
 
 
-def test_pdf_with_text_gets_a_box_per_detail_and_keeps_the_rest_intact() -> None:
+def _pdf(*lines: str, rotate: int = 0) -> bytes:
     import io
 
-    from pypdf import PdfReader
     from reportlab.lib.pagesizes import A4
     from reportlab.pdfgen.canvas import Canvas
 
     buffer = io.BytesIO()
     canvas = Canvas(buffer, pagesize=A4)
-    canvas.drawString(72, 700, "Quarterly notes for the team")
-    canvas.drawString(72, 680, "Contact: casey.person@example.test for details")
-    canvas.drawString(72, 660, "Nothing else of note on this page.")
+    for index, line in enumerate(lines):
+        canvas.drawString(72, 700 - 20 * index, line)
     canvas.showPage()
     canvas.save()
-    data = buffer.getvalue()
+    if not rotate:
+        return buffer.getvalue()
+    # A page that is shown turned, the way a scanner or a viewer's rotate leaves it:
+    # the content stays where it was drawn and /Rotate says how to display it.
+    from pypdf import PdfReader, PdfWriter
+
+    writer = PdfWriter(clone_from=PdfReader(io.BytesIO(buffer.getvalue())))
+    writer.pages[0].rotate(rotate)
+    output = io.BytesIO()
+    writer.write(output)
+    return output.getvalue()
+
+
+def _boxes(content: bytes) -> list[tuple[float, float, float, float]]:
+    """The bars painted into the page, read back from the marked blocks."""
+    import io
+    import re
+
+    from pypdf import PdfReader
+
+    page = PdfReader(io.BytesIO(content)).pages[0]
+    painted = b"".join(entry.get_object().get_data() for entry in page["/Contents"])
+    return [
+        (float(x), float(y), float(x) + float(w), float(y) + float(h))
+        for x, y, w, h in re.findall(
+            rb"/PrivacyGuardian <<[^>]*>> BDC q 0 g ([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+) re f Q EMC",
+            painted,
+        )
+    ]
+
+
+def _render(content: bytes) -> Any:
+    """The page as a viewer that ignores annotations would paint it."""
+    import pypdfium2
+
+    return pypdfium2.PdfDocument(content)[0].render(scale=2, draw_annots=False).to_pil()
+
+
+def test_pdf_with_text_gets_a_box_per_detail_and_keeps_the_rest_intact() -> None:
+    import io
+
+    from pypdf import PdfReader
+
+    data = _pdf(
+        "Quarterly notes for the team",
+        "Contact: casey.person@example.test for details",
+        "Nothing else of note on this page.",
+    )
     document = extract_document(data, "notes.pdf")
     result = redact_document(data, "notes.pdf", document)
     assert result.verified and result.boxes == 1
     reader = PdfReader(io.BytesIO(result.content))
-    annotation = reader.pages[0]["/Annots"][0].get_object()
-    assert annotation["/Subtype"] == "/Square" and annotation["/T"] == "Privacy Guardian"
-    x0, y0, x1, y1 = (float(value) for value in annotation["/Rect"])
-    # The bar sits on the contact line, around the address, and nowhere else.
+    # The bar is page content, not an annotation, so every viewer paints it.
+    assert "/Annots" not in reader.pages[0]
+    [(x0, y0, x1, y1)] = _boxes(result.content)
+    # It sits on the contact line, around the address, and nowhere else.
     assert 675 < y0 < 682 and 688 < y1 < 696 and x0 > 100 and x1 < 400
+    rendered = _render(result.content).convert("RGB")
+    assert rendered.getpixel((int((x0 + x1)), int((842 - (y0 + y1) / 2) * 2))) == (0, 0, 0)
+    assert rendered.getpixel((int(80 * 2), int((842 - 700) * 2))) != (0, 0, 0)
     assert "Quarterly notes for the team" in reader.pages[0].extract_text()
     restored = unredact_document(result.content, "redacted-document.pdf")
+    assert restored.boxes == 1
+    # The original content stream comes back exactly as it was.
+    original = PdfReader(io.BytesIO(data)).pages[0].get_contents().get_data()
+    assert PdfReader(io.BytesIO(restored.content)).pages[0].get_contents().get_data() == original
+
+
+def test_every_flagged_detail_is_covered_even_when_a_fresh_look_would_miss_it() -> None:
+    """The card says what was found; the copy covers exactly that, whatever a rescan says."""
+    from privacy_guardian.core.events import Finding
+
+    data = _pdf("Quarterly notes for the team", "Prepared by the finance office.")
+    document = extract_document(data, "notes.pdf")
+    text = document.pages[0].text
+    start = text.index("finance office")
+    flagged = [
+        Finding(
+            category=DataCategory.EMPLOYMENT,
+            confidence=0.9,
+            span_ref=f"{start}:{start + len('finance office')}",
+            page=1,
+        )
+    ]
+    result = redact_document(data, "notes.pdf", document, findings=flagged)
+    assert result.boxes == 1
+    [(x0, y0, x1, y1)] = _boxes(result.content)
+    # The second line, at y=680: the bar sits on it.
+    assert 675 < y0 < 682 and 688 < y1 < 696
+    # A flagged detail that is not on the page refuses the copy rather than skipping it.
+    missing = [Finding(category=DataCategory.FULL_NAME, confidence=0.9, span_ref="0:5", page=1)]
+    document.pages[0].text = "Ghost " + text
+    with pytest.raises(ValueError):
+        redact_document(data, "notes.pdf", document, findings=missing)
+
+
+def test_a_rotated_page_gets_its_box_where_the_text_is_shown() -> None:
+    data = _pdf("Contact: casey.person@example.test for details", rotate=90)
+    document = extract_document(data, "notes.pdf")
+    result = redact_document(data, "notes.pdf", document)
+    assert result.boxes == 1
+    [(x0, y0, x1, y1)] = _boxes(result.content)
+    # In the page's own space the line is still at y=700; drawn there, it lands on the
+    # text however the page is turned.
+    assert 690 < y0 < 700 and 705 < y1 < 715
+    rendered = _render(result.content).convert("RGB")
+    # Rendered as displayed (turned 90 degrees clockwise), the line now runs down the
+    # page 700 units from its left edge, and the bar is on it.
+    assert abs(rendered.size[0] - 842 * 2) <= 1 and abs(rendered.size[1] - 595 * 2) <= 1
+    assert rendered.getpixel((int((y0 + y1) / 2 * 2), int((x0 + x1) / 2 * 2))) == (0, 0, 0)
+    assert rendered.getpixel((int(300 * 2), int((x0 + x1) / 2 * 2))) != (0, 0, 0)
+
+
+def test_neighbouring_boxes_fuse_into_one_bar_whichever_comes_first() -> None:
+    """Two words on a line whose bottoms round to different lines still make one bar."""
+    from privacy_guardian.analysis.documents.redact import _merge
+
+    right = (197.5, 502.5, 267.0, 514.0)
+    left = (174.5, 503.0, 196.0, 514.0)
+    assert _merge([right, left]) == [(174.5, 502.5, 267.0, 514.0)]
+    assert _merge([left, right]) == [(174.5, 502.5, 267.0, 514.0)]
+    apart = (300.0, 503.0, 340.0, 514.0)
+    assert len(_merge([left, right, apart])) == 2
+
+
+def test_boxes_merged_into_the_page_content_by_another_tool_can_still_be_taken_off() -> None:
+    import io
+
+    from pypdf import PdfReader, PdfWriter
+    from pypdf.generic import NameObject, StreamObject
+
+    data = _pdf("Contact: casey.person@example.test for details")
+    result = redact_document(data, "notes.pdf", extract_document(data, "notes.pdf"))
+    # A compressor folds the three content streams into one and drops our keys.
+    writer = PdfWriter(clone_from=PdfReader(io.BytesIO(result.content)))
+    page = writer.pages[0]
+    merged = StreamObject()
+    merged.set_data(b"\n".join(entry.get_object().get_data() for entry in page["/Contents"]))
+    page[NameObject("/Contents")] = writer._add_object(merged)
+    output = io.BytesIO()
+    writer.write(output)
+    flattened = output.getvalue()
+    assert count_redaction_marks(flattened, "flat.pdf") == 1
+    assert _render(flattened).convert("RGB").getpixel((int(200 * 2), int((842 - 703) * 2))) == (
+        0,
+        0,
+        0,
+    )
+    restored = unredact_document(flattened, "flat.pdf")
+    assert restored.boxes == 1
+    assert count_redaction_marks(restored.content, restored.filename) == 0
+    assert _render(restored.content).convert("RGB").getpixel(
+        (int(200 * 2), int((842 - 703) * 2))
+    ) != (0, 0, 0)
     assert (
-        restored.boxes == 1
-        and "/Annots" not in PdfReader(io.BytesIO(restored.content)).pages[0]
-        or not PdfReader(io.BytesIO(restored.content)).pages[0]["/Annots"]
+        "casey.person@example.test"
+        in PdfReader(io.BytesIO(restored.content)).pages[0].extract_text()
     )
 
 
