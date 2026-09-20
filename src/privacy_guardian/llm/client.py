@@ -15,11 +15,12 @@ from google.genai import types as genai_types
 from pydantic import BaseModel, ValidationError
 
 from privacy_guardian.config import LLMSettings
-from privacy_guardian.llm.catalog import SUGGESTED_MODELS, ConnectionCheck
+from privacy_guardian.llm.catalog import SUGGESTED_MODELS, ConnectionCheck, flash_models
 from privacy_guardian.llm.guard import OutboundPrivacyError, sanitize_outbound
 
 __all__ = [
     "SUGGESTED_MODELS",
+    "flash_models",
     "ConnectionCheck",
     "LLMClient",
     "available_models",

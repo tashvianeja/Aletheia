@@ -204,26 +204,8 @@ def test_keychain_error_is_visible_and_does_not_apply_settings(
     assert ui_controller.core.adapter.autostart == []
 
 
-def test_support_bundle_contains_diagnostics_but_no_event_pii(
-    qtbot, ui_controller, tmp_path: Path, monkeypatch
-) -> None:
-    seed_history(ui_controller)
-    dashboard = Dashboard(ui_controller)
-    qtbot.addWidget(dashboard)
-    support = tmp_path / "support.json"
-    monkeypatch.setattr(QFileDialog, "getSaveFileName", lambda *args: (str(support), "JSON"))
-    dashboard.export_support()
-    payload = support.read_text()
-    assert '"version": "0.1.0"' in payload
-    assert "one.example" not in payload
-    assert "Decision for" not in payload
-
-
-def test_profile_lookup_and_log_view_redact_sensitive_text(qtbot, ui_controller) -> None:
+def test_profile_lookup_reads_the_stored_profile(qtbot, ui_controller) -> None:
     ui_controller.core.store.put_profile("site", "https://profile.example", {"purpose": "news"})
-    log = ui_controller.settings.data_dir / "logs/guardian.log"
-    log.parent.mkdir()
-    log.write_text("contact alice@example.com card 4111111111111111")
     dashboard = Dashboard(ui_controller)
     qtbot.addWidget(dashboard)
     dashboard.profile_key.setText("https://profile.example")
@@ -231,8 +213,6 @@ def test_profile_lookup_and_log_view_redact_sensitive_text(qtbot, ui_controller)
     dashboard.refresh()
 
     assert json.loads(dashboard.profile_detail.toPlainText()) == {"purpose": "news"}
-    assert "alice@example.com" not in dashboard.log_view.toPlainText()
-    assert "4111111111111111" not in dashboard.log_view.toPlainText()
 
 
 def test_refresh_timer_follows_dashboard_visibility(qtbot, ui_controller) -> None:
@@ -251,17 +231,18 @@ def test_refresh_timer_follows_dashboard_visibility(qtbot, ui_controller) -> Non
     qtbot.waitUntil(lambda: not dashboard.timer.isActive())
 
 
-def test_the_model_picker_offers_suggestions_and_keeps_a_configured_one(
+def test_the_model_picker_is_a_closed_list_of_flash_models_plus_the_configured_one(
     qtbot, ui_controller
 ) -> None:
-    """A hard-coded model list goes stale, so whatever is configured stays selectable."""
+    """Nothing can be typed in, but whatever is configured stays selectable."""
     ui_controller.settings.llm.model = "gemini-something-unreleased"
     dashboard = Dashboard(ui_controller)
     qtbot.addWidget(dashboard)
     offered = [dashboard.model.itemText(index) for index in range(dashboard.model.count())]
-    assert SUGGESTED_MODELS[0] in offered
+    assert offered == [*SUGGESTED_MODELS, "gemini-something-unreleased"]
+    assert all("flash" in name for name in SUGGESTED_MODELS)
     assert dashboard.model.currentText() == "gemini-something-unreleased"
-    assert dashboard.model.isEditable()
+    assert not dashboard.model.isEditable()
 
 
 def test_testing_the_model_asks_the_service_rather_than_blocking_the_window(
@@ -290,11 +271,17 @@ def test_a_successful_test_replaces_the_guesses_with_what_the_key_can_call(
             ok=True,
             model="gemini-2.5-flash",
             latency_ms=412,
-            models=["gemini-2.5-flash", "gemini-2.5-pro"],
+            models=[
+                "gemini-2.5-flash",
+                "gemini-2.5-flash-image",
+                "gemini-2.5-pro",
+                "gemini-3.5-flash-lite",
+            ],
         )
     )
+    # Only the text-answering Flash models make it into the list.
     offered = [dashboard.model.itemText(index) for index in range(dashboard.model.count())]
-    assert offered == ["gemini-2.5-flash", "gemini-2.5-pro"]
+    assert offered == ["gemini-2.5-flash", "gemini-3.5-flash-lite"]
     assert dashboard.model.currentText() == "gemini-2.5-flash"
     assert "412" in dashboard.llm_status.text()
     assert dashboard.llm_test.isEnabled() is True
@@ -317,9 +304,9 @@ def test_the_chosen_model_is_what_gets_saved(qtbot, ui_controller, monkeypatch) 
     monkeypatch.setattr(
         "privacy_guardian.sensors.hotkey.GlobalHotkey", lambda *_: FakeGlobalHotkey()
     )
-    dashboard.model.setCurrentText("gemini-2.5-pro")
+    dashboard.model.setCurrentText("gemini-2.5-flash-lite")
     dashboard.save_settings()
-    assert ui_controller.settings.llm.model == "gemini-2.5-pro"
+    assert ui_controller.settings.llm.model == "gemini-2.5-flash-lite"
 
 
 class FakeGlobalHotkey:

@@ -224,8 +224,8 @@ def main() -> int:
     capture(dashboard, output / "overview.png", app, fit=False)
     dashboard.select("events")
     capture(dashboard, output / "dashboard.png", app, fit=False)
-    dashboard.select("preferences")
-    capture(dashboard, output / "preferences.png", app, fit=False)
+    dashboard.select("settings")
+    capture(dashboard, output / "settings.png", app, fit=False)
 
     onboarding = Onboarding(controller)
     onboarding.timer.stop()

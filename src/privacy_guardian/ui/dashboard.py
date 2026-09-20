@@ -32,12 +32,12 @@ from PySide6.QtWidgets import (
 )
 
 from privacy_guardian.engine.preferences import Preference, default_categories
-from privacy_guardian.llm.catalog import SUGGESTED_MODELS, ConnectionCheck
+from privacy_guardian.llm.catalog import SUGGESTED_MODELS, ConnectionCheck, flash_models
 from privacy_guardian.ui import icons
 from privacy_guardian.ui.theme import palette, stylesheet
 from privacy_guardian.util.i18n import tr
 
-# Preferences shows the kinds of information a person recognises, not the detector taxonomy.
+# Settings shows the kinds of information a person recognises, not the detector taxonomy.
 PREFERENCE_ROWS = (
     "medical",
     "government_id",
@@ -47,7 +47,7 @@ PREFERENCE_ROWS = (
     "analytics",
     "advertising",
 )
-SECTIONS = ("overview", "events", "preferences", "sites_and_apps", "about")
+SECTIONS = ("overview", "events", "settings", "sites_and_apps")
 # The Overview tiles, in reading order: three across, two down.
 TALLY_TILES = ("requesters", "trackers", "files", "documents", "banners", "permissions")
 # An ordinary adult reading pace, used only to turn analysed words into a time.
@@ -138,7 +138,7 @@ def _duration(words: int) -> str:
 
 
 class Dashboard(QWidget):
-    """The optional window: history, preferences and the full thorough-check report."""
+    """The optional window: history, settings and the full thorough-check report."""
 
     def __init__(self, service: Any) -> None:
         super().__init__()
@@ -157,9 +157,8 @@ class Dashboard(QWidget):
         root.addWidget(self.stack, 1)
         self.stack.addWidget(self._overview_pane())
         self.stack.addWidget(self._events_pane())
-        self.stack.addWidget(self._preferences_pane())
+        self.stack.addWidget(self._settings_pane())
         self.stack.addWidget(self._sites_pane())
-        self.stack.addWidget(self._about_pane())
         self.select("overview")
 
         self.history.cellDoubleClicked.connect(self.show_event_detail)
@@ -201,8 +200,8 @@ class Dashboard(QWidget):
         return frame
 
     def select(self, section: str) -> None:
-        """Nav is also the public entry point: show_dashboard('preferences') lands here."""
-        aliases = {"history": "events", "settings": "preferences", "diagnostics": "about"}
+        """Nav is also the public entry point: show_dashboard('settings') lands here."""
+        aliases = {"history": "events", "preferences": "settings"}
         section = aliases.get(section, section)
         if section not in SECTIONS:
             section = "overview"
@@ -427,13 +426,13 @@ class Dashboard(QWidget):
 
     # -- preferences ----------------------------------------------------------
 
-    def _preferences_pane(self) -> QWidget:
+    def _settings_pane(self) -> QWidget:
         inner = QWidget()
         outer = QVBoxLayout(inner)
         outer.setContentsMargins(28, 24, 28, 24)
         outer.setSpacing(12)
-        outer.addWidget(_label(tr("preferences"), "h1"))
-        outer.addWidget(_label(tr("preferences_subtitle"), "subtitle"))
+        outer.addWidget(_label(tr("settings"), "h1"))
+        outer.addWidget(_label(tr("settings_subtitle"), "subtitle"))
         outer.addSpacing(6)
 
         heading = QHBoxLayout()
@@ -478,7 +477,7 @@ class Dashboard(QWidget):
         )
 
         outer.addSpacing(8)
-        outer.addWidget(_label(tr("settings"), "section"))
+        outer.addWidget(_label(tr("application"), "section"))
         form = QFormLayout()
         form.setSpacing(8)
         self.retention = QSpinBox()
@@ -490,10 +489,9 @@ class Dashboard(QWidget):
         self.llm_enabled.setChecked(self.service.settings.llm.enabled)
         self.api_key = QLineEdit()
         self.api_key.setEchoMode(QLineEdit.EchoMode.Password)
-        # Editable, because the list of Gemini models changes faster than this app ships.
-        # A successful test replaces these suggestions with what the key can really call.
+        # A closed list of Flash models: the tier whose cost suits a few short requests per
+        # page. A successful test replaces it with the Flash models the key can really call.
         self.model = QComboBox()
-        self.model.setEditable(True)
         self.set_models(SUGGESTED_MODELS, self.service.settings.llm.model)
         self.llm_test = QPushButton(tr("llm_test"))
         self.llm_test.clicked.connect(self.test_llm)
@@ -561,7 +559,6 @@ class Dashboard(QWidget):
             buttons.addWidget(button)
         buttons.addStretch(1)
         outer.addLayout(buttons)
-        outer.addWidget(_label(tr("tracker_attribution"), "muted"))
         outer.addStretch(1)
         return _scroller(inner)
 
@@ -642,41 +639,6 @@ class Dashboard(QWidget):
         row.addLayout(text, 1)
         return row
 
-    # -- about ----------------------------------------------------------------
-
-    def _about_pane(self) -> QWidget:
-        inner = QWidget()
-        outer = QVBoxLayout(inner)
-        outer.setContentsMargins(28, 24, 28, 24)
-        outer.setSpacing(10)
-        outer.addWidget(_label(tr("about"), "h1"))
-        outer.addWidget(_label(tr("about_body"), "body"))
-        self.version_label = _label("", "muted")
-        outer.addWidget(self.version_label)
-        outer.addSpacing(8)
-        outer.addWidget(_label(tr("diagnostics"), "section"))
-        self.diagnostic_text = QTextEdit()
-        self.diagnostic_text.setReadOnly(True)
-        self.diagnostic_text.setMinimumHeight(150)
-        outer.addWidget(self.diagnostic_text)
-        row = QHBoxLayout()
-        support = QPushButton(tr("support"))
-        support.clicked.connect(self.export_support)
-        row.addWidget(support)
-        updates = QPushButton(tr("updates"))
-        updates.clicked.connect(lambda: self.service.check_updates())
-        row.addWidget(updates)
-        row.addStretch(1)
-        outer.addLayout(row)
-        outer.addWidget(_label(tr("logs"), "section"))
-        self.log_view = QTextEdit()
-        self.log_view.setReadOnly(True)
-        self.log_view.setAccessibleName(tr("logs"))
-        self.log_view.setMinimumHeight(150)
-        outer.addWidget(self.log_view)
-        outer.addStretch(1)
-        return _scroller(inner)
-
     # -- lifecycle ------------------------------------------------------------
 
     def showEvent(self, event: QShowEvent) -> None:
@@ -742,16 +704,6 @@ class Dashboard(QWidget):
             f"{tr('desktop_monitoring')}: {granted}/{len(permissions) or 1}"
         )
         self.memory.setPlainText(json.dumps(self.service.core.store.export_preferences(), indent=2))
-        diagnostics = self.service.diagnostics()
-        self.diagnostic_text.setPlainText(json.dumps(diagnostics, indent=2))
-        self.version_label.setText(tr("version_label", version=diagnostics.get("version", "")))
-        log_file = self.service.settings.data_dir / "logs/guardian.log"
-        if log_file.exists():
-            from privacy_guardian.util.privacy import redact_text
-
-            self.log_view.setPlainText(
-                redact_text(log_file.read_text(encoding="utf-8", errors="replace")[-20000:])
-            )
 
     # -- actions --------------------------------------------------------------
 
@@ -878,9 +830,9 @@ class Dashboard(QWidget):
         self.service.core.store.purge(settings.retention_days)
 
     def set_models(self, names: Any, selected: str = "") -> None:
-        """Offer these models, keeping whatever is configured even if it is not among them."""
+        """Offer the Flash models among these, keeping whatever is configured regardless."""
         current = selected or self.model.currentText().strip()
-        options = list(dict.fromkeys([*names, *([current] if current else [])]))
+        options = list(dict.fromkeys([*flash_models(names), *([current] if current else [])]))
         self.model.clear()
         self.model.addItems(options)
         if current:
@@ -928,13 +880,3 @@ class Dashboard(QWidget):
         if not self.llm_enabled.isChecked():
             message += " " + tr("llm_not_enabled")
         self.llm_status.setText(message)
-
-    def export_support(self) -> None:
-        filename, _ = QFileDialog.getSaveFileName(
-            self, tr("support"), "privacy-guardian-support.json", "JSON (*.json)"
-        )
-        if filename:
-            # Counts/configuration status only: no URLs, event prose, paths or user content.
-            Path(filename).write_text(
-                json.dumps(self.service.diagnostics(), indent=2), encoding="utf-8"
-            )

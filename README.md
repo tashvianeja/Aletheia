@@ -28,9 +28,9 @@ file and your decision.*
 |---|---|
 | ![Overview](docs/img/overview.png) | ![Events](docs/img/dashboard.png) |
 
-| Preferences | Thorough check |
+| Settings | Thorough check |
 |---|---|
-| ![Preferences](docs/img/preferences.png) | ![Thorough check](docs/img/deep-check.png) |
+| ![Settings](docs/img/settings.png) | ![Thorough check](docs/img/deep-check.png) |
 
 | Full report | |
 |---|---|
@@ -290,3 +290,6 @@ configured yourself. Remove the extension from your browser's extensions page.
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+The bundled tracker list is derived from [DuckDuckGo Tracker Radar](https://github.com/duckduckgo/tracker-radar),
+licensed CC-BY-NC-SA-4.0. It is updated only when you press **Update tracker list now** in Settings.
