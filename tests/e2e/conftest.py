@@ -244,7 +244,9 @@ async def real_browser(
             args=[
                 f"--disable-extensions-except={extension}",
                 f"--load-extension={extension}",
-                "--host-resolver-rules=MAP tracker-one.test 127.0.0.1,MAP ads-two.test 127.0.0.1,MAP metrics-three.test 127.0.0.1",
+                # Every .test host is the fixture server, so a fixture can be visited as a
+                # site of its own: the trackers, and each consent banner in turn.
+                "--host-resolver-rules=MAP *.test 127.0.0.1",
             ],
             env=environment,
         )
