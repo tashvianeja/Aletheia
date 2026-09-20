@@ -21,7 +21,7 @@ All notable changes will be documented here. This project has not produced a ver
   models the key can call, and a configured model that is not among them stays selectable.
   The tracker-list attribution line has moved off the page into the README. The About pane's
   version, diagnostics JSON, redacted log view and support-bundle export are no longer in the
-  window; `privacy-guardian --diagnose` still prints the same diagnostics.
+  window; `aletheia --diagnose` still prints the same diagnostics.
 - The Overview is now a tally of what has passed through the app, in the manner of a browser's
   "trackers blocked" panel: sites & apps checked, trackers spotted, files checked before upload,
   policies & terms summarised (with an estimated reading time once word counts exist), cookie
@@ -151,7 +151,7 @@ All notable changes will be documented here. This project has not produced a ver
   for as long as the person is on it, and the in-page panel, like the desktop widget before it,
   takes a sharpened decision into the card already on screen rather than leaving the first wording
   up: what the reader has opened or ticked stays as they left it.
-- Privacy Guardian announced a file share on sites where nothing had been shared. Any `Blob` or
+- Aletheia announced a file share on sites where nothing had been shared. Any `Blob` or
   `ArrayBuffer` request body counted as an upload, which covers analytics beacons, JSON payloads
   and media chunks on a large share of the web; the "file" was then named `upload.bin` and flagged
   as only partially checked because the bytes could not be parsed. Only something the person chose

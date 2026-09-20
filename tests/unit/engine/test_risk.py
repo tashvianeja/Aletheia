@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import pytest
 
-from privacy_guardian.core.events import DataCategory
-from privacy_guardian.engine.context import SiteOrAppProfile
-from privacy_guardian.engine.necessity import Necessity, NecessityAssessment
-from privacy_guardian.engine.risk import consequence_factor, score_risk
+from aletheia.core.events import DataCategory
+from aletheia.engine.context import SiteOrAppProfile
+from aletheia.engine.necessity import Necessity, NecessityAssessment
+from aletheia.engine.risk import consequence_factor, score_risk
 
 
 def assessment(category: DataCategory, verdict: Necessity) -> NecessityAssessment:
@@ -30,7 +30,7 @@ def test_risk_uses_specified_necessity_weights(
     monkeypatch, verdict: Necessity, expected: float
 ) -> None:
     monkeypatch.setattr(
-        "privacy_guardian.engine.risk.load_sensitivities",
+        "aletheia.engine.risk.load_sensitivities",
         lambda: {DataCategory.FINANCIAL_CARD_NUMBER.value: 0.9},
     )
     result = score_risk([assessment(DataCategory.FINANCIAL_CARD_NUMBER, verdict)])
@@ -39,7 +39,7 @@ def test_risk_uses_specified_necessity_weights(
 
 def test_consequences_compound_and_risk_is_clamped(monkeypatch) -> None:
     monkeypatch.setattr(
-        "privacy_guardian.engine.risk.load_sensitivities",
+        "aletheia.engine.risk.load_sensitivities",
         lambda: {DataCategory.PHONE.value: 0.5},
     )
     profile = SiteOrAppProfile(
@@ -58,7 +58,7 @@ def test_consequences_compound_and_risk_is_clamped(monkeypatch) -> None:
 
 def test_maximum_category_risk_drives_combined_result(monkeypatch) -> None:
     monkeypatch.setattr(
-        "privacy_guardian.engine.risk.load_sensitivities",
+        "aletheia.engine.risk.load_sensitivities",
         lambda: {DataCategory.EMAIL.value: 0.3, DataCategory.CREDENTIALS_PASSWORD.value: 1.0},
     )
     result = score_risk(

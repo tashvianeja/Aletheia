@@ -43,7 +43,7 @@ Foundations commit `b21b4ce` pushed; initial CI run `35441787422` reached both p
 
 Installed: uv-managed CPython3.12.13; 154 project/dev packages including spaCy model3.8.0 via locked wheel URL; Tesseract5.5.3 with English/OSD traineddata and create-dmg1.3.0 via Homebrew. OpenAI SDK3.16.2 official API verified by analysis worker; configured default model gpt-6-astra.
 
-First macOS package built at `dist/PrivacyGuardian.app` and `dist/PrivacyGuardian-0.1.0.dmg` (145,079,029 compressed bytes; app268MiB). Root verified deep strict codesign, UDZO imageinfo, isolated offscreen packaged smoke exit0. Bundled OCR runs successfully, non-system libraries rewritten to loader-relative paths. This artifact predates subsequent source changes and must be rebuilt at final acceptance.
+First macOS package built at `dist/Aletheia.app` and `dist/Aletheia-0.1.0.dmg` (145,079,029 compressed bytes; app268MiB). Root verified deep strict codesign, UDZO imageinfo, isolated offscreen packaged smoke exit0. Bundled OCR runs successfully, non-system libraries rewritten to loader-relative paths. This artifact predates subsequent source changes and must be rebuilt at final acceptance.
 
 Service/UI/platform implementations now present; independent Sol tests being added. Mandatory local analysis remains separate from bounded background cloud I/O, so cloud latency cannot delay native upload/form decisions. Raw worker payloads release on continue/cancel/redaction and expire through idle pool recycle. Remaining review work: full platform native monitoring/revocation, supervisor lifecycle, complete dashboard/settings, CI gates, browser E2E, live platform checks, perf and installer smoke. No feature is accepted merely for existing.
 
@@ -83,7 +83,7 @@ Source checkpoints697337e and Sol f162819 pushed/ready for coherent CI. macOS CI
 
 ### Final macOS artifact checkpoint (13:36 UTC, T+1:47)
 
-Main source frozen at `edeb15d`; later `b28416d` changes only the acceptance evidence. `.venv/bin/python scripts/build.py mac` completed successfully, replacing the superseded main app and DMG. The complete Mach-O audit checks 339 slices/files and reports highest minimum macOS 13.0. `tests/packaging/verify_packaged_installation.py --platform macos --artifact dist/PrivacyGuardian-0.1.0.dmg --maximum-macos 13.0` passed installed onboarding/tray readiness, genuine framed native-host handshake (version 0.1.0/protocol 1), bundled PNG/native JPEG OCR, uninstall and registration restoration. Fresh clone independently built from source and passed the same lifecycle at `3bec889` before the final clipboard race fix.
+Main source frozen at `edeb15d`; later `b28416d` changes only the acceptance evidence. `.venv/bin/python scripts/build.py mac` completed successfully, replacing the superseded main app and DMG. The complete Mach-O audit checks 339 slices/files and reports highest minimum macOS 13.0. `tests/packaging/verify_packaged_installation.py --platform macos --artifact dist/Aletheia-0.1.0.dmg --maximum-macos 13.0` passed installed onboarding/tray readiness, genuine framed native-host handshake (version 0.1.0/protocol 1), bundled PNG/native JPEG OCR, uninstall and registration restoration. Fresh clone independently built from source and passed the same lifecycle at `3bec889` before the final clipboard race fix.
 
 Whole-tree Ruff lint/format: 172 files pass. Native and Windows strict mypy: 73 modules pass; Bandit medium/high gate clean. Sol authoritative pre-final line coverage: 85.09% scoped, 74.52% overall; final root `make check` rerun pending. Connected headed browser evidence: native bridge ready 1.354564s (<5), passport DOM change-to-visible 1.095s (<1.5), host-side comparison 1.327781s, field badge 238.983ms (<300), consent mutation 213.5ms (<400). Cold first-action measurements included bridge startup and ranged 2.386–2.834s; these remain separately recorded rather than hidden. Real native clipboard plus spawned worker 185.746ms (<500); clear/write race has a dedicated passing regression.
 
@@ -103,7 +103,7 @@ CI `35446163637` macOS arm64 built and passed the installed package lifecycle. I
 
 ### Independent full check and cross-platform corrections (13:56 UTC, T+2:07)
 
-Root's exact `PRIVACY_GUARDIAN_E2E_HEADED=1 QT_QPA_PLATFORM=offscreen make check` passed at `7fb6b07`: Ruff 173 files, strict mypy 73 modules, instrumented 270 passed / 4 skipped / 2 timing tests deselected, uninstrumented headed browsers/performance/native clipboard 34 passed / 1 platform skip. Line gates: scoped 1667/1945 = 85.71%; overall 4107/5448 = 75.39%.
+Root's exact `ALETHEIA_E2E_HEADED=1 QT_QPA_PLATFORM=offscreen make check` passed at `7fb6b07`: Ruff 173 files, strict mypy 73 modules, instrumented 270 passed / 4 skipped / 2 timing tests deselected, uninstrumented headed browsers/performance/native clipboard 34 passed / 1 platform skip. Line gates: scoped 1667/1945 = 85.71%; overall 4107/5448 = 75.39%.
 
 Intel CI uncovered an additional incompatible binary: cryptography 50.0.1 has no Intel wheel, so its source build linked Homebrew OpenSSL and bundled a legacy provider requiring macOS15. The Intel package lifecycle stopped at the binary audit and did not pass. Build now compiles checksum-pinned OpenSSL3.5.8 LTS statically for macOS13 and rebuilds current cryptography, preserving legacy PDF ciphers; actual Intel CI audit remains required. Downgrading to the last universal wheel was rejected because that release has a known certificate-verification vulnerability.
 
@@ -131,9 +131,9 @@ Final SHA256 digests:
 
 |Artifact|SHA256|
 |---|---|
-|`dist/PrivacyGuardian-0.1.0.dmg`|`31dc9c46582b48b2c7448eb6fe268eeef85ec1c27026c3d04f0502fbcfffeb08`|
-|`dist/privacy-guardian-chromium.zip`|`414f6cedb7221ed3594730c1d0e1f8abf6035d6895d26a9f4a5f30cb0c7ee42f`|
-|`dist/privacy-guardian-firefox.zip`|`bbadfc4e4fcf6348f2465ec2155a2aeafae16de84bfb42632cd1e69d04e875d2`|
+|`dist/Aletheia-0.1.0.dmg`|`31dc9c46582b48b2c7448eb6fe268eeef85ec1c27026c3d04f0502fbcfffeb08`|
+|`dist/aletheia-chromium.zip`|`414f6cedb7221ed3594730c1d0e1f8abf6035d6895d26a9f4a5f30cb0c7ee42f`|
+|`dist/aletheia-firefox.zip`|`bbadfc4e4fcf6348f2465ec2155a2aeafae16de84bfb42632cd1e69d04e875d2`|
 
 The repaired Windows checkpoint `4d20bde` completed its installer build. Its arm64 job completed 276 instrumented tests and passed the packaged lifecycle, but final enforcement failed because cold native-bridge setup took6.552899s against the6.25s tolerance gate. This historical hosted result is distinct from the green current-source local suite. Intel's earlier corrected static-crypto artifact passed its full installed lifecycle, while its passport runtime measurement2125.7ms exceeded1875ms. Final-source hosted jobs remain blocked before execution by account billing; cross-platform acceptance is not declared complete.
 

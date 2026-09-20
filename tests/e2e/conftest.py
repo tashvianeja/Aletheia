@@ -17,9 +17,9 @@ import pytest_asyncio
 from aiohttp import web
 from playwright.async_api import BrowserContext, Worker, async_playwright
 
-from privacy_guardian.config import Settings
-from privacy_guardian.core.ipc.transport import send_request
-from privacy_guardian.util import installation
+from aletheia.config import Settings
+from aletheia.core.ipc.transport import send_request
+from aletheia.util import installation
 from tests.e2e.fixture_server import FixtureState, create_fixture_app
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -186,7 +186,7 @@ def installed_native_host(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> It
                         "SELECT id FROM events WHERE event_type='file_upload'"
                     )
                 }
-            artifact_folder = Path.home() / "Downloads/PrivacyGuardian"
+            artifact_folder = Path.home() / "Downloads/Aletheia"
             if artifact_folder.is_dir():
                 for artifact in artifact_folder.iterdir():
                     if artifact.is_file() and any(
@@ -203,11 +203,11 @@ async def real_browser(
     settings = installed_native_host
     profile_dir = tmp_path / "chromium-profile"
     environment = os.environ.copy()
-    environment["PRIVACY_GUARDIAN_DATA_DIR"] = str(settings.data_dir)
+    environment["ALETHEIA_DATA_DIR"] = str(settings.data_dir)
     service = await asyncio.create_subprocess_exec(
         sys.executable,
         "-m",
-        "privacy_guardian",
+        "aletheia",
         "--headless",
         cwd=ROOT,
         env=environment,
@@ -240,7 +240,7 @@ async def real_browser(
         context = await playwright.chromium.launch_persistent_context(
             str(profile_dir),
             channel="chromium",
-            headless=os.getenv("PRIVACY_GUARDIAN_E2E_HEADED") != "1",
+            headless=os.getenv("ALETHEIA_E2E_HEADED") != "1",
             args=[
                 f"--disable-extensions-except={extension}",
                 f"--load-extension={extension}",

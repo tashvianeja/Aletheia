@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from privacy_guardian.analysis.forms import analyze_fields, label_field
-from privacy_guardian.core.events import DataCategory, FormField
+from aletheia.analysis.forms import analyze_fields, label_field
+from aletheia.core.events import DataCategory, FormField
 
 
 @pytest.mark.parametrize(

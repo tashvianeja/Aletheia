@@ -4,8 +4,8 @@ import logging
 
 import pytest
 
-from privacy_guardian.core.bus import EventBus
-from privacy_guardian.core.events import FormObservedEvent
+from aletheia.core.bus import EventBus
+from aletheia.core.events import FormObservedEvent
 
 
 @pytest.mark.asyncio

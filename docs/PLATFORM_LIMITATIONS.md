@@ -20,7 +20,7 @@ Registry access can be restricted by policy or permissions. Some applications ob
 
 Chrome/Chromium, Edge, Brave, and Firefox are targets. The extension requests `nativeMessaging`, storage, cookies, web request, declarative net request, scripting, active-tab, tabs, and all-URL host access because it must observe relevant page context and perform requested local actions. It validates page messages and passes metadata through an allowlist, but any capability depends on browser version, enterprise policy, private/incognito mode, content security policy, frame isolation, and extension installation state.
 
-The source assigns Chromium ID `bfdjphkbgihhbonhnmjbbfhckdddonob` and Firefox ID `privacy-guardian@privacyguardian.local`. The final local headed run passed all 23 real Chromium cases plus Firefox, and exercises consent, tracker blocking, Deep Check, native messaging, and recovery. Firefox’s fixed-ID native-host handshake took 3.02 seconds. This local evidence does not make CI green. Dynamic blocking is best-effort and browser-scoped; it does not constitute a network firewall.
+The source assigns Chromium ID `bfdjphkbgihhbonhnmjbbfhckdddonob` and Firefox ID `aletheia@aletheia.local`. The final local headed run passed all 23 real Chromium cases plus Firefox, and exercises consent, tracker blocking, Deep Check, native messaging, and recovery. Firefox’s fixed-ID native-host handshake took 3.02 seconds. This local evidence does not make CI green. Dynamic blocking is best-effort and browser-scoped; it does not constitute a network firewall.
 
 ## Clipboard and redaction semantics
 
@@ -32,4 +32,4 @@ What gets a box is set per document kind (see *What a redacted copy covers* in `
 
 ## Product boundaries
 
-Privacy Guardian observes accessible signals and makes local recommendations. It cannot see every application action, encrypted service-side processing, invisible permission grant, browser operation, or network request. It is not an antivirus, DLP system, legal determination, or guarantee that data has been blocked, deleted, or not retained by a remote service.
+Aletheia observes accessible signals and makes local recommendations. It cannot see every application action, encrypted service-side processing, invisible permission grant, browser operation, or network request. It is not an antivirus, DLP system, legal determination, or guarantee that data has been blocked, deleted, or not retained by a remote service.

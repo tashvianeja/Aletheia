@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from privacy_guardian.analysis.consent import (
+from aletheia.analysis.consent import (
     ConsentButton,
     ConsentSnapshot,
     ConsentToggle,

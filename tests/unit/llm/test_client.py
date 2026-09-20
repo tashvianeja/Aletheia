@@ -11,8 +11,8 @@ import pytest
 from google.genai import errors as genai_errors
 from google.genai import types as genai_types
 
-from privacy_guardian.config import LLMSettings
-from privacy_guardian.llm.client import (
+from aletheia.config import LLMSettings
+from aletheia.llm.client import (
     BASE_URL,
     LLMClient,
     Probe,
@@ -20,7 +20,7 @@ from privacy_guardian.llm.client import (
     build_client,
     check_connection,
 )
-from privacy_guardian.llm.schemas import (
+from aletheia.llm.schemas import (
     DeepCheckNarrative,
     PolishedExplanation,
     RefinedClause,
@@ -293,7 +293,7 @@ def test_opening_preferences_does_not_load_a_network_client() -> None:
     Importing the provider SDK costs roughly a third of a second, and the model picker
     needs nothing from it but a list of strings and a result type.
     """
-    dashboard = Path(__file__).resolve().parents[3] / "src/privacy_guardian/ui/dashboard.py"
+    dashboard = Path(__file__).resolve().parents[3] / "src/aletheia/ui/dashboard.py"
     source = dashboard.read_text(encoding="utf-8").splitlines()
     imports = [line for line in source if line.startswith(("import ", "from "))]
     assert not [line for line in imports if "llm.client" in line]
@@ -302,7 +302,7 @@ def test_opening_preferences_does_not_load_a_network_client() -> None:
         [
             sys.executable,
             "-c",
-            "import privacy_guardian.ui.dashboard, sys; print('google.genai' in sys.modules)",
+            "import aletheia.ui.dashboard, sys; print('google.genai' in sys.modules)",
         ],
         capture_output=True,
         text=True,

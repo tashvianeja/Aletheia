@@ -3,7 +3,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from privacy_guardian.config import Settings
+from aletheia.config import Settings
 
 
 def test_nested_environment_override_preserves_file_llm_values(tmp_path: Path, monkeypatch) -> None:
@@ -22,7 +22,7 @@ deep_check_narrative = false
 """.strip(),
         encoding="utf-8",
     )
-    monkeypatch.setenv("PRIVACY_GUARDIAN_LLM__ENABLED", "true")
+    monkeypatch.setenv("ALETHEIA_LLM__ENABLED", "true")
 
     loaded = Settings.load(settings_file)
 
@@ -35,7 +35,7 @@ deep_check_narrative = false
 
 
 def test_settings_save_and_load_round_trip(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.delenv("PRIVACY_GUARDIAN_LLM__ENABLED", raising=False)
+    monkeypatch.delenv("ALETHEIA_LLM__ENABLED", raising=False)
     original = Settings(
         data_dir=tmp_path,
         retention_days=37,

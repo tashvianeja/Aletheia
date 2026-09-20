@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from privacy_guardian.analysis.worker import analyze_payload
-from privacy_guardian.core.events import DataCategory
+from aletheia.analysis.worker import analyze_payload
+from aletheia.core.events import DataCategory
 
 
 def test_text_payload_scans_identifier_beyond_legacy_two_million_character_limit() -> None:

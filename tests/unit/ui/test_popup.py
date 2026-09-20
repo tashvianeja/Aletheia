@@ -3,8 +3,8 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import QLabel
 
-from privacy_guardian.core.events import Decision, Outcome
-from privacy_guardian.ui.popup import InterventionPopup, PopupQueue
+from aletheia.core.events import Decision, Outcome
+from aletheia.ui.popup import InterventionPopup, PopupQueue
 
 
 def decision(event_id: str = "event-1", outcome: Outcome = Outcome.INTERVENE) -> Decision:
@@ -101,8 +101,8 @@ def test_a_notice_offers_its_remedy_as_a_workflow_beside_ok(qtbot) -> None:
     """The user's report: a card that only told them about an advertising profile
     gave them nothing to do about it. The remedy is the filled button; OK is a plain
     one beside it, and the two record different things."""
-    from privacy_guardian.core.events import DataCategory, Requester, TrackingEvent
-    from privacy_guardian.engine.decision import decide
+    from aletheia.core.events import DataCategory, Requester, TrackingEvent
+    from aletheia.engine.decision import decide
 
     def notice() -> Decision:
         return decide(
@@ -142,8 +142,8 @@ def test_a_notice_with_several_remedies_wraps_them_rather_than_clipping_them(qtb
     """Three buttons are wider than the card; on one row the last was cut mid-word."""
     from PySide6.QtWidgets import QHBoxLayout
 
-    from privacy_guardian.core.events import DataCategory, FileUploadEvent, Requester
-    from privacy_guardian.engine.decision import decide
+    from aletheia.core.events import DataCategory, FileUploadEvent, Requester
+    from aletheia.engine.decision import decide
 
     photo = decide(
         FileUploadEvent(
@@ -168,8 +168,8 @@ def test_a_notice_with_several_remedies_wraps_them_rather_than_clipping_them(qtb
 
 
 def test_a_photo_whose_only_problem_is_its_location_gets_the_location_remedy(qtbot) -> None:
-    from privacy_guardian.core.events import DataCategory, FileUploadEvent, Requester
-    from privacy_guardian.engine.decision import decide
+    from aletheia.core.events import DataCategory, FileUploadEvent, Requester
+    from aletheia.engine.decision import decide
 
     photo = decide(
         FileUploadEvent(
@@ -255,8 +255,8 @@ def test_the_reasoning_on_a_notice_opens_inside_the_card(qtbot) -> None:
 
 def test_closing_a_desktop_notice_does_not_act_on_the_person_s_behalf(qtbot) -> None:
     """Dismissing a permission notice must not open system settings by itself."""
-    from privacy_guardian.core.events import DataCategory, PermissionRequestEvent, Requester
-    from privacy_guardian.engine.decision import decide
+    from aletheia.core.events import DataCategory, PermissionRequestEvent, Requester
+    from aletheia.engine.decision import decide
 
     notice = decide(
         PermissionRequestEvent(
@@ -353,7 +353,7 @@ def test_a_notice_is_not_given_a_green_tick_it_has_not_earned(qtbot) -> None:
 def test_the_band_says_in_words_what_its_colour_says(qtbot) -> None:
     """Every card wears its tier: the outline, the band and the word on it agree, and
     a decision built without a tier is given one rather than a blank band."""
-    from privacy_guardian.ui.theme import URGENCY_LIGHT
+    from aletheia.ui.theme import URGENCY_LIGHT
 
     stop = InterventionPopup(decision("stop"), mode="light")  # INTERVENE at risk 0.9
     ask = InterventionPopup(decision("ask").model_copy(update={"risk": 0.5}), mode="light")
@@ -377,7 +377,7 @@ def test_the_band_says_in_words_what_its_colour_says(qtbot) -> None:
 def test_an_informational_card_still_lists_what_was_found(qtbot) -> None:
     """The headline says "building an advertising profile"; the rows say which trackers.
     Dropping the rows from a notice left the person with the conclusion but no evidence."""
-    from privacy_guardian.core.events import DecisionFinding
+    from aletheia.core.events import DecisionFinding
 
     notice = decision("rows", Outcome.INFORM).model_copy(
         update={
@@ -442,7 +442,7 @@ def test_desktop_surfaces_stay_up_while_the_app_is_inactive(qtbot) -> None:
     qtbot.addWidget(popup)
     assert popup.windowFlags() & Qt.WindowType.WindowDoesNotAcceptFocus
     assert popup.testAttribute(Qt.WidgetAttribute.WA_MacAlwaysShowToolWindow)
-    from privacy_guardian.ui.popup import ConfirmationBar
+    from aletheia.ui.popup import ConfirmationBar
 
     bar = ConfirmationBar("3 fields marked as not needed")
     qtbot.addWidget(bar)

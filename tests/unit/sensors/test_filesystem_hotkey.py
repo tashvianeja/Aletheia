@@ -4,8 +4,8 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-from privacy_guardian.sensors.filesystem import PathMonitor
-from privacy_guardian.sensors.hotkey import GlobalHotkey
+from aletheia.sensors.filesystem import PathMonitor
+from aletheia.sensors.hotkey import GlobalHotkey
 
 
 def test_path_monitor_routes_relevant_changes_only(tmp_path: Path, monkeypatch) -> None:
@@ -25,7 +25,7 @@ def test_path_monitor_routes_relevant_changes_only(tmp_path: Path, monkeypatch) 
         def join(self, timeout: int) -> None:
             callbacks.append(f"joined:{timeout}")
 
-    monkeypatch.setattr("privacy_guardian.sensors.filesystem.Observer", Observer)
+    monkeypatch.setattr("aletheia.sensors.filesystem.Observer", Observer)
     monitor = PathMonitor([tmp_path], lambda: callbacks.append("changed"))
     monitor.start()
     handler = captured[0]
@@ -39,7 +39,7 @@ def test_path_monitor_routes_relevant_changes_only(tmp_path: Path, monkeypatch) 
 
 def test_global_hotkey_is_safe_noop_on_unsupported_platform(monkeypatch) -> None:
     invoked: list[bool] = []
-    monkeypatch.setattr("privacy_guardian.sensors.hotkey.sys.platform", "linux")
+    monkeypatch.setattr("aletheia.sensors.hotkey.sys.platform", "linux")
     hotkey = GlobalHotkey("Ctrl+Shift+P", lambda: invoked.append(True))
     hotkey.start()
     hotkey.stop()
@@ -71,7 +71,7 @@ def test_macos_hotkey_callback_matches_key_and_modifiers(monkeypatch) -> None:
         NSEventModifierFlagShift=8,
     )
     monkeypatch.setitem(sys.modules, "AppKit", appkit)
-    monkeypatch.setattr("privacy_guardian.sensors.hotkey.sys.platform", "darwin")
+    monkeypatch.setattr("aletheia.sensors.hotkey.sys.platform", "darwin")
     hotkey = GlobalHotkey("Cmd+Shift+P", lambda: invoked.append(True))
     hotkey.start()
     event = SimpleNamespace(modifierFlags=lambda: 1 | 8, charactersIgnoringModifiers=lambda: "p")

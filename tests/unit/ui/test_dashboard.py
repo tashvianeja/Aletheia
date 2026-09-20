@@ -5,7 +5,7 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QFileDialog, QLabel, QMessageBox, QPushButton, QTextEdit
 
-from privacy_guardian.core.events import (
+from aletheia.core.events import (
     ConsentBannerEvent,
     DataCategory,
     Decision,
@@ -16,9 +16,9 @@ from privacy_guardian.core.events import (
     TrackingEvent,
     UserResponse,
 )
-from privacy_guardian.engine.preferences import LearnedRule, Preference
-from privacy_guardian.llm.client import SUGGESTED_MODELS, ConnectionCheck
-from privacy_guardian.ui.dashboard import Dashboard
+from aletheia.engine.preferences import LearnedRule, Preference
+from aletheia.llm.client import SUGGESTED_MODELS, ConnectionCheck
+from aletheia.ui.dashboard import Dashboard
 
 
 def seed_history(controller) -> None:
@@ -162,8 +162,8 @@ def test_settings_route_llm_key_hotkey_autostart_and_retention(
         def stop(self) -> None:
             hotkeys.append("stopped")
 
-    monkeypatch.setattr("privacy_guardian.llm.client.set_api_key", keys.append)
-    monkeypatch.setattr("privacy_guardian.sensors.hotkey.GlobalHotkey", Hotkey)
+    monkeypatch.setattr("aletheia.llm.client.set_api_key", keys.append)
+    monkeypatch.setattr("aletheia.sensors.hotkey.GlobalHotkey", Hotkey)
     dashboard.api_key.setText("synthetic-key")
     dashboard.llm_enabled.setChecked(True)
     dashboard.llm_toggles["policy_refinement"].setChecked(False)
@@ -191,7 +191,7 @@ def test_keychain_error_is_visible_and_does_not_apply_settings(
     def fail(_value: str) -> None:
         raise RuntimeError("synthetic keychain failure")
 
-    monkeypatch.setattr("privacy_guardian.llm.client.set_api_key", fail)
+    monkeypatch.setattr("aletheia.llm.client.set_api_key", fail)
     monkeypatch.setattr(
         QMessageBox, "warning", lambda _parent, _title, message: warnings.append(message)
     )
@@ -301,9 +301,7 @@ def test_a_failed_test_says_which_setting_to_change(qtbot, ui_controller) -> Non
 def test_the_chosen_model_is_what_gets_saved(qtbot, ui_controller, monkeypatch) -> None:
     dashboard = Dashboard(ui_controller)
     qtbot.addWidget(dashboard)
-    monkeypatch.setattr(
-        "privacy_guardian.sensors.hotkey.GlobalHotkey", lambda *_: FakeGlobalHotkey()
-    )
+    monkeypatch.setattr("aletheia.sensors.hotkey.GlobalHotkey", lambda *_: FakeGlobalHotkey())
     dashboard.model.setCurrentText("gemini-2.5-flash-lite")
     dashboard.save_settings()
     assert ui_controller.settings.llm.model == "gemini-2.5-flash-lite"
@@ -339,7 +337,7 @@ def test_a_failure_is_not_drawn_as_a_hint(qtbot, ui_controller) -> None:
 def test_sites_pane_is_a_report_not_a_json_console(qtbot, ui_controller) -> None:
     """Site and app memory is still kept, read and written — it just has no controls on
     a page whose job is to tell someone what a site does with their data."""
-    from privacy_guardian.ui.dashboard import SECTIONS
+    from aletheia.ui.dashboard import SECTIONS
 
     dashboard = Dashboard(ui_controller)
     qtbot.addWidget(dashboard)
@@ -444,7 +442,7 @@ def test_every_action_the_user_can_take_has_a_name_in_the_tally() -> None:
     itself, so an action without a label reads as "decided_clear_fields" on the
     page instead of English.
     """
-    from privacy_guardian.core.ipc.protocol import ACTIONS
-    from privacy_guardian.util.i18n import EN
+    from aletheia.core.ipc.protocol import ACTIONS
+    from aletheia.util.i18n import EN
 
     assert [action for action in sorted(ACTIONS) if "decided_" + action not in EN] == []

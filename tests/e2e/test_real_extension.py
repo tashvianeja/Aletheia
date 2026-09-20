@@ -11,10 +11,10 @@ import psutil
 import pytest
 from playwright.async_api import async_playwright
 
-from privacy_guardian.analysis.documents import redaction_marks, unredact_document
-from privacy_guardian.analysis.worker import analyze_payload
-from privacy_guardian.core.events import DataCategory
-from privacy_guardian.core.ipc.transport import send_request
+from aletheia.analysis.documents import redaction_marks, unredact_document
+from aletheia.analysis.worker import analyze_payload
+from aletheia.core.events import DataCategory
+from aletheia.core.ipc.transport import send_request
 from tests.e2e.conftest import PERFORMANCE_TOLERANCE, RealBrowser
 from tests.perf.test_latency_budgets import synthetic_mixed_pdf
 
@@ -27,7 +27,7 @@ TYPING_PAUSE_MS = 500
 async def native_ping(browser: RealBrowser) -> dict[str, object]:
     return await browser.worker.evaluate(
         """() => new Promise(resolve => {
-          const port = chrome.runtime.connectNative('com.privacyguardian.host');
+          const port = chrome.runtime.connectNative('com.aletheia.host');
           const timer = setTimeout(() => resolve({error: 'native response timeout'}), 5000);
           port.onMessage.addListener(message => { clearTimeout(timer); port.disconnect(); resolve(message); });
           port.onDisconnect.addListener(() => { clearTimeout(timer); resolve({error: chrome.runtime.lastError?.message || 'native host disconnected'}); });
@@ -666,7 +666,7 @@ async def test_passport_redacted_copy_replaces_input_and_carries_black_boxes(
         "async input => Array.from(new Uint8Array(await input.files[0].arrayBuffer()))"
     )
     copy = bytes(content)
-    # The copy is the passport itself under Privacy Guardian's black boxes: what they
+    # The copy is the passport itself under Aletheia's black boxes: what they
     # cover is still in the file, which is what lets the original be restored from it.
     assert copy.startswith(b"%PDF-")
     assert redaction_marks(copy, "redacted.pdf") >= 1
@@ -1089,7 +1089,7 @@ async def test_browser_disconnect_aborts_pending_upload_and_reconnects_within_fi
     restarted_playwright = await async_playwright().start()
     extension = Path(__file__).resolve().parents[2] / "extension"
     environment = os.environ.copy()
-    environment["PRIVACY_GUARDIAN_DATA_DIR"] = str(real_browser.data_dir)
+    environment["ALETHEIA_DATA_DIR"] = str(real_browser.data_dir)
     reconnect_started = time.perf_counter()
     restarted = await restarted_playwright.chromium.launch_persistent_context(
         str(real_browser.profile_dir),

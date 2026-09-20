@@ -8,8 +8,8 @@ from typing import Any
 import psutil
 import pytest
 
-from privacy_guardian.config import Settings
-from privacy_guardian.core.events import (
+from aletheia.config import Settings
+from aletheia.core.events import (
     ClipboardReadEvent,
     ConsentBannerEvent,
     DataCategory,
@@ -21,8 +21,8 @@ from privacy_guardian.core.events import (
     TrackingEvent,
     UserResponse,
 )
-from privacy_guardian.core.service import Service
-from privacy_guardian.storage import Store
+from aletheia.core.service import Service
+from aletheia.storage import Store
 
 
 class FakePool:
@@ -98,7 +98,7 @@ def test_cloud_executor_is_lazy_and_owned_workers_are_terminated(
         def shutdown(self, **_kwargs: object) -> None:
             actions.append("shutdown")
 
-    monkeypatch.setattr("privacy_guardian.core.service.ProcessPoolExecutor", Executor)
+    monkeypatch.setattr("aletheia.core.service.ProcessPoolExecutor", Executor)
     first = service.llm_executor
     assert service.llm_executor is first
     service._close_cloud()
@@ -156,8 +156,8 @@ async def test_maintenance_expires_all_bounded_runtime_state(
         if sleeps > 2:
             raise asyncio.CancelledError
 
-    monkeypatch.setattr("privacy_guardian.core.service.asyncio.sleep", sleep)
-    monkeypatch.setattr("privacy_guardian.core.service.time.monotonic", lambda: 1_000.0)
+    monkeypatch.setattr("aletheia.core.service.asyncio.sleep", sleep)
+    monkeypatch.setattr("aletheia.core.service.time.monotonic", lambda: 1_000.0)
 
     with pytest.raises(asyncio.CancelledError):
         await service._maintenance()
@@ -202,7 +202,7 @@ def test_native_host_process_identity_detects_exit_and_pid_reuse(
         def create_time(self) -> float:
             return {101: 10.0, 202: 99.0}[self.pid]
 
-    monkeypatch.setattr("privacy_guardian.core.service.psutil.Process", Process)
+    monkeypatch.setattr("aletheia.core.service.psutil.Process", Process)
     service.session_processes.update(
         {
             "live": (101, 10.0),
@@ -408,8 +408,8 @@ async def test_a_desktop_notice_is_never_answered_on_the_person_s_behalf(
         if sleeps > 1:
             raise asyncio.CancelledError
 
-    monkeypatch.setattr("privacy_guardian.core.service.asyncio.sleep", sleep)
-    monkeypatch.setattr("privacy_guardian.core.service.time.monotonic", lambda: 1_000.0)
+    monkeypatch.setattr("aletheia.core.service.asyncio.sleep", sleep)
+    monkeypatch.setattr("aletheia.core.service.time.monotonic", lambda: 1_000.0)
 
     with pytest.raises(asyncio.CancelledError):
         await service._maintenance()

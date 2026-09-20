@@ -1,7 +1,7 @@
 /* Browser identity comes exclusively from runtime sender and browser APIs. */
 if (typeof importScripts === 'function') importScripts('schema-validator.js');
 const api = globalThis.browser || chrome;
-const HOST = 'com.privacyguardian.host';
+const HOST = 'com.aletheia.host';
 let port = null, reconnectTimer = null, reconnectDelay = 250;
 const acknowledgedDocuments=new Set();
 const pending = new Map(), tabSignals = new Map(), tabContexts = new Map(), storageOrigins = new Map(), storageTabs = new Map(), dnsCache = new Map();

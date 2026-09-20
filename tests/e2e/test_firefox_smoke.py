@@ -15,9 +15,9 @@ import psutil
 import pytest
 from aiohttp import web
 
-from privacy_guardian.config import Settings
-from privacy_guardian.core.ipc.transport import send_request
-from privacy_guardian.util import installation
+from aletheia.config import Settings
+from aletheia.core.ipc.transport import send_request
+from aletheia.util import installation
 
 pytestmark = pytest.mark.e2e
 ROOT = Path(__file__).resolve().parents[2]
@@ -35,17 +35,17 @@ def firefox_binary() -> str | None:
 
 def host_manifest(data_dir: Path) -> dict[str, Any]:
     if sys.platform == "win32":
-        executable = Path(sys.executable).parent / "privacy-guardian-host.exe"
+        executable = Path(sys.executable).parent / "aletheia-host.exe"
     else:
-        executable = data_dir / "privacy-guardian-host"
+        executable = data_dir / "aletheia-host"
         executable.write_text(
-            f'#!/bin/sh\nexec "{sys.executable}" -m privacy_guardian.core.ipc.native_host "$@"\n',
+            f'#!/bin/sh\nexec "{sys.executable}" -m aletheia.core.ipc.native_host "$@"\n',
             encoding="utf-8",
         )
         executable.chmod(0o700)
     return {
         "name": installation.HOST_NAME,
-        "description": "Privacy Guardian Firefox smoke host",
+        "description": "Aletheia Firefox smoke host",
         "path": str(executable),
         "type": "stdio",
         "allowed_extensions": [installation.FIREFOX_ID],
@@ -157,14 +157,14 @@ async def test_firefox_fixed_id_performs_real_native_host_ping(
     data_dir = tmp_path / "data"
     Settings(data_dir=data_dir, autostart=False, onboarding_complete=True).save()
     environment = os.environ.copy()
-    environment["PRIVACY_GUARDIAN_DATA_DIR"] = str(data_dir)
+    environment["ALETHEIA_DATA_DIR"] = str(data_dir)
     service_log_path = tmp_path / "service-stderr.log"
     service_log = service_log_path.open("wb")
     try:
         service = await asyncio.create_subprocess_exec(
             sys.executable,
             "-m",
-            "privacy_guardian",
+            "aletheia",
             "--headless",
             cwd=ROOT,
             env=environment,

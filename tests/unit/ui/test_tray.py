@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QSystemTrayIcon
 
-from privacy_guardian.ui.tray import GuardianTray, shield_icon
+from aletheia.ui.tray import GuardianTray, shield_icon
 
 
 def test_tray_exposes_and_routes_all_actions(qtbot, ui_controller) -> None:

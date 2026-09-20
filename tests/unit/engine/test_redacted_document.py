@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from privacy_guardian.core.events import Outcome, RedactedDocumentEvent, Requester
-from privacy_guardian.engine.context import SiteOrAppProfile
-from privacy_guardian.engine.decision import decide
-from privacy_guardian.engine.notice import notice_signature
-from privacy_guardian.engine.outcome import report_for
-from privacy_guardian.engine.preferences import LearnedRules, UserPreferences
+from aletheia.core.events import Outcome, RedactedDocumentEvent, Requester
+from aletheia.engine.context import SiteOrAppProfile
+from aletheia.engine.decision import decide
+from aletheia.engine.notice import notice_signature
+from aletheia.engine.outcome import report_for
+from aletheia.engine.preferences import LearnedRules, UserPreferences
 
 
 def _event(path: str = "/tmp/redacted-document.pdf") -> RedactedDocumentEvent:

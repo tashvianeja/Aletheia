@@ -4,9 +4,9 @@ setup:
 	uv run python scripts/fetch_model.py
 	uv run python scripts/setup.py
 run:
-	uv run privacy-guardian
+	uv run aletheia
 test:
-	uv run pytest tests/unit tests/integration tests/platform tests/packaging -m "not perf" --cov=privacy_guardian --cov-report=term-missing --cov-report=xml --cov-report=json --cov-fail-under=0
+	uv run pytest tests/unit tests/integration tests/platform tests/packaging -m "not perf" --cov=aletheia --cov-report=term-missing --cov-report=xml --cov-report=json --cov-fail-under=0
 	uv run pytest tests/e2e tests/perf tests/platform/test_clipboard.py::test_real_macos_clipboard_classifies_synthetic_card_within_500ms tests/platform/test_clipboard.py::test_real_windows_clipboard_classifies_synthetic_card_within_500ms
 	uv run python tests/check_coverage.py coverage.json
 lint:

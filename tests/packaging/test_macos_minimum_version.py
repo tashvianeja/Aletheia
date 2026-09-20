@@ -33,7 +33,7 @@ def test_packaged_lifecycle_helper_is_directly_invokable() -> None:
         text=True,
     )
 
-    assert "Verify a packaged Privacy Guardian install lifecycle" in result.stdout
+    assert "Verify a packaged Aletheia install lifecycle" in result.stdout
 
 
 def test_packaged_ocr_binary_discovery_deduplicates_resource_symlink(tmp_path: Path) -> None:
@@ -52,7 +52,7 @@ def test_packaged_ocr_binary_discovery_deduplicates_resource_symlink(tmp_path: P
 def test_minimum_version_reads_build_and_legacy_load_commands(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    binary = tmp_path / "PrivacyGuardian"
+    binary = tmp_path / "Aletheia"
     binary.write_bytes(b"\xcf\xfa\xed\xfe")
 
     def run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
@@ -83,8 +83,8 @@ def test_version_components_are_normalized_for_comparison() -> None:
 def test_default_accepts_exact_macos_13_minimum(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    app = tmp_path / "PrivacyGuardian.app"
-    binary = app / "Contents/MacOS/PrivacyGuardian"
+    app = tmp_path / "Aletheia.app"
+    binary = app / "Contents/MacOS/Aletheia"
     binary.parent.mkdir(parents=True)
     binary.write_bytes(b"\xcf\xfa\xed\xfe")
     monkeypatch.setattr(
@@ -101,8 +101,8 @@ def test_default_accepts_exact_macos_13_minimum(
 def test_audit_reports_every_incompatible_architecture_slice(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    app = tmp_path / "PrivacyGuardian.app"
-    first = app / "Contents/MacOS/PrivacyGuardian"
+    app = tmp_path / "Aletheia.app"
+    first = app / "Contents/MacOS/Aletheia"
     second = app / "Contents/Frameworks/PySide6/QtCore.abi3.so"
     first.parent.mkdir(parents=True)
     second.parent.mkdir(parents=True)

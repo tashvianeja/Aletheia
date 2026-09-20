@@ -6,13 +6,13 @@ import time
 
 import pytest
 
-from privacy_guardian.analysis.forms import label_field
-from privacy_guardian.core.events import FormContext, FormField
-from privacy_guardian.intelligence import embedder
-from privacy_guardian.intelligence.intent import classify_form, describe
-from privacy_guardian.intelligence.necessity import assess_form
-from privacy_guardian.intelligence.taxonomy import FormIntent
-from privacy_guardian.intelligence.tokenizer import encode, vocabulary
+from aletheia.analysis.forms import label_field
+from aletheia.core.events import FormContext, FormField
+from aletheia.intelligence import embedder
+from aletheia.intelligence.intent import classify_form, describe
+from aletheia.intelligence.necessity import assess_form
+from aletheia.intelligence.taxonomy import FormIntent
+from aletheia.intelligence.tokenizer import encode, vocabulary
 
 
 def field(label: str, name: str = "", **kwargs: object) -> FormField:

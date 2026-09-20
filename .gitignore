@@ -25,5 +25,5 @@ playwright-report/
 mockups/
 
 # On-device sentence encoder: fetched by scripts/fetch_model.py, checksummed there.
-src/privacy_guardian/data/models/*.onnx
-src/privacy_guardian/data/models/vocab.txt
+src/aletheia/data/models/*.onnx
+src/aletheia/data/models/vocab.txt

@@ -17,7 +17,7 @@ def main() -> None:
     version = tomllib.loads((ROOT / "pyproject.toml").read_text())["project"]["version"]
     for browser in ("chromium", "firefox"):
         with zipfile.ZipFile(
-            target / f"privacy-guardian-{browser}.zip", "w", zipfile.ZIP_DEFLATED
+            target / f"aletheia-{browser}.zip", "w", zipfile.ZIP_DEFLATED
         ) as output:
             for path in sorted((ROOT / "extension").rglob("*")):
                 if (
@@ -38,7 +38,7 @@ def main() -> None:
                     output.writestr("manifest.json", json.dumps(manifest, indent=2))
                 else:
                     output.write(path, relative)
-        print(target / f"privacy-guardian-{browser}.zip")
+        print(target / f"aletheia-{browser}.zip")
 
 
 if __name__ == "__main__":

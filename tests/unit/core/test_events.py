@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from privacy_guardian.core.events import (
+from aletheia.core.events import (
     EVENT_ADAPTER,
     Decision,
     FormField,

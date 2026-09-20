@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from privacy_guardian.llm.schemas import RefinedClause, RefinedPolicy, RefinedPurpose
+from aletheia.llm.schemas import RefinedClause, RefinedPolicy, RefinedPurpose
 
 
 def test_refined_purpose_is_constrained_to_local_taxonomy() -> None:

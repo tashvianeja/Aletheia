@@ -10,8 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from privacy_guardian.core.ipc.protocol import MAX_MESSAGE_BYTES, decode_message, encode_message
-from privacy_guardian.core.ipc.transport import (
+from aletheia.core.ipc.protocol import MAX_MESSAGE_BYTES, decode_message, encode_message
+from aletheia.core.ipc.transport import (
     ControlServer,
     endpoint,
     ensure_token,

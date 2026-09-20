@@ -23,7 +23,7 @@ else:
     from audit_macos_minimum_version import audit_bundle, version_tuple
 
 CHROME_ID = "bfdjphkbgihhbonhnmjbbfhckdddonob"
-HOST_NAME = "com.privacyguardian.host"
+HOST_NAME = "com.aletheia.host"
 
 
 @dataclass(frozen=True)
@@ -54,7 +54,7 @@ def macos_registration_paths() -> list[Path]:
     return [
         base / vendor / "NativeMessagingHosts" / f"{HOST_NAME}.json"
         for vendor in ("Google/Chrome", "Microsoft Edge", "BraveSoftware/Brave-Browser", "Mozilla")
-    ] + [Path.home() / "Library/LaunchAgents/com.privacyguardian.app.plist"]
+    ] + [Path.home() / "Library/LaunchAgents/com.aletheia.app.plist"]
 
 
 @contextlib.contextmanager
@@ -337,7 +337,7 @@ def verify_runtime(
     work_dir: Path,
 ) -> dict[str, object]:
     environment = os.environ.copy()
-    environment["PRIVACY_GUARDIAN_DATA_DIR"] = str(data_dir)
+    environment["ALETHEIA_DATA_DIR"] = str(data_dir)
     environment["QT_QPA_PLATFORM"] = "offscreen"
     run_checked([str(app), "--smoke-test", "--no-autostart"], environment=environment)
     wait_for(data_dir / "tray-ready")
@@ -393,17 +393,17 @@ def verify_macos(artifact: Path, work_dir: Path, maximum_macos: str) -> None:
                     str(artifact),
                 ]
             )
-            source = mounted / "PrivacyGuardian.app"
+            source = mounted / "Aletheia.app"
         else:
             source = artifact
-        installed = install_dir / "PrivacyGuardian.app"
+        installed = install_dir / "Aletheia.app"
         run_checked(["ditto", str(source), str(installed)])
         run_checked(["codesign", "--verify", "--deep", "--strict", str(installed)])
         audit_bundle(installed, version_tuple(maximum_macos))
-        app = installed / "Contents/MacOS/PrivacyGuardian"
+        app = installed / "Contents/MacOS/Aletheia"
         data_dir = work_dir / "profile"
         environment = os.environ.copy()
-        environment["PRIVACY_GUARDIAN_DATA_DIR"] = str(data_dir)
+        environment["ALETHEIA_DATA_DIR"] = str(data_dir)
         with preserve_macos_user_state():
             installed_registration = False
             try:
@@ -496,11 +496,11 @@ def verify_windows(installer: Path, work_dir: Path) -> None:
     ]
     states = {(path, ""): registry_value(path, "") for path in registry_paths}
     run_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
-    states[(run_path, "PrivacyGuardian")] = registry_value(run_path, "PrivacyGuardian")
+    states[(run_path, "Aletheia")] = registry_value(run_path, "Aletheia")
     install_dir = work_dir / "installed"
     data_dir = work_dir / "profile"
     environment = os.environ.copy()
-    environment["PRIVACY_GUARDIAN_DATA_DIR"] = str(data_dir)
+    environment["ALETHEIA_DATA_DIR"] = str(data_dir)
     uninstaller: Path | None = None
     try:
         run_checked(
@@ -515,8 +515,8 @@ def verify_windows(installer: Path, work_dir: Path) -> None:
             ],
             environment=environment,
         )
-        app = install_dir / "PrivacyGuardian.exe"
-        host = install_dir / "PrivacyGuardianHost.exe"
+        app = install_dir / "Aletheia.exe"
+        host = install_dir / "AletheiaHost.exe"
         if not app.is_file() or not host.is_file():
             raise RuntimeError(
                 f"silent installer did not create packaged executables in {install_dir}"
@@ -551,9 +551,7 @@ def verify_windows(installer: Path, work_dir: Path) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Verify a packaged Privacy Guardian install lifecycle."
-    )
+    parser = argparse.ArgumentParser(description="Verify a packaged Aletheia install lifecycle.")
     parser.add_argument("--platform", choices=("macos", "windows"), required=True)
     parser.add_argument(
         "--artifact", type=Path, required=True, help="macOS .app/.dmg or Windows setup .exe"

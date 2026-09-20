@@ -6,9 +6,9 @@ from typing import Any
 
 import pytest
 
-from privacy_guardian.config import Settings
-from privacy_guardian.engine.preferences import LearnedRules, UserPreferences
-from privacy_guardian.storage import Store
+from aletheia.config import Settings
+from aletheia.engine.preferences import LearnedRules, UserPreferences
+from aletheia.storage import Store
 
 
 class FakeHotkey:

@@ -1,7 +1,0 @@
-{
-  "name": "com.privacyguardian.host",
-  "description": "Local Privacy Guardian analysis bridge",
-  "path": "__INSTALL_PATH__",
-  "type": "stdio",
-  "allowed_origins": ["chrome-extension://bfdjphkbgihhbonhnmjbbfhckdddonob/"]
-}

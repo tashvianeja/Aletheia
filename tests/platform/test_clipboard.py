@@ -7,9 +7,9 @@ from typing import Any
 
 import pytest
 
-from privacy_guardian.core.events import ClipboardReadEvent, DataCategory, Requester
-from privacy_guardian.core.pool import AnalysisPool
-from privacy_guardian.sensors.clipboard import ClipboardMonitor
+from aletheia.core.events import ClipboardReadEvent, DataCategory, Requester
+from aletheia.core.pool import AnalysisPool
+from aletheia.sensors.clipboard import ClipboardMonitor
 
 PERFORMANCE_TOLERANCE = 1.25
 
@@ -161,7 +161,7 @@ async def test_real_macos_clipboard_classifies_synthetic_card_within_500ms() -> 
 async def test_real_windows_clipboard_classifies_synthetic_card_within_500ms() -> None:
     import win32clipboard
 
-    from privacy_guardian.sensors.platform.windows import WindowsClipboard
+    from aletheia.sensors.platform.windows import WindowsClipboard
 
     previous = ""
     win32clipboard.OpenClipboard()

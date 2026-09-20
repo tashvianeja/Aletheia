@@ -3,8 +3,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from privacy_guardian.config import data_directory
-from privacy_guardian.util.tracker_update import update_tracker_list
+from aletheia.config import data_directory
+from aletheia.util.tracker_update import update_tracker_list
 
 
 def main() -> None:

@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Privacy Guardian",
+  "name": "Aletheia",
   "version": "0.1.0",
   "description": "Local privacy checks before you share files, form fields, permissions, or consent.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA6Kg+RlFIB3/rRAqnDCouLtAoxidju6t/K8IWcKup9T0EiRML2yIv9pLRmxOdQXeHod3KNmYH3Y9tl7olR+uzaGszogtyg/OAVTYXyh0iC1yi7g2pKuP4f4ASa/fEH+brHutRHPbwIhhvwMPbQn3e6vd8QTngKxWUc1DWTKiDXTKR5E18yvkz1/rLYqco7R+g734MxQNcYM0fAU9L+G61d7VCCqq31CYmOw4U276YaI8xzpYWAndWD3i+NhgE4Vzco0q8jej4Fjls1cILOl+BGoEC2qVEVNK/2pvpHRU29LjOOzWG4iSS4AJOPVtKTuiUd6Q/T9sR3nj48PY/2LHXBQIDAQAB",
@@ -21,7 +21,7 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "Privacy Guardian \u2014 local privacy checks"
+    "default_title": "Aletheia \u2014 local privacy checks"
   },
   "content_scripts": [
     {

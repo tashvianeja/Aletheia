@@ -7,13 +7,13 @@ from typing import Any
 
 import pytest
 
-from privacy_guardian.analysis.policy import (
+from aletheia.analysis.policy import (
     PolicyProfile,
     TermsProfile,
     analyze_policy,
     analyze_terms,
 )
-from privacy_guardian.core.events import DataCategory
+from aletheia.core.events import DataCategory
 
 CORPUS_ROOT = Path(__file__).resolve().parents[2] / "fixtures" / "corpora"
 

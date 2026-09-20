@@ -4,14 +4,14 @@ import os
 
 import pytest
 
-from privacy_guardian.config import LLMSettings
-from privacy_guardian.llm.client import LLMClient
-from privacy_guardian.llm.schemas import PolishedExplanation
+from aletheia.config import LLMSettings
+from aletheia.llm.client import LLMClient
+from aletheia.llm.schemas import PolishedExplanation
 
 
 def _live_key() -> str:
-    if os.getenv("PRIVACY_GUARDIAN_RUN_LLM_TEST") != "1":
-        pytest.skip("set PRIVACY_GUARDIAN_RUN_LLM_TEST=1 to opt into the provider call")
+    if os.getenv("ALETHEIA_RUN_LLM_TEST") != "1":
+        pytest.skip("set ALETHEIA_RUN_LLM_TEST=1 to opt into the provider call")
     key = os.getenv("GEMINI_API_KEY")
     if not key:
         pytest.skip("GEMINI_API_KEY is absent")
@@ -43,7 +43,7 @@ def test_opt_in_real_gemini_call_uses_only_synthetic_category_context() -> None:
 @pytest.mark.llm
 def test_opt_in_connection_check_reaches_the_real_api() -> None:
     """What the Preferences "Test" button does, against the provider rather than a fake."""
-    from privacy_guardian.llm.client import check_connection
+    from aletheia.llm.client import check_connection
 
     key = _live_key()
     check = check_connection(LLMSettings().model, key=key)

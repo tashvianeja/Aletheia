@@ -12,8 +12,8 @@ from typing import Any
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication, QWidget
 
-from privacy_guardian.config import Settings
-from privacy_guardian.core.events import (
+from aletheia.config import Settings
+from aletheia.core.events import (
     ClipboardReadEvent,
     ConsentBannerEvent,
     DataCategory,
@@ -25,14 +25,14 @@ from privacy_guardian.core.events import (
     TrackingEvent,
     UserResponse,
 )
-from privacy_guardian.deepcheck import build_groups
-from privacy_guardian.engine.decision import decide
-from privacy_guardian.engine.preferences import LearnedRules, UserPreferences
-from privacy_guardian.storage import Store
-from privacy_guardian.ui.dashboard import Dashboard
-from privacy_guardian.ui.deepcheck import DeepCheckWindow
-from privacy_guardian.ui.onboarding import Onboarding
-from privacy_guardian.ui.popup import InterventionPopup
+from aletheia.deepcheck import build_groups
+from aletheia.engine.decision import decide
+from aletheia.engine.preferences import LearnedRules, UserPreferences
+from aletheia.storage import Store
+from aletheia.ui.dashboard import Dashboard
+from aletheia.ui.deepcheck import DeepCheckWindow
+from aletheia.ui.onboarding import Onboarding
+from aletheia.ui.popup import InterventionPopup
 
 
 class ScreenshotController:
@@ -194,7 +194,7 @@ def main() -> int:
     root = Path(__file__).parents[3]
     output = root / "docs/img"
     output.mkdir(parents=True, exist_ok=True)
-    data_dir = Path(os.environ.get("SCREENSHOT_DATA_DIR", "/tmp/privacy-guardian-screenshots"))
+    data_dir = Path(os.environ.get("SCREENSHOT_DATA_DIR", "/tmp/aletheia-screenshots"))
     data_dir.mkdir(parents=True, exist_ok=True)
     database = data_dir / "screenshots.sqlite3"
     if database.exists():

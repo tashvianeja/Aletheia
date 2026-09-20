@@ -44,13 +44,13 @@ Build the extension schemas/package with:
 make build-extension
 ```
 
-The extension source is in `extension/`. Chromium uses the fixed development extension ID `bfdjphkbgihhbonhnmjbbfhckdddonob`; Firefox uses `privacy-guardian@privacyguardian.local`. The native host name is `com.privacyguardian.host`. Register a development host with `uv run privacy-guardian --install-native-host`, then load the unpacked extension. Chromium/Firefox handshakes and browser recovery are verified; CI evidence remains pending.
+The extension source is in `extension/`. Chromium uses the fixed development extension ID `bfdjphkbgihhbonhnmjbbfhckdddonob`; Firefox uses `aletheia@aletheia.local`. The native host name is `com.aletheia.host`. Register a development host with `uv run aletheia --install-native-host`, then load the unpacked extension. Chromium/Firefox handshakes and browser recovery are verified; CI evidence remains pending.
 
 ## Local data and credentials
 
-The data directory defaults to `~/Library/Application Support/PrivacyGuardian` on macOS and `%APPDATA%\\PrivacyGuardian` on Windows. Override it with `PRIVACY_GUARDIAN_DATA_DIR` for a disposable development profile.
+The data directory defaults to `~/Library/Application Support/Aletheia` on macOS and `%APPDATA%\\Aletheia` on Windows. Override it with `ALETHEIA_DATA_DIR` for a disposable development profile.
 
-Optional Gemini credentials are stored through the operating-system keychain only, using service `PrivacyGuardian` and account `gemini_api_key`. The UI/API rejects unsupported keyring backends. Do not put keys in `.env`, `settings.toml`, or test fixtures.
+Optional Gemini credentials are stored through the operating-system keychain only, using service `Aletheia` and account `gemini_api_key`. The UI/API rejects unsupported keyring backends. Do not put keys in `.env`, `settings.toml`, or test fixtures.
 
 ## Fresh-clone verification procedure
 
@@ -66,9 +66,9 @@ xcode-select --install
 brew install uv tesseract create-dmg cmake autoconf automake libtool pkg-config
 uv sync
 make setup
-export PRIVACY_GUARDIAN_DATA_DIR="$(mktemp -d)"
-uv run privacy-guardian --diagnose
-QT_QPA_PLATFORM=offscreen uv run privacy-guardian --smoke-test
+export ALETHEIA_DATA_DIR="$(mktemp -d)"
+uv run aletheia --diagnose
+QT_QPA_PLATFORM=offscreen uv run aletheia --smoke-test
 make lint
 make typecheck
 make test

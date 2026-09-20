@@ -3,8 +3,8 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QMessageBox, QPushButton
 
-from privacy_guardian.ui.deepcheck import DeepCheckWindow
-from privacy_guardian.ui.onboarding import Onboarding
+from aletheia.ui.deepcheck import DeepCheckWindow
+from aletheia.ui.onboarding import Onboarding
 
 
 def test_onboarding_has_complete_walkthrough_and_live_permission_status(
@@ -30,8 +30,8 @@ def test_onboarding_finish_persists_cloud_and_autostart(qtbot, ui_controller, mo
     onboarding.extension_page.registered = True
     installed: list[object] = []
     keys: list[str] = []
-    monkeypatch.setattr("privacy_guardian.util.installation.install", installed.append)
-    monkeypatch.setattr("privacy_guardian.llm.client.set_api_key", keys.append)
+    monkeypatch.setattr("aletheia.util.installation.install", installed.append)
+    monkeypatch.setattr("aletheia.llm.client.set_api_key", keys.append)
     onboarding.cloud_enabled.setChecked(True)
     onboarding.key_input.setText("synthetic-key")
     onboarding.autostart.setChecked(False)
@@ -50,14 +50,14 @@ def test_onboarding_keychain_failure_is_visible(qtbot, ui_controller, monkeypatc
     qtbot.addWidget(onboarding)
     warnings: list[str] = []
     monkeypatch.setattr(
-        "privacy_guardian.llm.client.set_api_key",
+        "aletheia.llm.client.set_api_key",
         lambda _value: (_ for _ in ()).throw(RuntimeError("keychain unavailable")),
     )
     monkeypatch.setattr(
         QMessageBox, "warning", lambda _parent, _title, message: warnings.append(message)
     )
     monkeypatch.setattr(
-        "privacy_guardian.util.installation.install",
+        "aletheia.util.installation.install",
         lambda _settings: (_ for _ in ()).throw(AssertionError("must not install")),
     )
     onboarding.key_input.setText("synthetic-key")
@@ -74,7 +74,7 @@ def _labels(window) -> list[str]:
 
 
 def test_deep_check_progresses_then_renders_grouped_result(qtbot, ui_controller) -> None:
-    from privacy_guardian.deepcheck import build_groups
+    from aletheia.deepcheck import build_groups
 
     window = DeepCheckWindow(ui_controller)
     qtbot.addWidget(window)
@@ -124,7 +124,7 @@ def test_deep_check_progresses_then_renders_grouped_result(qtbot, ui_controller)
 def test_deep_check_card_lists_nothing_when_there_is_nothing_to_review(
     qtbot, ui_controller
 ) -> None:
-    from privacy_guardian.deepcheck import build_groups
+    from aletheia.deepcheck import build_groups
 
     window = DeepCheckWindow(ui_controller)
     qtbot.addWidget(window)
@@ -266,7 +266,7 @@ def test_a_failed_bridge_registration_is_explained_and_blocks(qtbot, ui_controll
 def test_skipping_the_extension_is_deliberate_and_leaves_setup_incomplete(
     qtbot, ui_controller, monkeypatch
 ) -> None:
-    monkeypatch.setattr("privacy_guardian.util.installation.install", lambda _settings: [])
+    monkeypatch.setattr("aletheia.util.installation.install", lambda _settings: [])
     monkeypatch.setattr(QMessageBox, "information", lambda *args: None)
     monkeypatch.setattr(
         QMessageBox, "question", lambda *args, **kwargs: QMessageBox.StandardButton.Yes

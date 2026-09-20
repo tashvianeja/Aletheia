@@ -11,7 +11,7 @@ from pathlib import Path
 
 import psutil
 
-from privacy_guardian.config import Settings
+from aletheia.config import Settings
 
 
 def process_tree(process: psutil.Process) -> list[psutil.Process]:
@@ -48,11 +48,11 @@ def main(duration: float = 300.0) -> int:
     ) as data_dir:
         Settings(data_dir=Path(data_dir), autostart=False, onboarding_complete=True).save()
         environment = os.environ.copy()
-        environment["PRIVACY_GUARDIAN_DATA_DIR"] = data_dir
+        environment["ALETHEIA_DATA_DIR"] = data_dir
         environment.setdefault("QT_QPA_PLATFORM", "offscreen")
         started = time.perf_counter()
         child = subprocess.Popen(
-            [sys.executable, "-m", "privacy_guardian"],
+            [sys.executable, "-m", "aletheia"],
             env=environment,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,

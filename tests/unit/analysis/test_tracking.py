@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from privacy_guardian.analysis.tracking import (
+from aletheia.analysis.tracking import (
     CookieObservation,
     TrackingSnapshot,
     analyze_tracking,

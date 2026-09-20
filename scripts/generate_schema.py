@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from privacy_guardian.core.events import EVENT_ADAPTER, Decision
-from privacy_guardian.core.ipc.protocol import Request, Response
+from aletheia.core.events import EVENT_ADAPTER, Decision
+from aletheia.core.ipc.protocol import Request, Response
 
 root = Path(__file__).resolve().parents[1] / "extension/schema"
 root.mkdir(parents=True, exist_ok=True)

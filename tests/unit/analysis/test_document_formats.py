@@ -9,8 +9,8 @@ from PIL import Image
 from pptx import Presentation
 from pptx.util import Inches
 
-from privacy_guardian.analysis.documents import extract as extraction
-from privacy_guardian.analysis.documents.extract import extract_document
+from aletheia.analysis.documents import extract as extraction
+from aletheia.analysis.documents.extract import extract_document
 
 
 def test_docx_extracts_paragraph_table_header_and_footer() -> None:

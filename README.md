@@ -1,4 +1,4 @@
-# Privacy Guardian
+# Aletheia
 
 **A small app that lives in your menu bar and speaks up right before you make a privacy decision.**
 
@@ -6,7 +6,7 @@ You make dozens of them a day. You drag a file into a free website. You tick a b
 because the reject button is two screens deep. Nobody tells you what is being taken, who is taking
 it, or whether they need it at all.
 
-Privacy Guardian watches for those moments, works out what is actually being asked for, and asks
+Aletheia watches for those moments, works out what is actually being asked for, and asks
 one question on your behalf:
 
 > **Does this site or app actually need this, for what you are doing?**
@@ -54,13 +54,13 @@ cd Privacy-Guardian
 ```
 
 The script checks your prerequisites, installs [uv](https://docs.astral.sh/uv/) if it is missing,
-builds `PrivacyGuardian.app`, copies it to `/Applications`, registers the browser bridge for
+builds `Aletheia.app`, copies it to `/Applications`, registers the browser bridge for
 Chrome, Edge, Brave and Firefox, starts the app, and leaves its setup walkthrough on screen.
 
 | Flag | What it does |
 |---|---|
 | `--skip-ocr` | Skips compiling the bundled OCR engine. Much faster. Scanned images are then reported as *unchecked* rather than silently skipped. |
-| `--no-autostart` | Does not start Privacy Guardian when you log in. |
+| `--no-autostart` | Does not start Aletheia when you log in. |
 | `--uninstall` | Removes the app, the browser bridge, autostart and the local database. |
 
 The first build with OCR compiles a static Tesseract from source and takes several minutes. Use
@@ -68,10 +68,10 @@ The first build with OCR compiles a static Tesseract from source and takes sever
 
 ### Then finish setup
 
-Privacy Guardian opens its setup walkthrough the first time it starts, and the script leaves it
+Aletheia opens its setup walkthrough the first time it starts, and the script leaves it
 on screen for you.
 
-Most of what Privacy Guardian sees comes through the browser, so the extension is not optional and
+Most of what Aletheia sees comes through the browser, so the extension is not optional and
 setup will not move past it until a browser has actually connected. That page registers the native
 messaging bridge, shows you where the extension lives with a copy button, and updates itself the
 moment a browser appears:
@@ -84,13 +84,13 @@ You can continue without it, but that takes a confirmation and leaves setup mark
 it will ask again next time. Packaged zips are written to `dist/` by the same build.
 
 Desktop monitoring is genuinely optional, and setup says so. Reopen the walkthrough any time from
-the menu bar under **Set up Privacy Guardian**.
+the menu bar under **Set up Aletheia**.
 
 ### Optional: desktop monitoring
 
 System Settings → Privacy & Security:
 
-- **Full Disk Access** lets Privacy Guardian see the permissions other apps have been granted
+- **Full Disk Access** lets Aletheia see the permissions other apps have been granted
 - **Accessibility** enables the ⌘⇧P thorough-check shortcut
 
 Everything in the browser works without either. The setup walkthrough shows their live status and
@@ -134,7 +134,7 @@ consolidated answer. Useful when something feels off but nothing has been flagge
 
 ### Learning
 
-Privacy Guardian notices when you keep making the same protective choice. After you have rejected
+Aletheia notices when you keep making the same protective choice. After you have rejected
 optional cookies on five different sites it asks, once:
 
 > **Make "reject optional cookies" your default?**
@@ -142,7 +142,7 @@ optional cookies on five different sites it asks, once:
 
 It never decides for you, and it never offers to automate anything involving government IDs,
 medical, financial or credential data. That boundary is in the code
-([`engine/preferences.py`](src/privacy_guardian/engine/preferences.py)), not just in the copy.
+([`engine/preferences.py`](src/aletheia/engine/preferences.py)), not just in the copy.
 
 ---
 
@@ -169,12 +169,12 @@ category tokens rather than values and drops anything that still looks like an i
 uv sync                 # dependencies
 make run                # start the desktop app
 make check              # lint, strict mypy, tests
-make build-extension    # dist/privacy-guardian-{chromium,firefox}.zip
-make build-mac          # dist/PrivacyGuardian.app and the .dmg
+make build-extension    # dist/aletheia-{chromium,firefox}.zip
+make build-mac          # dist/Aletheia.app and the .dmg
 ```
 
 `make setup` additionally provisions Firefox, Node and web-ext for the browser end-to-end suite.
-`uv run privacy-guardian --diagnose` prints platform, OCR availability, host registrations,
+`uv run aletheia --diagnose` prints platform, OCR availability, host registrations,
 detected browsers, database counts and permission status without starting the UI.
 
 Current state on macOS 26 arm64: **515 passed, 5 skipped** across `tests/unit`,
@@ -211,13 +211,13 @@ ranked so the protective one is the easiest to hit. Read
 ## Configuration
 
 `settings.toml` in the data directory
-(`~/Library/Application Support/PrivacyGuardian` on macOS), overridden by environment variables
-prefixed `PRIVACY_GUARDIAN_`. Nested keys use a double underscore. Values are parsed as JSON, so
+(`~/Library/Application Support/Aletheia` on macOS), overridden by environment variables
+prefixed `ALETHEIA_`. Nested keys use a double underscore. Values are parsed as JSON, so
 booleans are `true`/`false` and lists are JSON arrays.
 
 | Key | Environment variable | Default | Meaning |
 |---|---|---|---|
-| `data_dir` | `PRIVACY_GUARDIAN_DATA_DIR` | OS data directory | Settings, token, logs and SQLite location. |
+| `data_dir` | `ALETHEIA_DATA_DIR` | OS data directory | Settings, token, logs and SQLite location. |
 | `retention_days` | `..._RETENTION_DAYS` | `90` | How long event history is kept, 1–3650. |
 | `analysis_timeout_seconds` | `..._ANALYSIS_TIMEOUT_SECONDS` | `20` | Per-analysis deadline, 1–120. |
 | `popup_timeout_seconds` | `..._POPUP_TIMEOUT_SECONDS` | `60` | How long a widget waits before taking its safe default, 1–60. |
@@ -236,13 +236,13 @@ booleans are `true`/`false` and lists are JSON arrays.
 | `llm.deep_check_narrative` | `..._LLM__DEEP_CHECK_NARRATIVE` | `true` | Improve thorough-check summaries. |
 
 API keys never go in `settings.toml` or the environment. The app stores them in the system keychain
-under service `PrivacyGuardian`, account `gemini_api_key`.
+under service `Aletheia`, account `gemini_api_key`.
 
 ---
 
 ## Limits worth knowing
 
-Privacy Guardian gives guidance. It cannot intercept every application, permission change or
+Aletheia gives guidance. It cannot intercept every application, permission change or
 network transfer, and it is not a compliance tool.
 
 On macOS it **observes** permission grants; it cannot revoke them. When a permission looks
@@ -258,12 +258,12 @@ Full detail in [Platform limitations](docs/PLATFORM_LIMITATIONS.md).
 ## Troubleshooting
 
 **The browser extension cannot reach the app.** Run
-`/Applications/PrivacyGuardian.app/Contents/MacOS/PrivacyGuardian --install-native-host`, restart
+`/Applications/Aletheia.app/Contents/MacOS/Aletheia --install-native-host`, restart
 the browser, and check `--diagnose` for `native_host_registrations`.
 
 **macOS says the app is damaged or from an unidentified developer.** A locally built app is signed
 ad hoc, not notarised. `install.sh` clears the quarantine flag; if you moved the app by hand, run
-`xattr -dr com.apple.quarantine /Applications/PrivacyGuardian.app`.
+`xattr -dr com.apple.quarantine /Applications/Aletheia.app`.
 
 **Desktop events are missing.** Grant Full Disk Access, then quit and reopen the app — TCC changes
 are only picked up on restart.

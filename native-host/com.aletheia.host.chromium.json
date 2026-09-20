@@ -1,0 +1,7 @@
+{
+  "name": "com.aletheia.host",
+  "description": "Local Aletheia analysis bridge",
+  "path": "__INSTALL_PATH__",
+  "type": "stdio",
+  "allowed_origins": ["chrome-extension://bfdjphkbgihhbonhnmjbbfhckdddonob/"]
+}

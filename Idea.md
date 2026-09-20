@@ -1,4 +1,4 @@
-# Privacy Guardian
+# Aletheia
 
 ## 1. Problem
 
@@ -15,13 +15,13 @@ This happens when uploading files, filling forms, accepting cookies, installing 
 
 The problem is not that users have no privacy controls. The problem is that **the information required to make an informed decision is often hidden, technical, or presented at the wrong time**.
 
-Privacy Guardian runs quietly in the background and intervenes only when it detects a potentially important privacy decision.
+Aletheia runs quietly in the background and intervenes only when it detects a potentially important privacy decision.
 
 ---
 
 # 2. Product Behaviour
 
-Privacy Guardian is a **desktop background application**, similar in behaviour to Grammarly.
+Aletheia is a **desktop background application**, similar in behaviour to Grammarly.
 
 It:
 
@@ -38,7 +38,7 @@ For example:
                     User uses computer normally
                               │
                               ↓
-                    Privacy Guardian
+                    Aletheia
                      running silently
                               │
              ┌────────────────┼────────────────┐
@@ -65,7 +65,7 @@ The goal is **zero privacy effort for normal interactions**.
 
 ## 3.1 File Uploads
 
-When a user uploads a file, Privacy Guardian locally examines the file before submission.
+When a user uploads a file, Aletheia locally examines the file before submission.
 
 It identifies:
 
@@ -96,7 +96,7 @@ Date of birth
 Passport number
 Photo
 
-Privacy Guardian:
+Aletheia:
 "This file contains highly sensitive identity information.
 An image compressor does not appear to require most of this information."
 
@@ -125,7 +125,7 @@ Date of birth
 Home address
 ```
 
-Privacy Guardian analyses the form and the purpose of the website.
+Aletheia analyses the form and the purpose of the website.
 
 It could display:
 
@@ -147,7 +147,7 @@ This is particularly useful because users often don't realise that a field is un
 
 # 3.3 Terms & Conditions
 
-When the user is about to accept a long Terms & Conditions document, Privacy Guardian can analyse it and surface clauses that materially affect the user's privacy.
+When the user is about to accept a long Terms & Conditions document, Aletheia can analyse it and surface clauses that materially affect the user's privacy.
 
 Instead of summarising the entire document, it extracts things such as:
 
@@ -175,7 +175,7 @@ The system does not analyse every document on the internet. It activates when th
 
 Privacy policies are particularly difficult for normal users because the relevant information is buried inside long legal documents.
 
-Privacy Guardian extracts structured information:
+Aletheia extracts structured information:
 
 ```text
                  WEBSITE PRIVACY
@@ -214,7 +214,7 @@ The second is much more useful.
 
 # 3.5 Cookies and Tracking
 
-When a cookie/consent banner appears, Privacy Guardian identifies what the choices actually mean.
+When a cookie/consent banner appears, Aletheia identifies what the choices actually mean.
 
 For example:
 
@@ -240,7 +240,7 @@ This is an existing area of privacy tooling, so the differentiator is not merely
 
 # 3.6 Unnecessary Permissions
 
-Privacy Guardian monitors permission requests such as:
+Aletheia monitors permission requests such as:
 
 * Camera
 * Microphone
@@ -287,7 +287,7 @@ Examples include:
 * Browser history
 * System-level automation
 
-Privacy Guardian identifies when an application is asking for **broad system access relative to what it appears to do**.
+Aletheia identifies when an application is asking for **broad system access relative to what it appears to do**.
 
 For example:
 
@@ -310,7 +310,7 @@ This extends the system beyond browser privacy into **desktop privacy**.
 
 # 3.8 Advertising Profiles and Persistent Identifiers
 
-Privacy Guardian also detects when a website or application is attempting to create a persistent profile of the user.
+Aletheia also detects when a website or application is attempting to create a persistent profile of the user.
 
 This could include:
 
@@ -403,7 +403,7 @@ This allows completely different events to be handled using the same underlying 
 │                 │                        │
 │                 ↓                        │
 │       ┌─────────────────────┐            │
-│       │ Privacy Guardian    │            │
+│       │ Aletheia    │            │
 │       │ Background Service  │            │
 │       └──────────┬──────────┘            │
 │                  ↓                       │
@@ -469,7 +469,7 @@ The UI should deliberately be small.
 When nothing important happens:
 
 ```text
-                 [Privacy Guardian ●]
+                 [Aletheia ●]
 ```
 
 Nothing else appears.
@@ -478,7 +478,7 @@ When intervention is required:
 
 ```text
 ┌──────────────────────────────────────┐
-│ 🔒 Privacy Guardian                  │
+│ 🔒 Aletheia                  │
 │                                      │
 │ This website is asking for your      │
 │ phone number.                        │
@@ -496,11 +496,11 @@ A larger dashboard can exist for users who want it, but **the core product shoul
 
 ### Manual Deep Check
 
-The user can also **open Privacy Guardian at any time and request a thorough privacy check**, even if the system has not detected anything unusual.
+The user can also **open Aletheia at any time and request a thorough privacy check**, even if the system has not detected anything unusual.
 
 This is useful when the user feels that something may be wrong but the automatic system has not flagged it.
 
-For example, the user could click the Privacy Guardian icon and select:
+For example, the user could click the Aletheia icon and select:
 
 ```text
 [Run thorough check]
@@ -655,4 +655,4 @@ This gives you one coherent product rather than eight disconnected features.
 
 The central engineering idea remains:
 
-> **Privacy Guardian observes privacy-relevant events, understands what is being requested and why, determines whether it is necessary, and only interrupts the user when there is something worth knowing or acting on.**
+> **Aletheia observes privacy-relevant events, understands what is being requested and why, determines whether it is necessary, and only interrupts the user when there is something worth knowing or acting on.**

@@ -1,0 +1,478 @@
+from __future__ import annotations
+
+from datetime import timedelta
+
+from aletheia.core.events import (
+    ClipboardReadEvent,
+    ConsentBannerEvent,
+    DataCategory,
+    Decision,
+    FileUploadEvent,
+    Finding,
+    FormObservedEvent,
+    FormSubmitEvent,
+    Outcome,
+    PermissionRequestEvent,
+    PolicyDocumentEvent,
+    PrivacyEvent,
+    RedactedDocumentEvent,
+    ScreenCaptureEvent,
+    SystemAccessEvent,
+    TrackingEvent,
+)
+from aletheia.engine.context import SiteOrAppProfile, analyze_context
+from aletheia.engine.explain import explain, summarize
+from aletheia.engine.necessity import Necessity, NecessityAssessment
+from aletheia.engine.preferences import LearnedRules, Preference, UserPreferences, protected
+from aletheia.engine.presentation import decorate, findings_for, policy_rows
+from aletheia.engine.risk import score_risk
+
+_LEVELS = [Outcome.IGNORE, Outcome.INFORM, Outcome.INTERVENE]
+# What an automatic action reports back once it has run.
+AUTOMATIC_HEADLINES = {
+    "reject_optional": "Optional cookies rejected for you.",
+    "block": "Advertising identifiers blocked.",
+}
+AUTOMATIC_BODIES = {
+    "reject_optional": "Necessary cookies were kept. You set this as your default.",
+    "block": "This page can no longer link your visit to other websites. You set this as your default.",
+}
+_ACTIONS: dict[str, tuple[list[str], str]] = {
+    "file_upload": (["cancel", "continue", "redact"], "cancel"),
+    # "clear_fields" is the remedy: blank what the form has no business asking for and
+    # send the rest. It is withdrawn below when nothing on the form could be blanked.
+    "form_submit": (["cancel", "continue", "clear_fields", "review_fields"], "cancel"),
+    # A form merely being on the page holds nothing up, so this card asks nothing. It
+    # offers the remedy instead: replace what the form has no business asking for with
+    # bullets, there and then, before anything is sent. Withdrawn below when there is
+    # nothing typed in to replace.
+    "form_observed": (["redact_fields", "review_fields", "continue"], "review_fields"),
+    "consent_banner": (["reject_optional", "continue", "view_details"], "reject_optional"),
+    # "continue" is how a card gets put down: without it, closing the advertising
+    # card could not be recorded, and an unanswered warning is raised again.
+    "tracking": (["block", "learn_more", "continue"], "block"),
+    # "continue" is the way to put a desktop notice down without doing anything about
+    # it. Without one, closing the card would either act or leave it outstanding forever.
+    "permission_request": (["open_settings", "mark_expected", "continue"], "open_settings"),
+    "system_access": (["open_settings", "mark_expected", "continue"], "open_settings"),
+    "screen_capture": (["open_settings", "mark_expected", "continue"], "open_settings"),
+    "startup_registration": (["open_settings", "mark_expected", "continue"], "open_settings"),
+    "clipboard_read": (["clear_clipboard", "open_settings", "continue"], "clear_clipboard"),
+    "policy_document": (["cancel", "continue", "view_details"], "cancel"),
+    # A file with our own boxes on it: the remedy is to take them off again.
+    "redacted_document": (["unredact", "continue"], "unredact"),
+}
+
+
+def clearable_fields(event: FormObservedEvent, flagged: set[DataCategory]) -> list[str]:
+    """The fields "Send only what's needed" would blank, by the page's own ids.
+
+    A field the form insists on cannot be sent empty, and blanking it would only hand
+    the person a validation error with their answer gone. So the remedy takes the
+    fields the card is warning about that are filled in and not required, and no
+    others: a blank optional box is not worth mentioning, and a required one is the
+    form's decision to make, not this app's.
+    """
+    return [
+        field.field_id
+        for field in event.fields
+        if field.category is not None
+        and field.category in flagged
+        and field.filled
+        and not field.required
+        and not field.asserted_required
+    ]
+
+
+# Boxes that keep only the shapes of value they recognise: a tick, a dropdown, a date
+# picker. Bullets written into one are either discarded or empty it, so a field like
+# that is for "Send only what's needed" to blank rather than for this to redact.
+_UNREDACTABLE_INPUTS = frozenset(
+    {
+        "checkbox",
+        "radio",
+        "select-one",
+        "select-multiple",
+        "file",
+        "range",
+        "color",
+        "number",
+        "date",
+        "datetime-local",
+        "month",
+        "week",
+        "time",
+    }
+)
+
+
+def redactable_fields(event: FormObservedEvent, flagged: set[DataCategory]) -> list[str]:
+    """The fields "Redact these fields" would fill with bullets, by the page's own ids.
+
+    The fields the card is warning about that the person has actually typed something
+    into: what is redacted is the contents, so a box still empty has nothing to hide.
+
+    Unlike blanking, this leaves the box filled, so it is offered for a field the form
+    insists on as readily as for an optional one — the form still gets an answer of the
+    length it asked for, and the site never sees the password or the card number.
+    """
+    return [
+        field.field_id
+        for field in event.fields
+        if field.category is not None
+        and field.category in flagged
+        and field.filled
+        and field.input_type not in _UNREDACTABLE_INPUTS
+    ]
+
+
+def form_assessments(
+    event: FormObservedEvent,
+) -> tuple[list[NecessityAssessment], set[DataCategory]]:
+    """Necessity for a form, keyed on the transaction rather than the site category.
+
+    Returns the per-category verdicts and, separately, the categories the engine judged
+    worth raising: the card and the in-page badges then say the same thing.
+    """
+    from aletheia.intelligence.necessity import assess_form, assessments_for
+
+    fields = [
+        field
+        for field in event.fields
+        if not isinstance(event, FormSubmitEvent) or field.filled or field.required
+    ]
+    judgement = assess_form(fields, event.context, event.requester.purpose)
+    assessments = assessments_for(judgement)
+    # Categories that arrived on the event rather than as a field on this form - a
+    # clipboard finding, a sensor observation - still have to be judged, and the form's
+    # intent says nothing about them.
+    covered = {item.category for item in assessments}
+    flagged = {item.field.category for item in judgement.flagged if item.field.category}
+    return (
+        assessments
+        + analyze_context(
+            event.requester, [item for item in event.data_categories if item not in covered]
+        ),
+        flagged,
+    )
+
+
+def decide(
+    event: PrivacyEvent,
+    findings: list[Finding] | None = None,
+    profile: SiteOrAppProfile | None = None,
+    preferences: UserPreferences | None = None,
+    learned_rules: LearnedRules | None = None,
+) -> Decision:
+    profile = profile or SiteOrAppProfile()
+    preferences = preferences or UserPreferences()
+    learned_rules = learned_rules or LearnedRules()
+    categories = set(event.data_categories) | {finding.category for finding in findings or []}
+    if isinstance(event, FormObservedEvent):
+        categories |= {
+            field.category
+            for field in event.fields
+            if field.category is not None
+            and (not isinstance(event, FormSubmitEvent) or field.filled)
+        }
+    event = event.model_copy(update={"data_categories": sorted(categories, key=str)})
+    flagged: set[DataCategory] | None = None
+    if isinstance(event, FormObservedEvent):
+        # A form is judged against what it is for, not against the site's industry.
+        assessments, flagged = form_assessments(event)
+    else:
+        assessments = analyze_context(event.requester, event.data_categories)
+    scored = score_risk(assessments, profile, learned_rules, event.requester.purpose)
+    risk = scored.risk
+    level = 0 if risk < 0.25 else 1 if risk < 0.55 else 2
+    notes: list[str] = []
+    if categories and all(
+        preferences.for_category(category) == Preference.USUALLY_ALLOW for category in categories
+    ):
+        level = 0 if risk < 0.45 else 1 if risk < 0.75 else 2
+    minimum = 0
+    for category in categories:
+        preference = preferences.for_category(category)
+        if preference == Preference.ALWAYS_WARN:
+            minimum = max(minimum, 2 if scored.category_risks.get(category, 0) >= 0.4 else 1)
+        elif preference == Preference.REJECT:
+            minimum = max(minimum, 1)
+    level = max(level, minimum)
+    high_impact = any(protected(category) for category in categories)
+    if isinstance(event, TrackingEvent):
+        risk = (
+            max(0.25, min(0.54, event.confidence * 0.54))
+            if event.signals or event.tracker_domains or event.fingerprinting
+            else 0.0
+        )
+        level = max(minimum, 1 if risk else 0)
+        notes.append(
+            "Blocking prevents this page adding to that advertising profile, "
+            "and clears the identifiers it has already set."
+        )
+    if isinstance(event, ConsentBannerEvent):
+        optional = any(p != "necessary" for p in event.purposes)
+        rejects_tracking = (
+            preferences.categories.get("analytics") == Preference.REJECT
+            or preferences.categories.get("advertising") == Preference.REJECT
+        )
+        if optional and rejects_tracking:
+            notes.append("Your preference is to reject optional analytics and advertising cookies.")
+        risk = max(
+            risk,
+            0.55
+            if event.dark_patterns
+            else 0.3
+            if any(p != "necessary" for p in event.purposes)
+            else 0,
+        )
+        level = max(level, 2 if event.dark_patterns else 1 if risk >= 0.25 else 0)
+        if event.dark_patterns:
+            notes.append(
+                "The consent design makes rejecting optional tracking harder than accepting it."
+            )
+    if (
+        isinstance(event, SystemAccessEvent)
+        and event.breadth >= 0.6
+        and any(item.verdict in {Necessity.UNNECESSARY, Necessity.RED_FLAG} for item in assessments)
+    ):
+        risk = max(risk, 0.65)
+        level = max(level, 2)
+        notes.append("The breadth of system access exceeds what this task appears to need.")
+    if (
+        isinstance(event, SystemAccessEvent)
+        and event.requester.kind == "extension"
+        and event.breadth >= 0.6
+        and DataCategory.BROWSER_HISTORY in categories
+    ):
+        risk = max(risk, 0.7)
+        level = max(level, 2)
+        notes.append(
+            "This extension can access browsing history and broad website activity; review whether it needs that breadth of access."
+        )
+    if isinstance(event, PolicyDocumentEvent):
+        material = set(profile.clauses)
+        if material:
+            risk = max(risk, 0.6)
+            level = max(level, 2)
+            from aletheia.engine.clauses import clause_title
+
+            # Clause titles are whole sentences about the reader, so they only need
+            # their opening capital dropped to sit inside one.
+            said = [clause_title(clause) for clause in sorted(material)]
+            said = [title[:1].lower() + title[1:] for title in said]
+            notes.append(
+                "This agreement says "
+                + (", ".join(said[:-1]) + " and " + said[-1] if len(said) > 1 else said[0])
+                + "."
+            )
+        elif event.missing or profile.policy_missing:
+            risk = max(risk, 0.3)
+            level = max(level, 1)
+            notes.append(
+                "No privacy policy found; collection and retention terms could not be checked."
+            )
+    if isinstance(event, ScreenCaptureEvent) and event.active and not event.first_grant:
+        level = max(minimum, 1)
+        notes.append("Screen capture is now active.")
+    if isinstance(event, PermissionRequestEvent) and event.state in {"denied", "stopped"}:
+        level = 0
+    if isinstance(event, FormObservedEvent) and event.event_type == "form_observed":
+        level = min(level, 1)
+    if (
+        isinstance(event, ClipboardReadEvent)
+        and not event.cloud_sync
+        and (
+            event.writer_key == event.requester.key
+            or event.requester.key in preferences.clipboard_allowlist
+        )
+    ):
+        level = 0
+    if isinstance(event, ClipboardReadEvent) and event.cloud_sync and categories:
+        risk = max(risk, 0.3)
+        level = max(level, 1)
+        notes.append(
+            "Operating-system clipboard cloud sync is enabled; sensitive clipboard content may be copied to other devices."
+        )
+    if (
+        getattr(event, "existing", False)
+        and not any(
+            item.verdict in {Necessity.UNNECESSARY, Necessity.RED_FLAG} for item in assessments
+        )
+        and not high_impact
+    ):
+        # An access the requester already holds is the state of the machine, not news.
+        # Saying "this app is asking for your camera" about a grant made months ago is
+        # simply wrong, and doing it for every settled permission buries the real ones.
+        level = minimum
+        notes.append("This access was already in place; nothing has changed.")
+    expected = set(preferences.expected_permissions.get(event.requester.key, []))
+    if categories and categories <= expected:
+        level = 0 if not high_impact else min(level, 1)
+        notes.append("You marked this access as expected for this application.")
+    if preferences.requester_overrides.get(event.requester.key) == "allow" and not high_impact:
+        level = 0
+        notes.append("You explicitly allowed this requester.")
+    learned_floor = 0
+    if (
+        level == 2
+        and not high_impact
+        and categories
+        and all(
+            learned_rules.allows_downgrade(category, event.requester.purpose)
+            for category in categories
+        )
+    ):
+        level = 1
+        learned_floor = 1
+        notes.append(
+            "You continued at least three times for this data and purpose; this reminder remains visible."
+        )
+    red_flags = {item.category for item in assessments if item.verdict == Necessity.RED_FLAG}
+    for observation in profile.recent_observations:
+        if observation.event_class and observation.event_class != event.event_type:
+            continue
+        # Being shown once is not being answered once. Reloading the page, or opening
+        # the next one, used to arrive at a warning that had quietly turned itself off
+        # for the rest of the day, so nothing was ever announced again.
+        if not observation.answered:
+            continue
+        if isinstance(event, ConsentBannerEvent) and set(event.dark_patterns) - set(
+            observation.signals
+        ):
+            continue
+        if isinstance(event, PolicyDocumentEvent) and set(profile.clauses) - set(
+            observation.signals
+        ):
+            continue
+        # A tracking mechanism not seen before is news, however often the page has
+        # already been reported for the ones that were.
+        if isinstance(event, TrackingEvent) and set(event.signals) - set(observation.signals):
+            continue
+        if set(observation.categories) != categories or not timedelta(
+            0
+        ) <= event.ts - observation.ts < timedelta(hours=24):
+            continue
+        if high_impact or red_flags - set(observation.red_flags):
+            continue
+        if (
+            isinstance(event, TrackingEvent)
+            and event.confidence - observation.confidence >= 0.2 - 1e-9
+        ):
+            continue
+        level = max(minimum, level - 1)
+        notes.append("The same request was already shown within the last day.")
+        break
+    level = max(level, learned_floor)
+    if isinstance(event, RedactedDocumentEvent):
+        # Nothing is at risk here; it is an offer, so it is always worth a card and never a hold.
+        level = 1
+    partial_upload = isinstance(event, FileUploadEvent) and event.partial
+    if partial_upload:
+        level = max(level, 1)
+        risk = max(risk, 0.25)
+        notes.append("Partial file analysis: omitted or unreadable content has not been checked.")
+    actions, default_action = _ACTIONS.get(
+        event.event_type, (["open_settings", "continue"], "open_settings")
+    )
+    actions = list(actions)
+    if isinstance(event, ConsentBannerEvent) and not preferences.reject_optional_cookies:
+        actions = ["view_details", "reject_optional", "continue"]
+        default_action = "view_details"
+    if (
+        "clear_fields" in actions
+        and isinstance(event, FormObservedEvent)
+        and not clearable_fields(event, flagged or set())
+    ):
+        # Every field worth blanking is one the form insists on, so there is nothing
+        # this button could do. A button that does nothing is worse than none.
+        actions.remove("clear_fields")
+    if (
+        "redact_fields" in actions
+        and isinstance(event, FormObservedEvent)
+        and not redactable_fields(event, flagged or set())
+    ):
+        # Nothing has been typed into the boxes being warned about yet, so there are no
+        # contents to replace. The offer returns the moment there are.
+        actions.remove("redact_fields")
+    if event.event_type == "file_upload" and DataCategory.LOCATION_PRECISE in categories:
+        actions.insert(0, "strip_metadata")
+        if categories == {DataCategory.LOCATION_PRECISE}:
+            # Nothing in the picture to redact: the only thing to take out is where
+            # it was taken. Offering a "redacted copy" as well put the filled button
+            # on the remedy that would do nothing.
+            actions.remove("redact")
+    automatic = (
+        default_action
+        if default_action in preferences.automatic_actions and default_action in actions
+        else ""
+    )
+    if automatic:
+        # The user authorised this; take it, say so, and stop interrupting.
+        level = min(level, 1)
+        notes.append("You asked Aletheia to do this automatically.")
+    headline, body, findings_rows, rationale = explain(
+        event,
+        assessments,
+        profile,
+        notes,
+        informational=_LEVELS[level] == Outcome.INFORM,
+        found=findings,
+        flagged=flagged,
+    )
+    unnecessary = {
+        item.category
+        for item in assessments
+        if item.verdict in {Necessity.UNNECESSARY, Necessity.RED_FLAG}
+    }
+    findings_rows = findings_for(event, findings_rows, unnecessary, flagged)
+    if isinstance(event, PolicyDocumentEvent):
+        rows = policy_rows(list(profile.clauses), [])
+        if rows:
+            findings_rows = rows
+            headline = "Before you accept"
+            # The clauses are listed immediately below; counting them here said the
+            # same thing a second time in a card there is no time to read twice.
+            body = "Everything else in them looks standard."
+    if partial_upload:
+        # A caveat belongs after what was found, not in front of it.
+        body = f"{body} Part of this file could not be read, so it was not fully checked."
+    if isinstance(event, PermissionRequestEvent) and event.state in {"denied", "stopped"}:
+        level = 0
+        headline = "Access was denied or stopped."
+        body = "No active grant was detected."
+        findings_rows = []
+        rationale.append(summarize(headline, body))
+    if automatic:
+        headline = AUTOMATIC_HEADLINES.get(automatic, headline)
+        body = AUTOMATIC_BODIES.get(automatic, body)
+    explanation = summarize(headline, body)
+    return decorate(
+        Decision(
+            event_id=event.id,
+            outcome=_LEVELS[level],
+            risk=risk,
+            explanation=explanation,
+            headline=headline,
+            body=body,
+            findings=findings_rows,
+            rationale=rationale,
+            actions=actions,
+            default_action=default_action,
+            auto_action=automatic,
+        ),
+        event,
+        filename=getattr(event, "filename", ""),
+    )
+
+
+class DecisionEngine:
+    def decide(
+        self,
+        event: PrivacyEvent,
+        findings: list[Finding] | None = None,
+        profile: SiteOrAppProfile | None = None,
+        preferences: UserPreferences | None = None,
+        learned_rules: LearnedRules | None = None,
+    ) -> Decision:
+        return decide(event, findings, profile, preferences, learned_rules)

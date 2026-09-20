@@ -7,8 +7,8 @@ import struct
 import pytest
 from pydantic import ValidationError
 
-from privacy_guardian.core.ipc.native_host import validate_caller
-from privacy_guardian.core.ipc.protocol import (
+from aletheia.core.ipc.native_host import validate_caller
+from aletheia.core.ipc.protocol import (
     MAX_MESSAGE_BYTES,
     Request,
     decode_message,
@@ -77,9 +77,9 @@ def test_request_rejects_unknown_type_and_extra_fields() -> None:
 
 
 def test_native_host_caller_validation_requires_exact_extension_id() -> None:
-    allowed = ["abcdefghijklmnopabcdefghijklmnop", "privacy-guardian@privacyguardian.local"]
+    allowed = ["abcdefghijklmnopabcdefghijklmnop", "aletheia@aletheia.local"]
     assert validate_caller(["chrome-extension://abcdefghijklmnopabcdefghijklmnop/"], allowed)
-    assert validate_caller(["privacy-guardian@privacyguardian.local"], allowed)
+    assert validate_caller(["aletheia@aletheia.local"], allowed)
     assert not validate_caller(
         ["chrome-extension://abcdefghijklmnopabcdefghijklmnop.evil/"], allowed
     )

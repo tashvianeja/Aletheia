@@ -6,11 +6,11 @@ from pathlib import Path
 from typing import Any
 
 CORE_PREFIXES = (
-    "privacy_guardian/core/",
-    "privacy_guardian/analysis/pii/",
-    "privacy_guardian/detectors/",
-    "privacy_guardian/engine/",
-    "privacy_guardian/storage/",
+    "aletheia/core/",
+    "aletheia/analysis/pii/",
+    "aletheia/detectors/",
+    "aletheia/engine/",
+    "aletheia/storage/",
 )
 
 
@@ -34,7 +34,7 @@ def percentage(counts: tuple[int, int]) -> float:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Enforce Privacy Guardian line-coverage gates")
+    parser = argparse.ArgumentParser(description="Enforce Aletheia line-coverage gates")
     parser.add_argument("coverage_json", type=Path, nargs="?", default=Path("coverage.json"))
     parser.add_argument("--core-min", type=float, default=85.0)
     parser.add_argument("--overall-min", type=float, default=70.0)

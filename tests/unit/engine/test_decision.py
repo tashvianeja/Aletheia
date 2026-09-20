@@ -8,17 +8,17 @@ import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
-from privacy_guardian.core.events import (
+from aletheia.core.events import (
     EVENT_ADAPTER,
     DataCategory,
     FormSubmitEvent,
     Outcome,
     Requester,
 )
-from privacy_guardian.engine.context import Observation, SiteOrAppProfile
-from privacy_guardian.engine.decision import decide
-from privacy_guardian.engine.necessity import Necessity, necessity_for, purposes
-from privacy_guardian.engine.preferences import LearnedRules, Preference, UserPreferences, learn
+from aletheia.engine.context import Observation, SiteOrAppProfile
+from aletheia.engine.decision import decide
+from aletheia.engine.necessity import Necessity, necessity_for, purposes
+from aletheia.engine.preferences import LearnedRules, Preference, UserPreferences, learn
 from tests.fixtures.generate.generate_scenarios import generate as generate_scenarios
 
 LEVEL = {Outcome.IGNORE: 0, Outcome.INFORM: 1, Outcome.INTERVENE: 2}
@@ -144,7 +144,7 @@ def test_learning_and_rate_limit_can_never_silence_high_risk_request() -> None:
 
 
 def _standing_grant(existing: bool = True, purpose: str = "unknown") -> Outcome:
-    from privacy_guardian.core.events import PermissionRequestEvent
+    from aletheia.core.events import PermissionRequestEvent
 
     return decide(
         PermissionRequestEvent(
@@ -180,7 +180,7 @@ def test_a_permission_already_held_is_still_raised_when_it_is_unnecessary() -> N
 
 
 def test_closing_a_desktop_notice_is_an_option_the_decision_offers() -> None:
-    from privacy_guardian.core.events import PermissionRequestEvent
+    from aletheia.core.events import PermissionRequestEvent
 
     decision = decide(
         PermissionRequestEvent(
@@ -207,9 +207,9 @@ def test_closing_a_desktop_notice_is_an_option_the_decision_offers() -> None:
 def test_a_permission_is_described_as_what_actually_happened(
     state: str, existing: bool, expected: str
 ) -> None:
-    from privacy_guardian.core.events import PermissionRequestEvent
-    from privacy_guardian.engine.context import analyze_context
-    from privacy_guardian.engine.explain import explain
+    from aletheia.core.events import PermissionRequestEvent
+    from aletheia.engine.context import analyze_context
+    from aletheia.engine.explain import explain
 
     event = PermissionRequestEvent(
         source="os",
@@ -227,9 +227,9 @@ def test_a_permission_is_described_as_what_actually_happened(
 
 
 def test_broad_access_already_held_is_described_as_held() -> None:
-    from privacy_guardian.core.events import SystemAccessEvent
-    from privacy_guardian.engine.context import analyze_context
-    from privacy_guardian.engine.explain import explain
+    from aletheia.core.events import SystemAccessEvent
+    from aletheia.engine.context import analyze_context
+    from aletheia.engine.explain import explain
 
     event = SystemAccessEvent(
         source="os",
@@ -247,7 +247,7 @@ def test_broad_access_already_held_is_described_as_held() -> None:
 
 
 def test_upload_rows_say_where_each_thing_was_found() -> None:
-    from privacy_guardian.core.events import FileUploadEvent, Finding
+    from aletheia.core.events import FileUploadEvent, Finding
 
     event = FileUploadEvent(
         requester=Requester(
@@ -274,15 +274,15 @@ def test_upload_rows_say_where_each_thing_was_found() -> None:
 
 
 def test_a_single_page_document_is_not_labelled_page_one() -> None:
-    from privacy_guardian.core.events import Finding
-    from privacy_guardian.engine.explain import evidence
+    from aletheia.core.events import Finding
+    from aletheia.engine.explain import evidence
 
     assert evidence([Finding(category=DataCategory.EMAIL, page=1)]) == {}
 
 
 def test_tracking_rows_group_the_mechanisms_into_what_they_do() -> None:
-    from privacy_guardian.core.events import TrackingEvent
-    from privacy_guardian.engine.presentation import tracking_mechanisms, tracking_rows
+    from aletheia.core.events import TrackingEvent
+    from aletheia.engine.presentation import tracking_mechanisms, tracking_rows
 
     event = TrackingEvent(
         requester=Requester(kind="website", origin="https://news.test"),
@@ -314,8 +314,8 @@ def test_tracking_rows_group_the_mechanisms_into_what_they_do() -> None:
 
 
 def test_an_email_match_is_its_own_row_because_it_is_not_just_a_browser() -> None:
-    from privacy_guardian.core.events import TrackingEvent
-    from privacy_guardian.engine.presentation import tracking_rows
+    from aletheia.core.events import TrackingEvent
+    from aletheia.engine.presentation import tracking_rows
 
     event = TrackingEvent(
         requester=Requester(kind="website", origin="https://news.test"),
@@ -330,7 +330,7 @@ def test_an_email_match_is_its_own_row_because_it_is_not_just_a_browser() -> Non
 
 
 def test_page_context_warnings_name_the_site() -> None:
-    from privacy_guardian.sensors.browser_bridge import prepare_context
+    from aletheia.sensors.browser_bridge import prepare_context
 
     prepared = prepare_context({"origin": "https://news.example", "signals": {}})
 
@@ -338,8 +338,8 @@ def test_page_context_warnings_name_the_site() -> None:
 
 
 def test_a_cookie_banner_is_one_choice_so_it_reads_as_one_row() -> None:
-    from privacy_guardian.core.events import ConsentBannerEvent
-    from privacy_guardian.engine.explain import consent_findings, consent_meanings
+    from aletheia.core.events import ConsentBannerEvent
+    from aletheia.engine.explain import consent_findings, consent_meanings
 
     event = ConsentBannerEvent(
         requester=Requester(kind="website", origin="https://news.test"),
@@ -360,8 +360,8 @@ def test_a_cookie_banner_is_one_choice_so_it_reads_as_one_row() -> None:
 
 
 def test_a_form_card_lists_what_needs_looking_at_not_what_is_fine() -> None:
-    from privacy_guardian.core.events import FormField, FormObservedEvent
-    from privacy_guardian.engine.explain import form_findings
+    from aletheia.core.events import FormField, FormObservedEvent
+    from aletheia.engine.explain import form_findings
 
     fields = [
         FormField(field_id="e", category=DataCategory.EMAIL),
@@ -379,7 +379,7 @@ def test_a_form_card_lists_what_needs_looking_at_not_what_is_fine() -> None:
 
 
 def test_the_card_does_not_say_in_prose_what_the_rows_already_say() -> None:
-    from privacy_guardian.core.events import ConsentBannerEvent, TrackingEvent
+    from aletheia.core.events import ConsentBannerEvent, TrackingEvent
 
     site = Requester(kind="website", origin="https://news.test", display_name="news.test")
     tracking = decide(
@@ -404,8 +404,8 @@ def test_the_card_does_not_say_in_prose_what_the_rows_already_say() -> None:
 def test_urgency_follows_the_verdict_and_the_risk() -> None:
     """The tier is the colour the widget wears: two reds for what holds something up,
     amber for a warning, green for fine or handled, blue for a plain note."""
-    from privacy_guardian.core.events import Decision, DecisionFinding, Outcome
-    from privacy_guardian.engine.presentation import urgency_for
+    from aletheia.core.events import Decision, DecisionFinding, Outcome
+    from aletheia.engine.presentation import urgency_for
 
     def made(outcome: Outcome, risk: float, **extra: object) -> Decision:
         return Decision(event_id="e", outcome=outcome, risk=risk, explanation="x", **extra)
@@ -425,7 +425,7 @@ def test_urgency_follows_the_verdict_and_the_risk() -> None:
 
 
 def test_decisions_leave_the_engine_with_their_tier_set() -> None:
-    from privacy_guardian.core.events import DataCategory, FileUploadEvent, Requester
+    from aletheia.core.events import DataCategory, FileUploadEvent, Requester
 
     upload = FileUploadEvent(
         filename="passport.pdf",

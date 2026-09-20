@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from privacy_guardian.llm.guard import OutboundPrivacyError, sanitize_outbound
+from aletheia.llm.guard import OutboundPrivacyError, sanitize_outbound
 
 
 @pytest.mark.parametrize(

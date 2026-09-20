@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from privacy_guardian.core.events import DataCategory
+from aletheia.core.events import DataCategory
 
-ROOT = Path(__file__).resolve().parents[1] / "src/privacy_guardian/data"
+ROOT = Path(__file__).resolve().parents[1] / "src/aletheia/data"
 # Curated public service domains grouped by their primary user-facing purpose.
 SITES = {
     "image_tool": "tinypng.com tinyjpg.com squoosh.app compressor.io imagecompressor.com iloveimg.com remove.bg picresize.com kraken.io jpeg.io",

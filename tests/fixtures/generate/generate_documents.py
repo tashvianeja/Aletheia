@@ -64,7 +64,7 @@ def synthetic_mrz() -> str:
 
 def synthetic_aadhaar() -> str:
     """A synthetic Aadhaar number, 4-4-4, with a real Verhoeff check digit."""
-    from privacy_guardian.analysis.pii.validators import verhoeff_digit
+    from aletheia.analysis.pii.validators import verhoeff_digit
 
     digits = SYNTHETIC_AADHAAR_BODY + verhoeff_digit(SYNTHETIC_AADHAAR_BODY)
     return " ".join(digits[start : start + 4] for start in (0, 4, 8))
@@ -72,7 +72,7 @@ def synthetic_aadhaar() -> str:
 
 def synthetic_vid() -> str:
     """A synthetic Virtual ID, the sixteen-digit stand-in printed under the number."""
-    from privacy_guardian.analysis.pii.validators import verhoeff_digit
+    from aletheia.analysis.pii.validators import verhoeff_digit
 
     digits = SYNTHETIC_VID_BODY + verhoeff_digit(SYNTHETIC_VID_BODY)
     return " ".join(digits[start : start + 4] for start in (0, 4, 8, 12))
@@ -81,7 +81,7 @@ def synthetic_vid() -> str:
 def _qr_symbol(modules: int = 33, scale: int = 6, seed: int = 7) -> Any:
     """A QR-shaped symbol: the three finder patterns, timing rows, and noise between.
 
-    Nothing reads this, and nothing in Privacy Guardian decodes a QR code either — it
+    Nothing reads this, and nothing in Aletheia decodes a QR code either — it
     locates one by its finder patterns, which is exactly what this draws.
     """
     import random

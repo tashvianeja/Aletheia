@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import re
 
-from privacy_guardian.analysis.pii import detect_pii, redact_text
-from privacy_guardian.core.events import DataCategory
+from aletheia.analysis.pii import detect_pii, redact_text
+from aletheia.core.events import DataCategory
 
 SYNTHETIC_TEXT = """
 Full name: Morgan Testperson

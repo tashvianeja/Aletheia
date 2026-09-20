@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from privacy_guardian.core.events import (
+from aletheia.core.events import (
     ConsentBannerEvent,
     DataCategory,
     FileUploadEvent,
@@ -12,7 +12,7 @@ from privacy_guardian.core.events import (
     Requester,
     TrackingEvent,
 )
-from privacy_guardian.engine.notice import notice_signature
+from aletheia.engine.notice import notice_signature
 
 SITE = Requester(origin="https://news.example", display_name="news.example")
 

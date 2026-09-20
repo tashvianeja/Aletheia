@@ -56,7 +56,7 @@
   function band(urgency,label,onClose){
     const head=element('div','pg-band');
     head.append(icon(URGENCY_ICONS[urgency]||'note'),element('span','pg-band-label',label));
-    head.append(element('span','pg-brand','Privacy Guardian'));
+    head.append(element('span','pg-brand','Aletheia'));
     if(onClose){const close=element('button','pg-close');close.type='button';close.setAttribute('aria-label','Dismiss');close.append(icon('close'));close.addEventListener('click',onClose);head.append(close);}
     return head;
   }
@@ -77,7 +77,7 @@
     const panel=element('section','pg-panel');
     panel.dataset.pgUrgency=urgency;
     panel.setAttribute('role',informational?'status':'alertdialog');
-    panel.setAttribute('aria-label','Privacy Guardian: '+(URGENCY_LABELS[urgency]||''));
+    panel.setAttribute('aria-label','Aletheia: '+(URGENCY_LABELS[urgency]||''));
     panel.setAttribute('aria-live',informational?'polite':'assertive');
     const headline=element('p','pg-headline',decision.headline||decision.explanation);
     const label=urgency==='all_clear'&&decision.auto_action?'Handled for you':URGENCY_LABELS[urgency];
@@ -237,7 +237,7 @@
     }
     const panel=element('section','pg-panel');panel.dataset.pgResult='1';panel.dataset.pgUrgency='all_clear';panel.dataset.pgHeadline=headline;
     panel.setAttribute('role','status');panel.setAttribute('aria-live','polite');
-    panel.setAttribute('aria-label','Privacy Guardian: Done');
+    panel.setAttribute('aria-label','Aletheia: Done');
     const close=()=>panel.remove();
     panel.append(band('all_clear','Done',close),element('p','pg-headline',headline));
     if(report.body)panel.append(element('p','pg-body',String(report.body)));
@@ -345,7 +345,7 @@
           const host=node.parentElement;
           if(!host||host.closest('.pg-panel,.pg-stack'))continue;
           seen.add(phrase);host.classList.add('pg-review');
-          host.setAttribute('aria-description','Privacy Guardian flagged this clause');
+          host.setAttribute('aria-description','Aletheia flagged this clause');
           first=first||host;found++;
         }
       }

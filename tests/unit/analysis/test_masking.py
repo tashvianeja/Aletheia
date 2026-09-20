@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import pytest
 
-from privacy_guardian.analysis.documents.extract import ExtractedDocument
-from privacy_guardian.analysis.documents.masking import cover_ranges, plan_for, spans_to_cover
-from privacy_guardian.analysis.documents.qr import find_qr_codes
-from privacy_guardian.core.events import DataCategory
+from aletheia.analysis.documents.extract import ExtractedDocument
+from aletheia.analysis.documents.masking import cover_ranges, plan_for, spans_to_cover
+from aletheia.analysis.documents.qr import find_qr_codes
+from aletheia.core.events import DataCategory
 
 
 def _document(kind: str = "identity_document", scheme: str = "") -> ExtractedDocument:

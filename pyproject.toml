@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "privacy-guardian"
+name = "aletheia"
 version = "0.1.0"
 description = "Local-first privacy decisions for your browser and desktop"
 requires-python = ">=3.12,<3.13"
@@ -20,14 +20,14 @@ dependencies = [
 ]
 
 [project.scripts]
-privacy-guardian = "privacy_guardian.app:main"
-privacy-guardian-host = "privacy_guardian.core.ipc.native_host:main"
+aletheia = "aletheia.app:main"
+aletheia-host = "aletheia.core.ipc.native_host:main"
 
 [dependency-groups]
 dev = ["ruff>=0.9", "mypy>=1.14", "pytest>=8.3", "pytest-cov>=6", "pytest-qt>=4.4", "pytest-asyncio>=0.25", "hypothesis>=6.120", "playwright>=1.49", "aiohttp>=3.11", "respx>=0.22", "pre-commit>=4", "pyinstaller>=6.11", "pip-audit>=2.7", "bandit>=1.8", "types-PyYAML", "types-psutil", "types-requests"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/privacy_guardian"]
+packages = ["src/aletheia"]
 
 [tool.ruff]
 target-version = "py312"
@@ -51,7 +51,7 @@ markers = ["macos: requires a real macOS desktop", "windows: requires Windows", 
 [tool.coverage.run]
 patch = ["subprocess"]
 parallel = true
-source = ["privacy_guardian"]
+source = ["aletheia"]
 branch = true
 
 [tool.coverage.report]

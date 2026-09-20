@@ -7,17 +7,17 @@ from typing import Any
 
 import pytest
 
-from privacy_guardian.config import Settings
-from privacy_guardian.core.events import (
+from aletheia.config import Settings
+from aletheia.core.events import (
     DataCategory,
     FileUploadEvent,
     FormField,
     FormObservedEvent,
     Requester,
 )
-from privacy_guardian.core.service import Service
-from privacy_guardian.intelligence import embedder
-from privacy_guardian.storage import Store
+from aletheia.core.service import Service
+from aletheia.intelligence import embedder
+from aletheia.storage import Store
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 
@@ -217,7 +217,7 @@ async def test_deep_check_says_a_part_has_started_while_it_is_still_running(
     """
     import time
 
-    from privacy_guardian.deepcheck import PAGE_STAGES, run_deep_check
+    from aletheia.deepcheck import PAGE_STAGES, run_deep_check
 
     updates: list[tuple[str, str]] = []
     service.progress_listeners.append(
@@ -614,7 +614,7 @@ def survey_field(field_id: str, label: str, filled: bool = True) -> FormField:
 
 
 def survey_form(*fields: FormField) -> FormObservedEvent:
-    from privacy_guardian.core.events import FormContext
+    from aletheia.core.events import FormContext
 
     return FormObservedEvent(
         requester=Requester(
@@ -644,7 +644,7 @@ async def test_a_survey_asking_for_a_password_and_a_card_raises_one_card_for_bot
     first rather than stacking under it — and answering it hands the page every field
     to redact at once.
     """
-    from privacy_guardian.core.events import UserResponse
+    from aletheia.core.events import UserResponse
 
     typing = survey_form(
         survey_field("f1", "Your name"),

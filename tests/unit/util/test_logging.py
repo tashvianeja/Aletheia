@@ -5,8 +5,8 @@ from pathlib import Path
 
 import structlog
 
-from privacy_guardian.util.logging import configure_logging
-from privacy_guardian.util.privacy import redact_text, sanitize
+from aletheia.util.logging import configure_logging
+from aletheia.util.privacy import redact_text, sanitize
 
 SYNTHETIC_CARD = "4111111111111111"
 SYNTHETIC_EMAIL = "morgan.testperson@example.test"

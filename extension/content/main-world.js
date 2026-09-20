@@ -1,6 +1,6 @@
 /* Sensor/actuator only: Python makes all privacy and purpose decisions. */
 (() => {
-  if(window.__privacyGuardianMain)return;window.__privacyGuardianMain=true;
+  if(window.__aletheiaMain)return;window.__aletheiaMain=true;
   const capturedOpen=XMLHttpRequest.prototype.open,xhrAsync=new WeakMap();
   const capturedFetch=window.fetch, capturedSend=XMLHttpRequest.prototype.send, capturedSubmit=HTMLFormElement.prototype.submit;
   const waiting=new Map(),binaryFiles=new WeakMap(),storageKeys=new Map(),databaseKeys=[],confirmedHashes=new Set();
@@ -82,7 +82,7 @@
       const contentType=input.headers.get('content-type')||'';
       try{if(contentType.includes('multipart/form-data'))body=await input.clone().formData();else body=requestFiles.get(input);}catch(_){}
     }
-    const result=await checkBody(body);if(!result.allowed)throw new DOMException('Upload cancelled by Privacy Guardian','AbortError');
+    const result=await checkBody(body);if(!result.allowed)throw new DOMException('Upload cancelled by Aletheia','AbortError');
     if(input instanceof NativeRequest&&body){const headers=new Headers(init?.headers||input.headers);if(result.body instanceof FormData)headers.delete('content-type');request=new NativeRequest(input,{...init,headers,body:result.body});return capturedFetch.call(this,request);}
     return capturedFetch.call(this,request,init?{...init,body:result.body}:init);
   };

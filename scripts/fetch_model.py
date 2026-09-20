@@ -1,7 +1,7 @@
 """Fetch the on-device sentence encoder used to judge what a form is for.
 
 The weights are a build input rather than source, so they are downloaded and checksummed
-here instead of being committed. Privacy Guardian degrades to structural-only inference
+here instead of being committed. Aletheia degrades to structural-only inference
 when they are absent, so a failed fetch weakens the judgement but never breaks the app.
 """
 
@@ -13,7 +13,7 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-TARGET = ROOT / "src/privacy_guardian/data/models"
+TARGET = ROOT / "src/aletheia/data/models"
 BASE = "https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main"
 FILES = {
     "minilm-int8.onnx": (

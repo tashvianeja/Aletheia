@@ -4,7 +4,7 @@ from typing import Any
 
 import pytest
 
-from privacy_guardian.core.pool import AnalysisPool
+from aletheia.core.pool import AnalysisPool
 
 
 def _increment(value: int) -> int:
@@ -20,10 +20,10 @@ def test_pool_is_created_lazily_with_spawn_context(monkeypatch: pytest.MonkeyPat
 
     context = object()
     monkeypatch.setattr(
-        "privacy_guardian.core.pool.multiprocessing.get_context",
+        "aletheia.core.pool.multiprocessing.get_context",
         lambda name: context if name == "spawn" else None,
     )
-    monkeypatch.setattr("privacy_guardian.core.pool.ProcessPoolExecutor", Executor)
+    monkeypatch.setattr("aletheia.core.pool.ProcessPoolExecutor", Executor)
     pool = AnalysisPool()
 
     first = pool._create()
@@ -74,7 +74,7 @@ async def test_run_executes_callable_and_restores_activity(
 
     pool = AnalysisPool(timeout=1)
     executor = object()
-    monkeypatch.setattr("privacy_guardian.core.pool.asyncio.get_running_loop", lambda: Loop())
+    monkeypatch.setattr("aletheia.core.pool.asyncio.get_running_loop", lambda: Loop())
     monkeypatch.setattr(pool, "_create", lambda: executor)
 
     result = await pool.run(lambda left, right: left + right, 2, 3)
@@ -97,7 +97,7 @@ async def test_timeout_recycles_worker_and_returns_retryable_error(
 
     pool = AnalysisPool(timeout=1)
     calls: list[str] = []
-    monkeypatch.setattr("privacy_guardian.core.pool.asyncio.get_running_loop", lambda: Loop())
+    monkeypatch.setattr("aletheia.core.pool.asyncio.get_running_loop", lambda: Loop())
     monkeypatch.setattr(pool, "_create", lambda: calls.append("create") or object())
     monkeypatch.setattr(pool, "recycle", lambda: calls.append("recycle"))
 

@@ -1,6 +1,6 @@
 import sys
 
-from privacy_guardian.app import main
+from aletheia.app import main
 
 try:
     raise SystemExit(main())

@@ -13,13 +13,13 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def bundle_ocr() -> None:
-    if os.getenv("PRIVACY_GUARDIAN_SKIP_OCR") == "1":
+    if os.getenv("ALETHEIA_SKIP_OCR") == "1":
         # Ships without scanned-image text extraction; every other detector is unaffected
         # and scanned pages are reported as unchecked rather than silently skipped.
         target = ROOT / "build/tesseract"
         if target.exists():
             shutil.rmtree(target)
-        print("Skipping OCR bundling (PRIVACY_GUARDIAN_SKIP_OCR=1)")
+        print("Skipping OCR bundling (ALETHEIA_SKIP_OCR=1)")
         return
     if sys.platform == "darwin":
         compatible = ROOT / "build/tesseract13"
@@ -118,20 +118,15 @@ def main() -> None:
     if args.platform == "mac":
         subprocess.run([sys.executable, str(ROOT / "scripts/build_crypto.py")], check=True)
     bundle_ocr()
-    spec = (
-        ROOT
-        / "packaging"
-        / ("macos" if args.platform == "mac" else "windows")
-        / "PrivacyGuardian.spec"
-    )
+    spec = ROOT / "packaging" / ("macos" if args.platform == "mac" else "windows") / "Aletheia.spec"
     subprocess.run(
         [sys.executable, "-m", "PyInstaller", "--noconfirm", str(spec)], cwd=ROOT, check=True
     )
     if args.platform == "mac":
-        app = ROOT / "dist/PrivacyGuardian.app"
+        app = ROOT / "dist/Aletheia.app"
         identity = os.getenv("CODESIGN_IDENTITY", "-")
-        dmg = ROOT / f"dist/PrivacyGuardian-{version}.dmg"
-        with tempfile.TemporaryDirectory(prefix="privacy-guardian-sign-") as workspace:
+        dmg = ROOT / f"dist/Aletheia-{version}.dmg"
+        with tempfile.TemporaryDirectory(prefix="aletheia-sign-") as workspace:
             signed = stage_clean_copy(app, Path(workspace))
             subprocess.run(
                 [
@@ -155,7 +150,7 @@ def main() -> None:
                     "hdiutil",
                     "create",
                     "-volname",
-                    "Privacy Guardian",
+                    "Aletheia",
                     "-srcfolder",
                     str(signed),
                     "-ov",

@@ -10,12 +10,12 @@ from PIL import Image
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfgen.canvas import Canvas
 
-from privacy_guardian.analysis.consent import ConsentSnapshot, analyze_consent
-from privacy_guardian.analysis.forms import analyze_fields
-from privacy_guardian.analysis.policy import analyze_policy
-from privacy_guardian.analysis.worker import analyze_payload
-from privacy_guardian.core.events import FormField
-from privacy_guardian.core.pool import AnalysisPool
+from aletheia.analysis.consent import ConsentSnapshot, analyze_consent
+from aletheia.analysis.forms import analyze_fields
+from aletheia.analysis.policy import analyze_policy
+from aletheia.analysis.worker import analyze_payload
+from aletheia.core.events import FormField
+from aletheia.core.pool import AnalysisPool
 
 TOLERANCE = 1.25
 

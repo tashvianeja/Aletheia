@@ -14,10 +14,10 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from privacy_guardian.intelligence.embedder import embed  # noqa: E402
-from privacy_guardian.intelligence.taxonomy import EXEMPLARS  # noqa: E402
+from aletheia.intelligence.embedder import embed  # noqa: E402
+from aletheia.intelligence.taxonomy import EXEMPLARS  # noqa: E402
 
-TARGET = ROOT / "src/privacy_guardian/data/models/intent_centroids.npz"
+TARGET = ROOT / "src/aletheia/data/models/intent_centroids.npz"
 
 
 def main() -> int:

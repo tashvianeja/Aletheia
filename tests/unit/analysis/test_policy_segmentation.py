@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from privacy_guardian.analysis.policy import analyzer
+from aletheia.analysis.policy import analyzer
 
 
 class RecordingSegmenter:

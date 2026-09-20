@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import argparse
 
-from privacy_guardian.config import Settings
-from privacy_guardian.util.installation import install, uninstall
+from aletheia.config import Settings
+from aletheia.util.installation import install, uninstall
 
 parser = argparse.ArgumentParser()
 parser.add_argument("action", choices=["install", "uninstall"])

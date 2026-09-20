@@ -6,10 +6,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-from privacy_guardian.app import diagnose
-from privacy_guardian.config import Settings
-from privacy_guardian.storage import Store
-from privacy_guardian.util.instance import InstanceLock
+from aletheia.app import diagnose
+from aletheia.config import Settings
+from aletheia.storage import Store
+from aletheia.util.instance import InstanceLock
 
 
 def test_diagnose_reports_counts_and_status_without_database_content(
@@ -20,11 +20,11 @@ def test_diagnose_reports_counts_and_status_without_database_content(
     store.set_preference("synthetic-user-secret", {"email": "person@example.test"})
     store.close()
     monkeypatch.setattr(
-        "privacy_guardian.sensors.platform.create_adapter",
+        "aletheia.sensors.platform.create_adapter",
         lambda: type("Adapter", (), {"permissions_status": lambda self: {"monitor": True}})(),
     )
     monkeypatch.setattr(
-        "privacy_guardian.util.installation.manifest_locations",
+        "aletheia.util.installation.manifest_locations",
         lambda: {"chrome": tmp_path / "native-host"},
     )
 
@@ -38,9 +38,9 @@ def test_diagnose_reports_counts_and_status_without_database_content(
 
 
 def test_diagnose_cli_is_machine_readable(tmp_path: Path) -> None:
-    environment = {**os.environ, "PRIVACY_GUARDIAN_DATA_DIR": str(tmp_path)}
+    environment = {**os.environ, "ALETHEIA_DATA_DIR": str(tmp_path)}
     result = subprocess.run(
-        [sys.executable, "-m", "privacy_guardian", "--diagnose"],
+        [sys.executable, "-m", "aletheia", "--diagnose"],
         cwd=Path(__file__).parents[2],
         env=environment,
         capture_output=True,
@@ -57,11 +57,11 @@ def test_diagnose_cli_is_machine_readable(tmp_path: Path) -> None:
 def test_qt_smoke_lifecycle_creates_ready_marker_and_exits(tmp_path: Path) -> None:
     environment = {
         **os.environ,
-        "PRIVACY_GUARDIAN_DATA_DIR": str(tmp_path),
+        "ALETHEIA_DATA_DIR": str(tmp_path),
         "QT_QPA_PLATFORM": "offscreen",
     }
     result = subprocess.run(
-        [sys.executable, "-m", "privacy_guardian", "--smoke-test", "--no-autostart"],
+        [sys.executable, "-m", "aletheia", "--smoke-test", "--no-autostart"],
         cwd=Path(__file__).parents[2],
         env=environment,
         capture_output=True,

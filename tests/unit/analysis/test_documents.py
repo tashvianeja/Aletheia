@@ -6,17 +6,17 @@ from typing import Any
 
 import pytest
 
-from privacy_guardian.analysis.documents import extract_document
-from privacy_guardian.analysis.documents.extract import ExtractedDocument, Page
-from privacy_guardian.analysis.documents.redact import redact_document, unredact_document
-from privacy_guardian.analysis.pii import detect_pii
-from privacy_guardian.analysis.worker import (
+from aletheia.analysis.documents import extract_document
+from aletheia.analysis.documents.extract import ExtractedDocument, Page
+from aletheia.analysis.documents.redact import redact_document, unredact_document
+from aletheia.analysis.pii import detect_pii
+from aletheia.analysis.worker import (
     analyze_payload,
     count_redaction_marks,
     redact_payload,
     unredact_payload,
 )
-from privacy_guardian.core.events import DataCategory
+from aletheia.core.events import DataCategory
 
 FIXTURES = Path(__file__).resolve().parents[2] / "fixtures"
 
@@ -107,7 +107,7 @@ def _boxes(content: bytes) -> list[tuple[float, float, float, float]]:
     return [
         (float(x), float(y), float(x) + float(w), float(y) + float(h))
         for x, y, w, h in re.findall(
-            rb"/PrivacyGuardian <<[^>]*>> BDC q 0 g ([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+) re f Q EMC",
+            rb"/Aletheia <<[^>]*>> BDC q 0 g ([\d.]+) ([\d.]+) ([\d.]+) ([\d.]+) re f Q EMC",
             painted,
         )
     ]
@@ -152,7 +152,7 @@ def test_pdf_with_text_gets_a_box_per_detail_and_keeps_the_rest_intact() -> None
 
 def test_every_flagged_detail_is_covered_even_when_a_fresh_look_would_miss_it() -> None:
     """The card says what was found; the copy covers exactly that, whatever a rescan says."""
-    from privacy_guardian.core.events import Finding
+    from aletheia.core.events import Finding
 
     data = _pdf("Quarterly notes for the team", "Prepared by the finance office.")
     document = extract_document(data, "notes.pdf")
@@ -197,7 +197,7 @@ def test_a_rotated_page_gets_its_box_where_the_text_is_shown() -> None:
 
 def test_neighbouring_boxes_fuse_into_one_bar_whichever_comes_first() -> None:
     """Two words on a line whose bottoms round to different lines still make one bar."""
-    from privacy_guardian.analysis.documents.redact import _merge
+    from aletheia.analysis.documents.redact import _merge
 
     right = (197.5, 502.5, 267.0, 514.0)
     left = (174.5, 503.0, 196.0, 514.0)
@@ -397,7 +397,7 @@ def test_a_redacted_aadhaar_keeps_its_last_four_digits_name_and_photograph() -> 
 
 def test_a_redacted_aadhaar_covers_the_qr_code_that_holds_the_whole_record() -> None:
     """Masking the digits and leaving the square is no redaction: a phone reads it."""
-    from privacy_guardian.analysis.documents.qr import find_qr_codes
+    from aletheia.analysis.documents.qr import find_qr_codes
 
     path = FIXTURES / "aadhaar_synthetic.pdf"
     data = path.read_bytes()

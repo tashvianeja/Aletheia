@@ -11,9 +11,9 @@ from __future__ import annotations
 
 import pytest
 
-from privacy_guardian.analysis.policy import analyze_policy, analyze_terms
-from privacy_guardian.analysis.policy.analyzer import patterns
-from privacy_guardian.engine.clauses import CLAUSES, clause_title, is_material
+from aletheia.analysis.policy import analyze_policy, analyze_terms
+from aletheia.analysis.policy.analyzer import patterns
+from aletheia.engine.clauses import CLAUSES, clause_title, is_material
 
 # The clause that started this: a subscription's notice period, reported as an age limit
 # because "at least 14" looks like "at least 18" to a pattern that never asked what the

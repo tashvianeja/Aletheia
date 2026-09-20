@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 from importlib.resources import files
 
-from privacy_guardian.core.events import DataCategory
-from privacy_guardian.engine.classifier import load_sensitivities
-from privacy_guardian.engine.necessity import load_matrix
+from aletheia.core.events import DataCategory
+from aletheia.engine.classifier import load_sensitivities
+from aletheia.engine.necessity import load_matrix
 
 
 def test_necessity_matrix_covers_every_purpose_category_pair() -> None:
@@ -32,7 +32,7 @@ def test_sensitivity_table_has_no_orphans_or_missing_categories() -> None:
 
 
 def test_known_site_seed_has_at_least_300_valid_entries() -> None:
-    sites = json.loads(files("privacy_guardian.data").joinpath("known_sites.yaml").read_text())
+    sites = json.loads(files("aletheia.data").joinpath("known_sites.yaml").read_text())
     assert len(sites) >= 300
     for domain, entry in sites.items():
         assert "." in domain

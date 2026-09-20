@@ -15,11 +15,11 @@ from typing import Any
 
 import pytest
 
-from privacy_guardian.core.events import DataCategory, PermissionRequestEvent, Requester
-from privacy_guardian.engine.decision import decide
-from privacy_guardian.sensors.platform.base import scan_extension_manifests
-from privacy_guardian.sensors.platform.macos import MacOSAdapter
-from privacy_guardian.sensors.platform.windows import WindowsAdapter, WindowsRegistry
+from aletheia.core.events import DataCategory, PermissionRequestEvent, Requester
+from aletheia.engine.decision import decide
+from aletheia.sensors.platform.base import scan_extension_manifests
+from aletheia.sensors.platform.macos import MacOSAdapter
+from aletheia.sensors.platform.windows import WindowsAdapter, WindowsRegistry
 
 
 class MacBackend:
@@ -234,9 +234,9 @@ def test_windows_scheduler_detects_new_and_modified_tasks() -> None:
         r"</Exec></Actions></Task>"
     )
     second_definition = first_definition.replace("version='1'", "version='2'")
-    scheduler.state = {r"\Synthetic\Privacy Guardian": first_definition}
+    scheduler.state = {r"\Synthetic\Aletheia": first_definition}
     created = adapter.poll_tasks()
-    scheduler.state = {r"\Synthetic\Privacy Guardian": second_definition}
+    scheduler.state = {r"\Synthetic\Aletheia": second_definition}
     modified = adapter.poll_tasks()
 
     assert created[0].mechanism == "scheduled_task" and created[0].modified is False
@@ -274,8 +274,8 @@ def test_browser_extension_permission_scan_has_plain_access_categories(tmp_path:
 @pytest.mark.macos
 @pytest.mark.platform
 @pytest.mark.skipif(
-    os.getenv("PRIVACY_GUARDIAN_NATIVE_WATCH_TEST") != "1",
-    reason="set PRIVACY_GUARDIAN_NATIVE_WATCH_TEST=1 outside a filesystem sandbox",
+    os.getenv("ALETHEIA_NATIVE_WATCH_TEST") != "1",
+    reason="set ALETHEIA_NATIVE_WATCH_TEST=1 outside a filesystem sandbox",
 )
 def test_macos_native_path_monitor_emits_launch_agent_within_two_seconds(tmp_path: Path) -> None:
     agents = tmp_path / "LaunchAgents"
@@ -337,7 +337,7 @@ def test_permission_settings_links_are_specific(monkeypatch) -> None:
 def test_real_macos_permission_status_is_read_only() -> None:
     script = """
 import json
-from privacy_guardian.sensors.platform.macos import MacOSAdapter
+from aletheia.sensors.platform.macos import MacOSAdapter
 adapter = MacOSAdapter()
 before = [(str(path), path.stat().st_mtime_ns) for path in adapter.tcc_paths if path.exists()]
 status = adapter.permissions_status()
@@ -359,9 +359,9 @@ print(json.dumps({'before': before, 'status': status, 'after': after}))
 def test_real_windows_registry_camera_grant_reaches_engine_as_intervention(monkeypatch) -> None:
     import winreg
 
-    import privacy_guardian.sensors.platform.windows as windows_platform
+    import aletheia.sensors.platform.windows as windows_platform
 
-    base = r"Software\PrivacyGuardianTests"
+    base = r"Software\AletheiaTests"
     root = rf"{base}\{uuid.uuid4()}"
     consent_root = root + r"\ConsentStore"
     leaf = consent_root + r"\webcam\NonPackaged\C:#Apps#PDFConverter.exe"

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from privacy_guardian.analysis.pii.validators import (
+from aletheia.analysis.pii.validators import (
     aadhaar_number,
     aadhaar_vid,
     aba_checksum,

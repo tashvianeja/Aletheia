@@ -1,1 +1,1 @@
-"""Privacy Guardian test suite."""
+"""Aletheia test suite."""

@@ -6,8 +6,8 @@ import types
 from pathlib import Path
 from typing import Any
 
-from privacy_guardian.core.events import DataCategory, Requester
-from privacy_guardian.sensors.platform.windows import WindowsAdapter
+from aletheia.core.events import DataCategory, Requester
+from aletheia.sensors.platform.windows import WindowsAdapter
 
 
 class Registry:

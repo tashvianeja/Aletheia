@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from privacy_guardian.core.events import DataCategory
-from privacy_guardian.engine.preferences import (
+from aletheia.core.events import DataCategory
+from aletheia.engine.preferences import (
     LearnedRules,
     Preference,
     UserPreferences,

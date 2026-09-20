@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from privacy_guardian.core.events import (
+from aletheia.core.events import (
     ClipboardReadEvent,
     ConsentBannerEvent,
     DataCategory,
@@ -16,13 +16,13 @@ from privacy_guardian.core.events import (
     Requester,
     TrackingEvent,
 )
-from privacy_guardian.engine.decision import (
+from aletheia.engine.decision import (
     clearable_fields,
     decide,
     form_assessments,
     redactable_fields,
 )
-from privacy_guardian.engine.outcome import report_for
+from aletheia.engine.outcome import report_for
 
 
 def site(origin: str, purpose: str) -> Requester:
@@ -197,7 +197,7 @@ def survey() -> FormObservedEvent:
 
 def labelled(event: FormObservedEvent) -> FormObservedEvent:
     """The event as the service hands it to the engine, with its fields categorised."""
-    from privacy_guardian.analysis.forms import label_field
+    from aletheia.analysis.forms import label_field
 
     fields = [label_field(field) for field in event.fields]
     return event.model_copy(

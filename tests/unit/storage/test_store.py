@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from privacy_guardian.core.events import (
+from aletheia.core.events import (
     ConsentBannerEvent,
     DataCategory,
     Decision,
@@ -20,7 +20,7 @@ from privacy_guardian.core.events import (
     TrackingEvent,
     UserResponse,
 )
-from privacy_guardian.storage import Store
+from aletheia.storage import Store
 
 SYNTHETIC_CARD = "4111111111111111"
 SYNTHETIC_EMAIL = "morgan.testperson@example.test"

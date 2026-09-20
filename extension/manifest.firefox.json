@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Privacy Guardian",
+  "name": "Aletheia",
   "version": "0.1.0",
   "description": "Local privacy checks before you share files, form fields, permissions, or consent.",
   "permissions": [
@@ -24,7 +24,7 @@
     ]
   },
   "action": {
-    "default_title": "Privacy Guardian \u2014 local privacy checks"
+    "default_title": "Aletheia \u2014 local privacy checks"
   },
   "content_scripts": [
     {
@@ -76,7 +76,7 @@
   },
   "browser_specific_settings": {
     "gecko": {
-      "id": "privacy-guardian@privacyguardian.local",
+      "id": "aletheia@aletheia.local",
       "strict_min_version": "128.0"
     }
   }

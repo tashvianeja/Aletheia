@@ -14,7 +14,7 @@ import pytest
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QScrollBar
 
-from privacy_guardian.core.events import (
+from aletheia.core.events import (
     ClipboardReadEvent,
     DataCategory,
     Decision,
@@ -23,9 +23,9 @@ from privacy_guardian.core.events import (
     Outcome,
     Requester,
 )
-from privacy_guardian.engine.decision import decide
-from privacy_guardian.ui.deepcheck import DeepCheckWindow
-from privacy_guardian.ui.popup import ConfirmationBar, InterventionPopup, PopupQueue
+from aletheia.engine.decision import decide
+from aletheia.ui.deepcheck import DeepCheckWindow
+from aletheia.ui.popup import ConfirmationBar, InterventionPopup, PopupQueue
 
 
 def available():

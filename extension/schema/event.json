@@ -881,7 +881,7 @@
     },
     "RedactedDocumentEvent": {
       "additionalProperties": false,
-      "description": "A file carrying Privacy Guardian's own redaction boxes has been opened.",
+      "description": "A file carrying Aletheia's own redaction boxes has been opened.",
       "properties": {
         "id": {
           "title": "Id",

@@ -4,7 +4,7 @@ import json
 import zipfile
 from pathlib import Path
 
-from privacy_guardian.analysis.pii.validators import aadhaar_number, aadhaar_vid, passport_mrz
+from aletheia.analysis.pii.validators import aadhaar_number, aadhaar_vid, passport_mrz
 from tests.fixtures.generate.generate_corpora import generate as generate_corpora
 from tests.fixtures.generate.generate_documents import generate as generate_documents
 from tests.fixtures.generate.generate_documents import (

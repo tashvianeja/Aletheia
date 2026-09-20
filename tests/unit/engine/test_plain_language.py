@@ -9,12 +9,12 @@ from __future__ import annotations
 
 import re
 
-from privacy_guardian.analysis.forms import label_field
-from privacy_guardian.core.events import FormContext, FormField, FormObservedEvent, Requester
-from privacy_guardian.engine.clauses import CLAUSES
-from privacy_guardian.engine.decision import decide
-from privacy_guardian.engine.explain import UNCERTAIN_PURPOSE
-from privacy_guardian.engine.presentation import policy_rows
+from aletheia.analysis.forms import label_field
+from aletheia.core.events import FormContext, FormField, FormObservedEvent, Requester
+from aletheia.engine.clauses import CLAUSES
+from aletheia.engine.decision import decide
+from aletheia.engine.explain import UNCERTAIN_PURPOSE
+from aletheia.engine.presentation import policy_rows
 
 CLAUSE_LIST = [
     {

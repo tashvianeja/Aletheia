@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from privacy_guardian.core.events import (
+from aletheia.core.events import (
     ClipboardReadEvent,
     ConsentBannerEvent,
     DataCategory,
@@ -17,9 +17,9 @@ from privacy_guardian.core.events import (
     SystemAccessEvent,
     TrackingEvent,
 )
-from privacy_guardian.engine.context import Observation, SiteOrAppProfile
-from privacy_guardian.engine.decision import DecisionEngine, decide
-from privacy_guardian.engine.preferences import Preference, UserPreferences
+from aletheia.engine.context import Observation, SiteOrAppProfile
+from aletheia.engine.decision import DecisionEngine, decide
+from aletheia.engine.preferences import Preference, UserPreferences
 
 
 def requester(purpose: str = "recipe") -> Requester:

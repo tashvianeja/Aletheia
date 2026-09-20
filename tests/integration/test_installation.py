@@ -12,10 +12,10 @@ from pathlib import Path
 
 import pytest
 
-from privacy_guardian.config import Settings
-from privacy_guardian.core.ipc.protocol import decode_message, encode_message
-from privacy_guardian.core.ipc.transport import ControlServer
-from privacy_guardian.util import installation
+from aletheia.config import Settings
+from aletheia.core.ipc.protocol import decode_message, encode_message
+from aletheia.core.ipc.transport import ControlServer
+from aletheia.util import installation
 
 
 def isolated_locations(root: Path) -> dict[str, Path]:
@@ -76,7 +76,7 @@ def test_install_writes_least_privilege_browser_manifests(
 
     installed = installation.install(settings)
 
-    host = settings.data_dir / "privacy-guardian-host"
+    host = settings.data_dir / "aletheia-host"
     if sys.platform == "win32":
         assert host not in installed
         assert registry is not None and len(registry.values) == 4
@@ -89,7 +89,7 @@ def test_install_writes_least_privilege_browser_manifests(
         manifest_path = folder / f"{installation.HOST_NAME}.json"
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         if sys.platform == "win32":
-            assert manifest["path"].endswith("privacy-guardian-host.exe")
+            assert manifest["path"].endswith("aletheia-host.exe")
         else:
             assert manifest["path"] == str(host)
         assert manifest["type"] == "stdio"
@@ -152,9 +152,9 @@ async def test_installed_native_host_performs_real_stdio_to_authenticated_servic
         manifest_path = Path(next(iter(registry.values.values())))
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         host = Path(manifest["path"])
-        assert host == Path(sys.executable).parent / "privacy-guardian-host.exe"
+        assert host == Path(sys.executable).parent / "aletheia-host.exe"
     else:
-        host = settings.data_dir / "privacy-guardian-host"
+        host = settings.data_dir / "aletheia-host"
     assert host.is_file()
 
     async def handler(message: dict[str, object]) -> dict[str, object]:
@@ -169,7 +169,7 @@ async def test_installed_native_host_performs_real_stdio_to_authenticated_servic
     server = ControlServer(settings.data_dir, handler)  # type: ignore[arg-type]
     await server.start()
     environment = os.environ.copy()
-    environment["PRIVACY_GUARDIAN_DATA_DIR"] = str(settings.data_dir)
+    environment["ALETHEIA_DATA_DIR"] = str(settings.data_dir)
     process = await asyncio.create_subprocess_exec(
         str(host),
         f"chrome-extension://{installation.CHROME_ID}/",
@@ -207,14 +207,14 @@ async def test_installed_native_host_performs_real_stdio_to_authenticated_servic
 def test_uninstall_removes_only_known_product_files(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from privacy_guardian.llm import client as llm_client
+    from aletheia.llm import client as llm_client
 
     monkeypatch.setattr(llm_client, "delete_api_key", lambda: None)
     locations = isolated_locations(tmp_path / "browser-config")
     monkeypatch.setattr(installation, "manifest_locations", lambda: locations)
     registry = isolate_windows_registry(monkeypatch)
     if sys.platform == "win32":
-        from privacy_guardian.sensors.platform import windows
+        from aletheia.sensors.platform import windows
 
         monkeypatch.setattr(windows.WindowsRegistry, "set_autostart", lambda *_args: None)
     monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: None)

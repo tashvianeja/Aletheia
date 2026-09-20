@@ -42,7 +42,7 @@ Tables: schema_version(version); events(id,ts,event_type,requester,categories,ev
 
 ## Browser boundary
 
-The WebExtension runs as a thin sensor/actuator. Its background worker obtains website identity from browser sender data rather than page-supplied identity, validates event/request/response schemas, and allowlists form metadata fields. It holds observed URL/tracker context only in extension memory and clears tab context on navigation or close. Chromium’s fixed development extension ID is `bfdjphkbgihhbonhnmjbbfhckdddonob`; Firefox’s ID is `privacy-guardian@privacyguardian.local`. Native host name: `com.privacyguardian.host`.
+The WebExtension runs as a thin sensor/actuator. Its background worker obtains website identity from browser sender data rather than page-supplied identity, validates event/request/response schemas, and allowlists form metadata fields. It holds observed URL/tracker context only in extension memory and clears tab context on navigation or close. Chromium’s fixed development extension ID is `bfdjphkbgihhbonhnmjbbfhckdddonob`; Firefox’s ID is `aletheia@aletheia.local`. Native host name: `com.aletheia.host`.
 
 The extension can create bounded dynamic blocking rules and remove relevant browser cookies after a user action. MAIN-world wrappers are best effort. Known upload paths can wait up to four seconds for initial analysis and then fail open; an `INTERVENE` decision waits for its safe 60-second service timeout. Synchronous file XHR can be aborted while ordinary XHR and beacons pass through. Firefox CNAME/DNS signals are cached best effort. Chromium native-host handshake and a fixture form-badge path have evidence; browser action coverage remains incomplete.
 

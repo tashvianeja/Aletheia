@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from privacy_guardian.core import worker_dispatch
+from aletheia.core import worker_dispatch
 
 
 @pytest.fixture(autouse=True)
@@ -35,7 +35,7 @@ def test_worker_preparation_is_lazy_and_reports_model_status(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     assert worker_dispatch.prepare_worker() is True
-    monkeypatch.setattr("privacy_guardian.analysis.pii.detector._ner", lambda: object())
+    monkeypatch.setattr("aletheia.analysis.pii.detector._ner", lambda: object())
     assert worker_dispatch.prepare_upload_model() is True
 
 
@@ -55,7 +55,7 @@ def test_small_upload_finishes_with_complete_bytes(monkeypatch: pytest.MonkeyPat
         captured.append(payload)
         return {"analyzed": True}
 
-    monkeypatch.setattr("privacy_guardian.analysis.worker.analyze_payload", analyze)
+    monkeypatch.setattr("aletheia.analysis.worker.analyze_payload", analyze)
     worker_dispatch.start_upload("small", "synthetic.txt", 6, "text/plain")
     worker_dispatch.append_upload("small", 0, b"abc")
     worker_dispatch.append_upload("small", 1, b"def")
@@ -83,7 +83,7 @@ def test_large_upload_keeps_bounded_first_and_tail_samples(
     monkeypatch.setattr(worker_dispatch, "FULL_SIZE", 5)
     monkeypatch.setattr(worker_dispatch, "SAMPLE_SIZE", 2)
     monkeypatch.setattr(
-        "privacy_guardian.analysis.worker.analyze_payload",
+        "aletheia.analysis.worker.analyze_payload",
         lambda payload: captured.append(payload) or payload,
     )
     worker_dispatch.start_upload("large", "large.bin", 8)
@@ -139,7 +139,7 @@ def test_refine_context_validates_schema_and_returns_typed_value(
             calls.append((use, payload, schema, fallback))
             return Result(fallback)
 
-    monkeypatch.setattr("privacy_guardian.llm.client.LLMClient", Client)
+    monkeypatch.setattr("aletheia.llm.client.LLMClient", Client)
     result = worker_dispatch.refine_context(
         "purpose_refinement",
         {"origin": "https://synthetic.example"},
