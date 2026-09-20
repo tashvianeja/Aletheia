@@ -151,27 +151,78 @@ def test_queue_ignores_ignore_outcomes(qtbot, ui_controller) -> None:
 
 
 def test_a_notice_is_not_given_a_green_tick_it_has_not_earned(qtbot) -> None:
-    """A tick beside "is asking for your camera" says the opposite of the sentence."""
-    from privacy_guardian.ui import icons
-
+    """A green "All clear" beside "is asking for your camera" says the opposite of
+    the sentence; a notice that carries any risk is amber, and only a settled one green."""
     notice = decision("notice", Outcome.INFORM).model_copy(update={"risk": 0.45})
     settled = decision("settled", Outcome.INFORM).model_copy(update={"risk": 0.1})
-    for popup, expected in (
-        (InterventionPopup(notice), "info"),
-        (InterventionPopup(settled), "ok"),
+    for popup, expected, word in (
+        (InterventionPopup(notice), "heads_up", "Heads up"),
+        (InterventionPopup(settled), "all_clear", "All clear"),
     ):
         qtbot.addWidget(popup)
-        glyphs = [
-            label
-            for label in popup.card.findChildren(QLabel)
-            if not label.text() and not label.pixmap().isNull()
-        ]
-        wanted = icons.pixmap(
-            expected, popup.card.colors["ok" if expected == "ok" else "faint"], 15
-        )
-        assert any(label.pixmap().toImage() == wanted.toImage() for label in glyphs), (
-            f"expected the {expected} glyph beside the headline"
-        )
+        assert popup.card.urgency == expected
+        assert popup.card.band_label is not None and popup.card.band_label.text() == word
+
+
+def test_the_band_says_in_words_what_its_colour_says(qtbot) -> None:
+    """Every card wears its tier: the outline, the band and the word on it agree, and
+    a decision built without a tier is given one rather than a blank band."""
+    from privacy_guardian.ui.theme import URGENCY_LIGHT
+
+    stop = InterventionPopup(decision("stop"), mode="light")  # INTERVENE at risk 0.9
+    ask = InterventionPopup(decision("ask").model_copy(update={"risk": 0.5}), mode="light")
+    qtbot.addWidget(stop)
+    qtbot.addWidget(ask)
+
+    assert stop.card.urgency == "act_now" and stop.card.property("urgency") == "act_now"
+    assert stop.card.band_label is not None and stop.card.band_label.text() == "Act now"
+    assert ask.card.urgency == "attention"
+    assert ask.card.band_label is not None and ask.card.band_label.text() == "Needs your attention"
+    assert URGENCY_LIGHT["act_now"]["band"] != URGENCY_LIGHT["attention"]["band"], (
+        "the two red tiers must be told apart at a glance"
+    )
+    # The band keeps its natural height so the rows underneath are never squeezed.
+    assert (
+        stop.card.band is not None
+        and stop.card.band.maximumHeight() == stop.card.band.minimumHeight()
+    )
+
+
+def test_an_informational_card_still_lists_what_was_found(qtbot) -> None:
+    """The headline says "building an advertising profile"; the rows say which trackers.
+    Dropping the rows from a notice left the person with the conclusion but no evidence."""
+    from privacy_guardian.core.events import DecisionFinding
+
+    notice = decision("rows", Outcome.INFORM).model_copy(
+        update={
+            "findings": [DecisionFinding(label="Shares what you do here with 4 other companies")],
+            "subject": "This page",
+            "destination": "dailymeridian.example",
+        }
+    )
+    popup = InterventionPopup(notice)
+    qtbot.addWidget(popup)
+
+    assert popup.card.findings_box is not None
+    texts = [label.text() for label in popup.card.findings_box.findChildren(QLabel)]
+    assert "Shares what you do here with 4 other companies" in texts
+    assert not popup.buttons, "a notice still asks nothing"
+
+
+def test_the_band_pulses_when_an_act_now_card_lands_and_then_rests(qtbot) -> None:
+    urgent = InterventionPopup(decision("urgent"))
+    calm = InterventionPopup(decision("calm", Outcome.INFORM).model_copy(update={"risk": 0.1}))
+    qtbot.addWidget(urgent)
+    qtbot.addWidget(calm)
+    urgent.show()
+    calm.show()
+
+    assert urgent.card._pulse is not None and urgent.card._pulse.loopCount() == 3
+    assert calm.card._pulse is None, "a green card has nothing to flash about"
+    qtbot.waitUntil(
+        lambda: urgent.card._pulse.state() != urgent.card._pulse.State.Running, timeout=5_000
+    )
+    assert urgent.card.band is not None and urgent.card.band.get_glow() == 0.0
 
 
 def test_queue_gives_way_to_the_thorough_check_and_resumes_after_it(qtbot, ui_controller) -> None:

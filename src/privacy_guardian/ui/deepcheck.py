@@ -30,7 +30,7 @@ from privacy_guardian.ui.card import (
     release_surface,
     scrollable,
 )
-from privacy_guardian.ui.theme import card_stylesheet, palette
+from privacy_guardian.ui.theme import card_stylesheet, palette, urgency_palette
 from privacy_guardian.util.i18n import tr
 
 # The four lines the card ticks off while the check runs.
@@ -49,6 +49,19 @@ STAGE_SOURCES = {
     "policy": {"policy", "terms"},
     "forms": {"forms", "uploads"},
 }
+# A report finding's severity, as the analysis names it, to the tier it is shown in.
+FINDING_TIERS = {"INTERVENE": "attention", "INFORM": "heads_up"}
+TIER_RANK = ("all_clear", "heads_up", "attention", "act_now")
+
+
+def report_urgency(findings: list[dict[str, Any]]) -> str:
+    """The card takes the tier of its worst finding; none to show means all clear."""
+    worst = "all_clear"
+    for finding in findings:
+        tier = FINDING_TIERS.get(str(finding.get("severity", "")).upper(), "")
+        if tier and TIER_RANK.index(tier) > TIER_RANK.index(worst):
+            worst = tier
+    return worst
 
 
 class DeepCheckWindow(QWidget):
@@ -75,19 +88,20 @@ class DeepCheckWindow(QWidget):
 
     # -- states ---------------------------------------------------------------
 
-    def _reset_card(self) -> GuardianCard:
+    def _reset_card(self, urgency: str = "note") -> GuardianCard:
         if self.scroller is not None:
             self._outer.removeWidget(self.scroller)
             self.scroller.deleteLater()
-        self.card = GuardianCard(self.mode)
+        self.card = GuardianCard(self.mode, urgency=urgency)
         self.card.closed.connect(self.close)
         self.scroller = scrollable(self.card)
         self._outer.addWidget(self.scroller)
         return self.card
 
     def _show_running(self) -> None:
-        card = self._reset_card()
-        card.add_header(title=tr("privacy_check"), right=self._origin())
+        card = self._reset_card("note")
+        card.add_header(title=tr("urgency_checking"), right=tr("app_name"))
+        card.add_headline(tr("privacy_check"))
         self.stage_glyphs = {}
         box = QVBoxLayout()
         box.setSpacing(7)
@@ -102,6 +116,7 @@ class DeepCheckWindow(QWidget):
             box.addLayout(row)
             self.stage_glyphs[key] = glyph
         card.add_layout(box)
+        card.add_context(tr("privacy_check"), self._origin())
         card.add_footer()
         self.status = card.headline_label or QLabel()
         self._anchor()
@@ -123,9 +138,6 @@ class DeepCheckWindow(QWidget):
 
     def show_report(self, report: dict[str, Any]) -> None:
         self.report = report
-        card = self._reset_card()
-        card.add_header(title=tr("privacy_check"), right=self._origin(report))
-        card.add_headline(str(report.get("summary", tr("check_complete"))))
         # Only the things that need looking at. A card that spends half its height
         # listing what turned out fine makes the person hunt for the part that matters;
         # the all-clear sections are still there in the full report.
@@ -134,6 +146,10 @@ class DeepCheckWindow(QWidget):
             for finding in report.get("findings", [])
             if str(finding.get("severity", "")).lower() != "ok"
         ]
+        urgency = report_urgency(findings)
+        card = self._reset_card(urgency)
+        card.add_header(title=tr(f"urgency_{urgency}"), right=tr("app_name"))
+        card.add_headline(str(report.get("summary", tr("check_complete"))))
         rows = [
             DecisionFinding(
                 label=str(finding.get("summary", "")),
@@ -145,6 +161,15 @@ class DeepCheckWindow(QWidget):
             )
             for finding in findings[:MAX_ROWS]
         ]
+        # Each row wears its own tier's colour, so a red row stands out from the
+        # amber ones around it instead of the whole list reading as one warning.
+        accents = [
+            urgency_palette(
+                self.mode,
+                FINDING_TIERS.get(str(finding.get("severity", "")).upper(), "heads_up"),
+            )["accent"]
+            for finding in findings[:MAX_ROWS]
+        ]
         if len(findings) > MAX_ROWS:
             rows.append(
                 DecisionFinding(
@@ -153,7 +178,9 @@ class DeepCheckWindow(QWidget):
             )
         if not report.get("context_available"):
             rows.append(DecisionFinding(label=tr("no_context"), severity="info"))
-        card.add_rows(rows)
+        if rows:
+            card.add_rows(rows, accents)
+        card.add_context(tr("privacy_check"), self._origin(report))
         actions = QHBoxLayout()
         actions.setSpacing(8)
         actions.addStretch(1)

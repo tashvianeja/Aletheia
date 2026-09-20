@@ -6,6 +6,17 @@ All notable changes will be documented here. This project has not produced a ver
 
 ### Changed
 
+- Every card now wears its urgency. `Decision` carries an `urgency` tier, set by the engine from
+  the verdict and the risk — `act_now` (INTERVENE at risk ≥ 0.75), `attention` (other
+  interventions), `heads_up` (a warning that asks nothing), `all_clear` (fine, or handled for the
+  person) and `note` — and both the desktop widget and the in-page panel render it the same way:
+  a coloured band across the top that names the tier in words ("Act now", "Needs your attention",
+  "Heads up", "All clear"), a stop sign / triangle / circle / tick to match, the card outline in
+  the tier's colour, and the findings grouped in a box washed in the same hue with their icons
+  coloured to match. The two reds are told apart on purpose: "Act now" is the only solid band, and
+  it pulses three times as the card lands, then rests. Informational cards list what was found
+  and where, not only the headline. The thorough-check card takes the tier of its worst finding,
+  and each of its rows keeps its own. The confirmation strip leads with a green tick.
 - Rebuilt both intervention surfaces — the desktop widget and the in-page extension panel — on one
   card design: a headline, a short body, severity-marked finding rows, a subject/destination
   context line, and actions ranked so the protective option is the filled primary button. Both

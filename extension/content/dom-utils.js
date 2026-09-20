@@ -23,13 +23,39 @@
   const GLYPHS={
     padlock:{c:'#3b5bdb',d:'<path fill="none" stroke="#3b5bdb" stroke-width="1.7" stroke-linecap="round" d="M6.4 10.2V7.3a3.6 3.6 0 0 1 7.2 0v2.9"/><rect x="4.2" y="10.2" width="11.6" height="8.1" rx="2.2" fill="none" stroke="#3b5bdb" stroke-width="1.7"/>'},
     shield:{d:'<path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" d="M10 2.6 16.4 5v5.1c0 4-3.8 6.4-6.4 7.6-2.6-1.2-6.4-3.6-6.4-7.6V5z"/>'},
-    warn:{d:'<path fill="#d97706" d="M10 2.9 18.6 17H1.4z"/><path fill="#fff" d="M9.1 7.3h1.8v5h-1.8zM9.1 13.6h1.8v1.8H9.1z"/>'},
-    ok:{d:'<circle cx="10" cy="10" r="7.6" fill="#059669"/><path fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="m6.6 10.2 2.4 2.4 4.4-5"/>'},
-    info:{d:'<rect x="4" y="9.2" width="12" height="1.7" rx="0.85" fill="#9ca3af"/>'},
+    // Filled marks take their colour from CSS (currentColor), so a warning row on a red
+    // card is red and the same row on an amber card is amber.
+    warn:{d:'<path fill="currentColor" d="M10 2.9 18.6 17H1.4z"/><path fill="var(--pg-cut,#fff)" d="M9.1 7.3h1.8v5h-1.8zM9.1 13.6h1.8v1.8H9.1z"/>'},
+    ok:{d:'<circle cx="10" cy="10" r="7.6" fill="currentColor"/><path fill="none" stroke="var(--pg-cut,#fff)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" d="m6.6 10.2 2.4 2.4 4.4-5"/>'},
+    info:{d:'<rect x="4" y="9.2" width="12" height="1.7" rx="0.85" fill="currentColor"/>'},
+    stop:{d:'<path fill="currentColor" d="M6.7 2.2h6.6l4.5 4.5v6.6l-4.5 4.5H6.7l-4.5-4.5V6.7z"/><path fill="var(--pg-cut,#fff)" d="M9.1 5.9h1.8v5.4h-1.8zM9.1 12.7h1.8v1.8H9.1z"/>'},
+    alert:{d:'<circle cx="10" cy="10" r="7.6" fill="currentColor"/><path fill="var(--pg-cut,#fff)" d="M9.1 5.9h1.8v5.4h-1.8zM9.1 12.7h1.8v1.8H9.1z"/>'},
+    note:{d:'<circle cx="10" cy="10" r="7.6" fill="currentColor"/><path fill="var(--pg-cut,#fff)" d="M9.1 8.8h1.8v5.4h-1.8zM9.1 5.8h1.8v1.8H9.1z"/>'},
     close:{d:'<path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" d="m5.8 5.8 8.4 8.4M14.2 5.8l-8.4 8.4"/>'},
     arrow:{d:'<path fill="none" stroke="#9ca3af" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" d="M4 10h11m-3.4-3.4L15 10l-3.4 3.4"/>'}
   };
   function icon(name){const node=document.createElementNS(SVG,'svg');node.setAttribute('viewBox','0 0 20 20');node.setAttribute('aria-hidden','true');node.innerHTML=GLYPHS[name]?.d||'';return node;}
+  // The band across the top of every card: the tier's icon and the tier in words. The
+  // service sends the tier; the fallback mirrors engine.presentation.urgency_for for a
+  // decision built by an older service.
+  const URGENCY_ICONS={act_now:'stop',attention:'warn',heads_up:'alert',all_clear:'ok',note:'note'};
+  const URGENCY_LABELS={act_now:'Act now',attention:'Needs your attention',heads_up:'Heads up',all_clear:'All clear',note:'For your information'};
+  function urgencyFor(decision){
+    if(decision.urgency&&URGENCY_ICONS[decision.urgency])return decision.urgency;
+    const risk=decision.risk||0;
+    if(decision.outcome==='INTERVENE')return risk>=0.75?'act_now':'attention';
+    if(decision.auto_action)return 'all_clear';
+    if((decision.findings||[]).some(item=>item.severity==='warn'))return 'heads_up';
+    if(risk<0.25)return 'all_clear';
+    return decision.outcome==='INFORM'?'heads_up':'note';
+  }
+  function band(urgency,label,onClose){
+    const head=element('div','pg-band');
+    head.append(icon(URGENCY_ICONS[urgency]||'note'),element('span','pg-band-label',label));
+    head.append(element('span','pg-brand','Privacy Guardian'));
+    if(onClose){const close=element('button','pg-close');close.type='button';close.setAttribute('aria-label','Dismiss');close.append(icon('close'));close.addEventListener('click',onClose);head.append(close);}
+    return head;
+  }
   function element(tag,className,text){const node=document.createElement(tag);if(className)node.className=className;if(text!==undefined)node.textContent=text;return node;}
   PG.decisionStates=new Map();
   // Every panel lives in one bottom-right column, newest above, so none of them can
@@ -43,34 +69,20 @@
   // The widget: one card, laid out exactly as the desktop popup lays it out.
   function buildPanel(decision,state){
     const informational=decision.outcome==='INFORM';
+    const urgency=urgencyFor(decision);
     const panel=element('section','pg-panel');
+    panel.dataset.pgUrgency=urgency;
     panel.setAttribute('role',informational?'status':'alertdialog');
-    panel.setAttribute('aria-label','Privacy Guardian');
+    panel.setAttribute('aria-label','Privacy Guardian: '+(URGENCY_LABELS[urgency]||''));
     panel.setAttribute('aria-live',informational?'polite':'assertive');
     const headline=element('p','pg-headline',decision.headline||decision.explanation);
-    const dismiss=()=>{const close=element('button','pg-close');close.type='button';close.setAttribute('aria-label','Dismiss');close.append(icon('close'));close.addEventListener('click',()=>state.dismiss());return close;};
-    if(informational){
-      const head=element('div','pg-head');
-      // A tick reports something that is fine or already handled; anything else that
-      // is worth saying gets the neutral mark, never a green all-clear.
-      const severity=(decision.findings||[]).some(item=>item.severity==='warn')?'warn':(decision.auto_action||(decision.risk||0)<0.25)?'ok':'info';
-      head.append(icon(severity),headline);
-      headline.style.margin='0';
-      headline.style.flex='1';
-      if(decision.destination)head.append(element('span','pg-origin',decision.destination));
-      head.append(dismiss());
-      panel.append(head);
-    }else{
-      const head=element('div','pg-head');
-      head.append(icon('padlock'),element('span','pg-name','Privacy Guardian'));
-      if(decision.destination)head.append(element('span','pg-origin',decision.destination));
-      head.append(dismiss());
-      panel.append(head,headline);
-    }
+    const label=urgency==='all_clear'&&decision.auto_action?'Handled for you':URGENCY_LABELS[urgency];
+    panel.append(band(urgency,label,()=>state.dismiss()),headline);
     const body=element('p','pg-body',decision.body||'');
     const rows=element('ul','pg-rows');
     for(const finding of decision.findings||[]){
       const item=document.createElement('li');
+      item.dataset.pgSeverity=finding.severity||'warn';
       item.append(icon(finding.severity||'warn'));
       const text=element('span','pg-row-label',finding.label);
       if(finding.detail)text.append(element('span','pg-row-detail',finding.detail));
@@ -86,14 +98,14 @@
     const check=document.createElement('input');check.type='checkbox';
     remember.append(check,document.createTextNode("Don't ask again for this site"));
     remember.hidden=true;panel.append(remember);
+    if(decision.subject||decision.destination){
+      panel.append(element('hr','pg-rule'));
+      const context=element('div','pg-context');
+      context.append(element('strong',null,decision.subject||''));
+      if(decision.destination){context.append(icon('arrow'),element('span',null,decision.destination));}
+      panel.append(context);
+    }
     if(!informational){
-      if(decision.subject||decision.destination){
-        panel.append(element('hr','pg-rule'));
-        const context=element('div','pg-context');
-        context.append(element('span',null,decision.subject||''));
-        if(decision.destination){context.append(icon('arrow'),element('span',null,decision.destination));}
-        panel.append(context);
-      }
       const labels=decision.action_labels||{};
       const primary=decision.primary_action||decision.default_action;
       const tertiary=decision.tertiary_action||'';
@@ -189,10 +201,11 @@
   // The compact bar from the component set: what just happened, and a way to dismiss it.
   PG.confirm = message=>{
     document.querySelector('.pg-panel[data-pg-confirm]')?.remove();
-    const panel=element('section','pg-panel');panel.dataset.pgConfirm='1';
+    const panel=element('section','pg-panel');panel.dataset.pgConfirm='1';panel.dataset.pgUrgency='all_clear';
     panel.setAttribute('role','status');panel.style.width='auto';panel.style.padding='12px 14px';
     const row=element('div','pg-head');row.style.margin='0';
-    row.append(icon('padlock'),element('span','pg-row-label',message));
+    const tick=icon('ok');tick.classList.add('pg-tick');
+    row.append(tick,element('span','pg-row-label',message));
     const done=element('button','pg-primary','Done');done.type='button';
     done.style.marginLeft='14px';
     done.addEventListener('click',()=>panel.remove());

@@ -8,12 +8,40 @@ from privacy_guardian.core.events import (
     DecisionFinding,
     FileUploadEvent,
     FormObservedEvent,
+    Outcome,
     PermissionRequestEvent,
     PolicyDocumentEvent,
     PrivacyEvent,
     SystemAccessEvent,
     TrackingEvent,
 )
+
+# The point past which an intervention is shown in the strongest register: a solid red
+# band that pulses when it arrives. Identity documents, passwords and broad desktop
+# access all score here; a consent banner with a buried reject button does not.
+ACT_NOW_RISK = 0.75
+# Below this an informational card is reporting that things are fine.
+SETTLED_RISK = 0.25
+
+
+def urgency_for(decision: Decision) -> str:
+    """Which register the widget speaks in, from the verdict and the risk.
+
+    The tiers map onto colours people already know: two reds for the cards that hold
+    something up (deep and solid for the worst of them), amber for a warning that
+    asks nothing, green for fine or already handled, blue for a plain note.
+    """
+    if decision.outcome == Outcome.INTERVENE:
+        return "act_now" if decision.risk >= ACT_NOW_RISK else "attention"
+    if decision.auto_action:
+        # The person authorised this; the card reports that it was done for them.
+        return "all_clear"
+    if any(finding.severity == "warn" for finding in decision.findings):
+        return "heads_up"
+    if decision.risk < SETTLED_RISK:
+        return "all_clear"
+    return "heads_up" if decision.outcome == Outcome.INFORM else "note"
+
 
 # What each button says at the moment it is shown. The same action id reads differently
 # depending on what the user is in the middle of doing, exactly as the mockups show.
@@ -320,4 +348,5 @@ def decorate(decision: Decision, event: PrivacyEvent, filename: str = "") -> Dec
         event.event_type, decision.actions
     )
     decision.layout = layout_for(event)  # type: ignore[assignment]
+    decision.urgency = urgency_for(decision)  # type: ignore[assignment]
     return decision

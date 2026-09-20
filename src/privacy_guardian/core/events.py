@@ -270,6 +270,9 @@ class Decision(Model):
     auto_action: str = ""
     layout: Literal["body_first", "findings_first"] = "body_first"
     default_action: str = "cancel"
+    # How loudly the widget should say this, from the verdict and the risk. The two
+    # red tiers are the ones that hold something up; the rest only report.
+    urgency: Literal["", "act_now", "attention", "heads_up", "all_clear", "note"] = ""
 
     @property
     def title(self) -> str:

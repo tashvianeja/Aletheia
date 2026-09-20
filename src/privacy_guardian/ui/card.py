@@ -2,11 +2,12 @@
 
 Layout, in the order the mockups put it:
 
-    [lock] Privacy Guardian                                  origin   [x]
+    ┃ [tier icon] ACT NOW / HEADS UP / ...    Privacy Guardian   [x] ┃  <- coloured band
     Headline in bold
     Body paragraph
-    [!] Finding row
-        optional detail line
+    ┌ [!] Finding row                                              ┐  <- tinted box
+    │     optional detail line                                     │
+    └──────────────────────────────────────────────────────────────┘
     ----------------------------------------------------------------
     subject  ->  destination
                                        tertiary (plain text, own row)
@@ -14,6 +15,10 @@ Layout, in the order the mockups put it:
     ----------------------------------------------------------------
     [shield] Analysed on this device              Why am I seeing this?
     [==== countdown, informational cards only ====]
+
+The band's colour family is the card's urgency tier (see engine.presentation.urgency_for):
+solid deep red for "act now", tinted red for "needs your attention", amber for a heads
+up, green for all clear or handled, blue for a plain note.
 """
 
 from __future__ import annotations
@@ -21,9 +26,19 @@ from __future__ import annotations
 import logging
 import sys
 from collections.abc import Callable
+from typing import Any
 
-from PySide6.QtCore import QRect, Qt, Signal
-from PySide6.QtGui import QCursor, QGuiApplication, QScreen
+from PySide6.QtCore import (
+    Property,
+    QByteArray,
+    QEasingCurve,
+    QPropertyAnimation,
+    QRect,
+    QRectF,
+    Qt,
+    Signal,
+)
+from PySide6.QtGui import QColor, QCursor, QGuiApplication, QPainter, QPainterPath, QScreen
 from PySide6.QtWidgets import (
     QFrame,
     QGraphicsDropShadowEffect,
@@ -38,7 +53,7 @@ from PySide6.QtWidgets import (
 
 from privacy_guardian.core.events import DecisionFinding
 from privacy_guardian.ui import icons
-from privacy_guardian.ui.theme import card_stylesheet, palette
+from privacy_guardian.ui.theme import card_stylesheet, palette, urgency_palette
 from privacy_guardian.util.i18n import tr
 
 CARD_WIDTH = 360
@@ -87,16 +102,97 @@ def divider(color: str) -> QFrame:
     return line
 
 
+BAND_ICONS = {
+    "act_now": "stop",
+    "attention": "warn",
+    "heads_up": "alert",
+    "all_clear": "ok",
+    "note": "note",
+}
+
+
+def urgency_label(urgency: str, handled: bool = False) -> str:
+    if urgency == "all_clear" and handled:
+        return tr("urgency_handled")
+    return tr(f"urgency_{urgency}") if urgency in BAND_ICONS else tr("app_name")
+
+
+class UrgencyBand(QFrame):
+    """The coloured strip across the top of the card.
+
+    It is painted rather than styled so it can pulse: `glow` blends the band colour
+    towards its brighter pulse colour, and an animation runs it up and down a few
+    times when an "act now" card arrives. Motion is the one signal that reaches
+    someone who is looking at something else, which is exactly when the card arrives.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("cardBand")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
+        self._glow = 0.0
+        self._base = QColor("#e8ecfd")
+        self._bright = QColor("#c7d2fe")
+        self.radius = 13
+
+    def set_colors(self, base: str, bright: str) -> None:
+        self._base = QColor(base)
+        self._bright = QColor(bright)
+        self.update()
+
+    def get_glow(self) -> float:
+        return self._glow
+
+    def set_glow(self, value: float) -> None:
+        self._glow = max(0.0, min(1.0, float(value)))
+        self.update()
+
+    glow = Property(float, get_glow, set_glow)  # type: ignore[call-arg]
+
+    def paintEvent(self, event: Any) -> None:
+        t = self._glow
+        color = QColor(
+            round(self._base.red() + (self._bright.red() - self._base.red()) * t),
+            round(self._base.green() + (self._bright.green() - self._base.green()) * t),
+            round(self._base.blue() + (self._bright.blue() - self._base.blue()) * t),
+        )
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        rect = QRectF(self.rect())
+        r = float(self.radius)
+        path.moveTo(rect.left(), rect.bottom())
+        path.lineTo(rect.left(), rect.top() + r)
+        path.arcTo(rect.left(), rect.top(), 2 * r, 2 * r, 180, -90)
+        path.lineTo(rect.right() - r, rect.top())
+        path.arcTo(rect.right() - 2 * r, rect.top(), 2 * r, 2 * r, 90, -90)
+        path.lineTo(rect.right(), rect.bottom())
+        path.closeSubpath()
+        painter.fillPath(path, color)
+        painter.end()
+
+
 class GuardianCard(QFrame):
-    """A single card. Callers add the parts they need, in order."""
+    """A single card. Callers add the parts they need, in order.
+
+    Every card belongs to one urgency tier, and the tier decides the colour family of
+    the band across the top, the icon and word on it, the outline of the card and the
+    wash behind the findings. Someone glancing at the corner of their screen should
+    know whether to stop or carry on before they have read a single sentence.
+    """
 
     closed = Signal()
 
-    def __init__(self, mode: str = "system", parent: QWidget | None = None) -> None:
+    def __init__(
+        self, mode: str = "system", parent: QWidget | None = None, urgency: str = "note"
+    ) -> None:
         super().__init__(parent)
         self.setObjectName("guardianCard")
         self.mode = mode
         self.colors = palette(mode)
+        self.urgency = urgency if urgency in BAND_ICONS else "note"
+        self.tone = urgency_palette(mode, self.urgency)
+        self.setProperty("urgency", self.urgency)
         self.setStyleSheet(card_stylesheet(mode))
         self.setFixedWidth(CARD_WIDTH)
         self.buttons: dict[str, QPushButton] = {}
@@ -105,10 +201,20 @@ class GuardianCard(QFrame):
         self.why_button: QPushButton | None = None
         self.headline_label: QLabel | None = None
         self.body_label: QLabel | None = None
+        self.band: UrgencyBand | None = None
+        self.band_icon: QLabel | None = None
+        self.band_label: QLabel | None = None
         self.rows_box: QVBoxLayout | None = None
+        self.findings_box: QFrame | None = None
+        self._pulse: QPropertyAnimation | None = None
+        # The band bleeds to the card's edges; everything under it keeps the margin.
         self._layout = QVBoxLayout(self)
-        self._layout.setContentsMargins(18, 16, 18, 0)
-        self._layout.setSpacing(9)
+        self._layout.setContentsMargins(0, 0, 0, 0)
+        self._layout.setSpacing(0)
+        self._content = QVBoxLayout()
+        self._content.setContentsMargins(18, 14, 18, 0)
+        self._content.setSpacing(9)
+        self._layout.addLayout(self._content)
         shadow = QGraphicsDropShadowEffect(self)
         shadow.setBlurRadius(34)
         shadow.setOffset(0, 8)
@@ -118,30 +224,96 @@ class GuardianCard(QFrame):
     # -- header ---------------------------------------------------------------
 
     def add_header(self, title: str = "", right: str = "", closable: bool = True) -> None:
-        row = QHBoxLayout()
+        """The band: tier icon, the tier in words (or a title), who is speaking, close.
+
+        The band is fixed at its natural height. Left to a layout it is the item that
+        soaks up any slack, and a card whose rows are squeezed to make room for a
+        taller band cuts the second line off the very finding the person needs.
+        """
+        band = UrgencyBand(self)
+        band.radius = 12 if self.urgency == "act_now" else 13
+        row = QHBoxLayout(band)
+        row.setContentsMargins(14, 9, 12, 9)
         row.setSpacing(8)
-        lock = QLabel()
-        lock.setPixmap(icons.pixmap("padlock", self.colors["accent"], 16))
-        row.addWidget(lock)
-        name = QLabel(title or tr("app_name"))
-        name.setObjectName("cardTitle")
-        row.addWidget(name)
+        self.band_icon = QLabel()
+        self.band_icon.setFixedWidth(20)
+        row.addWidget(self.band_icon)
+        self.band_label = QLabel(title or urgency_label(self.urgency))
+        self.band_label.setObjectName("cardBandLabel")
+        row.addWidget(self.band_label)
         row.addStretch(1)
         if right:
             origin = QLabel(right)
-            origin.setObjectName("cardFooter")
+            origin.setObjectName("cardBandOrigin")
+            origin.setMaximumWidth(150)
             row.addWidget(origin)
         if closable:
             self.close_button = QPushButton()
             self.close_button.setProperty("tier", "icon")
-            self.close_button.setIcon(icons.icon("close", self.colors["faint"]))
             self.close_button.setFlat(True)
             self.close_button.setFixedSize(18, 18)
             self.close_button.setAccessibleName(tr("close"))
             self.close_button.setToolTip(tr("close"))
+            self.close_button.setCursor(Qt.CursorShape.PointingHandCursor)
             self.close_button.clicked.connect(self.closed.emit)
             row.addWidget(self.close_button)
-        self._layout.addLayout(row)
+        self.band = band
+        self._layout.insertWidget(0, band)
+        self._paint_band()
+        band.setFixedHeight(band.sizeHint().height())
+
+    def _paint_band(self) -> None:
+        """Colour the band and its contents for the current tier."""
+        if self.band is None:
+            return
+        tone = self.tone
+        self.band.set_colors(tone["band"], tone["pulse"])
+        if self.band_icon is not None:
+            name = BAND_ICONS[self.urgency]
+            solid = self.urgency == "act_now"
+            self.band_icon.setPixmap(
+                icons.pixmap(
+                    name,
+                    tone["band_ink"] if solid else tone["accent"],
+                    17,
+                    inner=tone["band"] if solid else "#ffffff",
+                )
+            )
+        if self.close_button is not None:
+            self.close_button.setIcon(icons.icon("close", tone["band_dim"]))
+
+    def set_urgency(self, urgency: str, label: str = "") -> None:
+        """Move the card to another tier, restyling everything the tier decides."""
+        self.urgency = urgency if urgency in BAND_ICONS else "note"
+        self.tone = urgency_palette(self.mode, self.urgency)
+        self.setProperty("urgency", self.urgency)
+        self.style().unpolish(self)
+        self.style().polish(self)
+        if self.band_label is not None:
+            self.band_label.setText(label or urgency_label(self.urgency))
+        self._paint_band()
+
+    def set_mode(self, mode: str) -> None:
+        """Follow a light/dark switch without rebuilding the card."""
+        self.mode = mode
+        self.colors = palette(mode)
+        self.tone = urgency_palette(mode, self.urgency)
+        self.setStyleSheet(card_stylesheet(mode))
+        self._paint_band()
+
+    def pulse(self, times: int = 3) -> None:
+        """Breathe the band a few times, then rest. Never indefinitely."""
+        if self.band is None or times <= 0:
+            return
+        animation = QPropertyAnimation(self.band, QByteArray(b"glow"), self)
+        animation.setDuration(800)
+        animation.setKeyValueAt(0.0, 0.0)
+        animation.setKeyValueAt(0.5, 1.0)
+        animation.setKeyValueAt(1.0, 0.0)
+        animation.setEasingCurve(QEasingCurve.Type.InOutSine)
+        animation.setLoopCount(times)
+        self._pulse = animation
+        animation.start()
 
     # -- text -----------------------------------------------------------------
 
@@ -150,7 +322,7 @@ class GuardianCard(QFrame):
         label.setObjectName("cardHeadline")
         label.setWordWrap(True)
         self.headline_label = label
-        self._layout.addWidget(label)
+        self._content.addWidget(label)
         return label
 
     def add_body(self, text: str) -> QLabel:
@@ -158,29 +330,45 @@ class GuardianCard(QFrame):
         label.setObjectName("cardBody")
         label.setWordWrap(True)
         self.body_label = label
-        self._layout.addWidget(label)
+        self._content.addWidget(label)
         return label
 
     # -- finding rows ---------------------------------------------------------
 
-    def add_rows(self, findings: list[DecisionFinding]) -> None:
-        box = QVBoxLayout()
-        box.setSpacing(6)
-        box.setContentsMargins(0, 2, 0, 2)
-        self.rows_box = box
-        for finding in findings:
-            box.addLayout(self.build_row(finding))
-        self._layout.addLayout(box)
+    def add_rows(self, findings: list[DecisionFinding], accents: list[str] | None = None) -> None:
+        """The list of what was found, boxed together in the tier's wash.
 
-    def build_row(self, finding: DecisionFinding) -> QHBoxLayout:
-        colors = {
-            "warn": self.colors["warn"],
-            "ok": self.colors["ok"],
-            "info": self.colors["faint"],
-        }
+        `accents` overrides the colour of individual warning rows, for a card that
+        mixes tiers in one list (the thorough check does).
+        """
+        frame = QFrame()
+        frame.setObjectName("findingsBox")
+        box = QVBoxLayout(frame)
+        box.setSpacing(7)
+        box.setContentsMargins(11, 9, 11, 9)
+        self.rows_box = box
+        self.findings_box = frame
+        for index, finding in enumerate(findings):
+            accent = accents[index] if accents and index < len(accents) else None
+            box.addLayout(self.build_row(finding, accent))
+        self._content.addWidget(frame)
+
+    def row_color(self, severity: str) -> str:
+        """Warnings wear the tier's colour, so a red card has red rows, not amber."""
+        if severity == "warn":
+            return (
+                self.tone["accent"]
+                if self.urgency in ("act_now", "attention")
+                else (self.colors["warn"])
+            )
+        if severity == "ok":
+            return self.colors["ok"]
+        return self.colors["faint"]
+
+    def build_row(self, finding: DecisionFinding, accent: str | None = None) -> QHBoxLayout:
         row = QHBoxLayout()
         row.setSpacing(9)
-        row.addWidget(glyph(finding.severity, colors.get(finding.severity, self.colors["faint"])))
+        row.addWidget(glyph(finding.severity, accent or self.row_color(finding.severity)))
         text = QVBoxLayout()
         text.setSpacing(1)
         label = QLabel(finding.label)
@@ -200,11 +388,11 @@ class GuardianCard(QFrame):
     def add_context(self, subject: str, destination: str) -> None:
         if not subject and not destination:
             return
-        self._layout.addWidget(divider(self.colors["line"]))
+        self._content.addWidget(divider(self.colors["line"]))
         row = QHBoxLayout()
         row.setSpacing(8)
         left = QLabel(subject)
-        left.setObjectName("cardContext")
+        left.setObjectName("cardContextStrong")
         row.addWidget(left)
         if destination:
             arrow = QLabel()
@@ -214,7 +402,7 @@ class GuardianCard(QFrame):
             right.setObjectName("cardContext")
             row.addWidget(right)
         row.addStretch(1)
-        self._layout.addLayout(row)
+        self._content.addLayout(row)
 
     def add_actions(
         self,
@@ -230,6 +418,7 @@ class GuardianCard(QFrame):
             button = QPushButton(labels.get(action, tr(action)))
             button.setProperty("tier", tier)
             button.setAccessibleName(button.text())
+            button.setCursor(Qt.CursorShape.PointingHandCursor)
             button.clicked.connect(lambda _checked=False, value=action: on_click(value))
             self.buttons[action] = button
             return button
@@ -248,19 +437,19 @@ class GuardianCard(QFrame):
             above = QHBoxLayout()
             above.addStretch(1)
             above.addWidget(escape)
-            self._layout.addLayout(above)
+            self._content.addLayout(above)
         row = QHBoxLayout()
         row.setSpacing(8)
         row.addStretch(1)
         for widget in widgets:
             row.addWidget(widget)
-        self._layout.addLayout(row)
+        self._content.addLayout(row)
 
     # -- footer ---------------------------------------------------------------
 
     def add_footer(self, on_why: Callable[[], None] | None = None) -> None:
-        self._layout.addSpacing(2)
-        self._layout.addWidget(divider(self.colors["line"]))
+        self._content.addSpacing(2)
+        self._content.addWidget(divider(self.colors["line"]))
         row = QHBoxLayout()
         row.setContentsMargins(0, 0, 0, 10)
         row.setSpacing(6)
@@ -278,7 +467,7 @@ class GuardianCard(QFrame):
             self.why_button.setCursor(Qt.CursorShape.PointingHandCursor)
             self.why_button.clicked.connect(on_why)
             row.addWidget(self.why_button)
-        self._layout.addLayout(row)
+        self._content.addLayout(row)
 
     def add_countdown(self, milliseconds: int) -> QProgressBar:
         """The thin bar along the bottom edge of an informational card."""
@@ -288,19 +477,19 @@ class GuardianCard(QFrame):
         bar.setValue(milliseconds)
         bar.setFixedHeight(3)
         self.progress = bar
-        self._layout.setContentsMargins(18, 16, 18, 10)
-        self._layout.addWidget(bar)
+        self._content.setContentsMargins(18, 14, 18, 10)
+        self._content.addWidget(bar)
         return bar
 
     def add_widget(self, widget: QWidget) -> None:
-        self._layout.addWidget(widget)
+        self._content.addWidget(widget)
 
     def add_layout(self, layout: QHBoxLayout | QVBoxLayout) -> None:
-        self._layout.addLayout(layout)
+        self._content.addLayout(layout)
 
     def finish(self) -> None:
         """Close the bottom margin when the card has no footer of its own."""
-        self._layout.setContentsMargins(18, 16, 18, 16)
+        self._content.setContentsMargins(18, 14, 18, 14)
 
 
 def scrollable(card: GuardianCard) -> QScrollArea:

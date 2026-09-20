@@ -399,3 +399,44 @@ def test_the_card_does_not_say_in_prose_what_the_rows_already_say() -> None:
     assert banner.body == ""
     for decision in (tracking, banner):
         assert len(decision.findings) <= 3
+
+
+def test_urgency_follows_the_verdict_and_the_risk() -> None:
+    """The tier is the colour the widget wears: two reds for what holds something up,
+    amber for a warning, green for fine or handled, blue for a plain note."""
+    from privacy_guardian.core.events import Decision, DecisionFinding, Outcome
+    from privacy_guardian.engine.presentation import urgency_for
+
+    def made(outcome: Outcome, risk: float, **extra: object) -> Decision:
+        return Decision(event_id="e", outcome=outcome, risk=risk, explanation="x", **extra)
+
+    assert urgency_for(made(Outcome.INTERVENE, 1.0)) == "act_now"
+    assert urgency_for(made(Outcome.INTERVENE, 0.75)) == "act_now"
+    assert urgency_for(made(Outcome.INTERVENE, 0.55)) == "attention"
+    assert urgency_for(made(Outcome.INFORM, 0.4)) == "heads_up"
+    assert (
+        urgency_for(made(Outcome.INFORM, 0.1, findings=[DecisionFinding(label="w")])) == "heads_up"
+    ), "a warning row makes it a warning whatever the score"
+    assert urgency_for(made(Outcome.INFORM, 0.1)) == "all_clear"
+    assert urgency_for(made(Outcome.INFORM, 0.6, auto_action="reject_optional")) == "all_clear", (
+        "done for the person is reported as handled, not as a warning"
+    )
+    assert urgency_for(made(Outcome.IGNORE, 0.3)) == "note"
+
+
+def test_decisions_leave_the_engine_with_their_tier_set() -> None:
+    from privacy_guardian.core.events import DataCategory, FileUploadEvent, Requester
+
+    upload = FileUploadEvent(
+        filename="passport.pdf",
+        requester=Requester(
+            origin="https://shrinkpix.example",
+            display_name="shrinkpix.example",
+            purpose="image_tool",
+            purpose_confidence=0.9,
+        ),
+        data_categories=[DataCategory.GOVERNMENT_ID_PASSPORT, DataCategory.FULL_NAME],
+    )
+    verdict = decide(upload)
+    assert verdict.outcome.value == "INTERVENE"
+    assert verdict.urgency == "act_now"

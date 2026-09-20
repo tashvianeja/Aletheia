@@ -84,7 +84,15 @@ def capture(widget: QWidget, path: Path, app: QApplication, fit: bool = True) ->
     widget.show()
     app.processEvents()
     if fit:
-        widget.adjustSize()
+        # A floating card only knows its true height once its word-wrapped labels
+        # have been laid out at the card's width; adjustSize() would clip it.
+        content = getattr(widget, "stack_content", lambda: None)()
+        if content is not None and content.layout() is not None:
+            content.layout().activate()
+            app.processEvents()
+            widget.setFixedHeight(content.sizeHint().height())
+        else:
+            widget.adjustSize()
         app.processEvents()
     widget.grab().save(str(path), "PNG")
     widget.hide()

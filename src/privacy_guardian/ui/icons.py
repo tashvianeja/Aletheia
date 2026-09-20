@@ -17,12 +17,27 @@ _SHIELD = (
 )
 _WARNING = (
     '<path fill="{c}" d="M10 2.9 18.6 17H1.4z"/>'
-    '<path fill="#ffffff" d="M9.1 7.3h1.8v5h-1.8zM9.1 13.6h1.8v1.8H9.1z"/>'
+    '<path fill="{i}" d="M9.1 7.3h1.8v5h-1.8zM9.1 13.6h1.8v1.8H9.1z"/>'
 )
 _TICK = (
     '<circle cx="10" cy="10" r="7.6" fill="{c}"/>'
-    '<path fill="none" stroke="#ffffff" stroke-width="1.9" stroke-linecap="round" '
+    '<path fill="none" stroke="{i}" stroke-width="1.9" stroke-linecap="round" '
     'stroke-linejoin="round" d="m6.6 10.2 2.4 2.4 4.4-5"/>'
+)
+# A stop sign: the one shape that means "do not go on" without a word beside it.
+_STOP = (
+    '<path fill="{c}" d="M6.7 2.2h6.6l4.5 4.5v6.6l-4.5 4.5H6.7l-4.5-4.5V6.7z"/>'
+    '<path fill="{i}" d="M9.1 5.9h1.8v5.4h-1.8zM9.1 12.7h1.8v1.8H9.1z"/>'
+)
+# An exclamation in a circle: worth a look, not a stop.
+_ALERT = (
+    '<circle cx="10" cy="10" r="7.6" fill="{c}"/>'
+    '<path fill="{i}" d="M9.1 5.9h1.8v5.4h-1.8zM9.1 12.7h1.8v1.8H9.1z"/>'
+)
+# A lower-case i in a circle: a plain note.
+_INFO_CIRCLE = (
+    '<circle cx="10" cy="10" r="7.6" fill="{c}"/>'
+    '<path fill="{i}" d="M9.1 8.8h1.8v5.4h-1.8zM9.1 5.8h1.8v1.8H9.1z"/>'
 )
 _DASH = '<rect x="4" y="9.2" width="12" height="1.7" rx="0.85" fill="{c}"/>'
 _PENDING = '<circle cx="10" cy="10" r="6.4" fill="none" stroke="{c}" stroke-width="1.5"/>'
@@ -44,6 +59,9 @@ GLYPHS = {
     "shield": _SHIELD,
     "warn": _WARNING,
     "ok": _TICK,
+    "stop": _STOP,
+    "alert": _ALERT,
+    "note": _INFO_CIRCLE,
     "info": _DASH,
     "pending": _PENDING,
     "running": _SPINNER,
@@ -52,13 +70,16 @@ GLYPHS = {
 }
 
 
-def svg(name: str, color: str) -> str:
-    body = GLYPHS[name].replace("{c}", color)
+def svg(name: str, color: str, inner: str = "#ffffff") -> str:
+    """The glyph in `color`; `inner` is the mark cut out of a filled shape."""
+    body = GLYPHS[name].replace("{c}", color).replace("{i}", inner)
     return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">{body}</svg>'
 
 
-def pixmap(name: str, color: str, size: int = 16, ratio: float = 2.0) -> QPixmap:
-    renderer = QSvgRenderer(QByteArray(svg(name, color).encode()))
+def pixmap(
+    name: str, color: str, size: int = 16, ratio: float = 2.0, inner: str = "#ffffff"
+) -> QPixmap:
+    renderer = QSvgRenderer(QByteArray(svg(name, color, inner).encode()))
     scaled = max(1, int(size * ratio))
     image = QPixmap(scaled, scaled)
     image.fill(Qt.GlobalColor.transparent)
