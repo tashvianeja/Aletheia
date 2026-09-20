@@ -95,11 +95,49 @@ _CONTEXT_PATTERNS: tuple[tuple[str, str, float], ...] = (
         0.9,
     ),
     # An address that ends in a six-digit PIN: the street-suffix patterns above are
-    # written for US and UK addresses and do not see an Indian one at all.
+    # written for US and UK addresses and do not see an Indian one at all. An Aadhaar
+    # prints the whole address again beside the card, run over six or seven short
+    # lines, so the run this looks across has to be long enough to reach the PIN.
     (
         "postal_address",
-        r"(?:address|पता)\s*[:=]?\s*((?:[^\n]{1,80}\n){0,4}?[^\n]{0,80}?\b\d{6}\b)",
+        r"(?:address|पता)\s*[:=]?\s*((?:[^\n]{1,80}\n){0,8}?[^\n]{0,80}?\b\d{6}\b)",
         0.9,
+    ),
+    # An Indian address is not written under the word "address" at all: an Aadhaar
+    # letter prints it as a column of labelled lines, one field to a line, and the
+    # pattern above never sees it. These labels belong to that column and to little
+    # else, so one of them on its own is enough to read the line as an address.
+    (
+        "postal_address",
+        r"(?:^|\n)[ \t]*(?:VTC|Sub[\s-]*District|PIN\s*Code|Post\s*Office|Tehsil|Taluka?|Mandal)"
+        r"\s*[:=][ \t]*([^\n]{1,80})",
+        0.9,
+    ),
+    # The rest of that column is labelled with words ordinary prose and configuration
+    # use too ("State: active"), so these count only where the line below carries
+    # another of the column's labels. A run of them is an address; one is not.
+    (
+        "postal_address",
+        r"(?:^|\n)[ \t]*(?:PO|District|Dist\.?|State|PIN|Pincode|Village|Town|City|Street"
+        r"|Landmark|Locality|House(?:\s*No\.?)?)\s*[:=][ \t]*([^\n]{1,80})"
+        r"(?=\n[ \t]*(?:VTC|PO|Sub[\s-]*District|District|Dist\.?|State|PIN\s*Code|PIN|Pincode"
+        r"|Post\s*Office|Village|Town|City|Tehsil|Taluka?|Mandal)\s*[:=])",
+        0.88,
+    ),
+    # The house and street lines of that column carry no label of their own. They sit
+    # between the care-of line, which names a parent and stays readable, and the first
+    # labelled field, so that is where they are found. Anchoring on the care-of line
+    # rather than counting back from the first label is what keeps the addressee's own
+    # name, printed directly above it, out of the box.
+    (
+        "postal_address",
+        r"\b[CSDW]/O\b[^\n]*\n"
+        r"((?![ \t]*(?:VTC|PO|Sub[\s-]*District|District|Dist\.?|State|PIN|Pincode"
+        r"|Post\s*Office|Village|Town|City|Tehsil|Taluka?|Mandal)\s*[:=])"
+        r"(?:[^\n]{1,80}\n){0,3}?[^\n]{1,80})"
+        r"(?=\n[ \t]*(?:VTC|PO|Sub[\s-]*District|District|Dist\.?|State|PIN\s*Code|PIN|Pincode"
+        r"|Post\s*Office|Village|Town|City|Tehsil|Taluka?|Mandal)\s*[:=])",
+        0.85,
     ),
     ("government_id.ssn", r"(?:ssn|social\s+security(?:\s+number)?)\s*[:=]?\s*(\d{9})\b", 0.99),
     (
@@ -154,9 +192,18 @@ _CONTEXT_PATTERNS: tuple[tuple[str, str, float], ...] = (
 # tells an Aadhaar number apart from any other twelve digits. Matching it only where
 # one of these appears is what keeps a reference number on an invoice from being
 # announced to the person as their national ID; the checksum then does the rest.
+#
+# A card issued in a regional language prints its own name, and "Government of
+# India", only inside the banner picture at the top, so none of those words reach
+# this text at all. The labelled address column does: VTC is UIDAI's own name for
+# the village, town or city line, and it sits with an enrolment number, a PIN code
+# or a sub-district. That signature is kept in step with the one that classifies the
+# document, in analysis/documents/extract.py.
 _AADHAAR_MARKERS = re.compile(
     r"aadhaar|aadhar|आधार|uidai|unique\s+identification\s+authority"
-    r"|government\s+of\s+india|भारत\s*सरकार|\bvid\b",
+    r"|government\s+of\s+india|भारत\s*सरकार|\bvid\b"
+    r"|(?s:\bVTC\s*[:=].{0,2000}?(?:enrol?ment\s*no|PIN\s*Code|Sub[\s-]*District))"
+    r"|(?s:(?:enrol?ment\s*no|PIN\s*Code|Sub[\s-]*District).{0,2000}?\bVTC\s*[:=])",
     re.I,
 )
 # A bare Aadhaar number as the card prints it: 4-4-4, or run together.

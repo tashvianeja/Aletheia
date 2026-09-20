@@ -96,6 +96,47 @@ All notable changes will be documented here. This project has not produced a ver
 
 ### Fixed
 
+- A redacted Aadhaar left the whole address showing, and the photograph with it. UIDAI does not
+  print an address under the word "address": it prints a column of its own labelled fields — VTC,
+  PO, Sub District, District, State, PIN Code — above which the house and street lines carry no
+  label at all. Nothing here looked for any of that, so on a real card every line of the address
+  came through a redaction untouched. The column is now read field by field, the unlabelled
+  street lines are found from the care-of line above them, and the labels themselves stay
+  readable so the copy reads as an address withheld rather than as a card with a hole in it.
+- A real e-Aadhaar was not recognised as an Aadhaar. A card issued in Kannada, Tamil or Bengali
+  names itself in that language, and the banner reading "Aadhaar" and "Unique Identification
+  Authority of India" in English is a picture on the page rather than text on it — so the text a
+  reader gets back carries the word nowhere, the card was classified as an ordinary document, and
+  its QR code and its photograph were never covered at all. UIDAI's address column is now read as
+  a signature of the card in its own right, alongside the name.
+- The address an Aadhaar prints in the holder's own language stayed visible. The fonts an
+  e-Aadhaar embeds hand back nothing usable for most Indic scripts, so neither the word above
+  that block nor anything inside it can be matched, though every line of it is legible to whoever
+  opens the file: the address was redacted for a Hindi cardholder and for nobody else. That copy
+  is now covered by the shape of its block — a run of lines ending on the six-digit PIN, back as
+  far as the last line the card keeps readable.
+- The photograph on an Aadhaar is now covered. A face is matched against a face, and no form
+  asking for an Aadhaar is checking one. Only the photograph goes: a page's other pictures are
+  its logos, its banners, the rules between its sections and the block of standing advice UIDAI
+  ships as an image, and painting those out defaces the copy while withholding nothing. On a
+  scan there is no way to tell the portrait from the rest of a flat picture, and the copy says
+  so plainly rather than implying the face has gone.
+- Two QR codes on one sheet came back as a single enormous code. An e-Aadhaar prints the card
+  twice, and hits were gathered by how near they lay to one another, so a stray finder-shaped
+  mark in the white between the two symbols joined them: the bar that followed covered most of
+  the card. Three centres now have to sit as three finder patterns do — two the same distance
+  from the third, at a right angle to it — which two centres from one code and a third from the
+  other never do.
+- A bar could stop short of the tallest marks on the line it covered. A card sets its
+  punctuation and its Latin digits on a baseline of their own, a third of a line above the Indic
+  script beside them, and the reported height of a bare consonant says nothing about the vowel
+  marks drawn above it — so a readable strip of the address showed over the top of the box. Words
+  are now gathered into lines by whether their extents lie over one another, and every bar is
+  drawn as deep as the whole line it sits on.
+- The on-device sentence encoder's model files were left behind under the old package name when
+  the app was renamed, so nothing could load them. Field-necessity scoring fell back silently and
+  a form's over-asked boxes came back short.
+
 - The thorough-check card answered for whichever page you left it on. A check reads one page at
   one moment, but the card stayed in the corner through the next tab and the one after, keeping
   the same headline, the same findings and the same ticked-off sections — so a clean result from

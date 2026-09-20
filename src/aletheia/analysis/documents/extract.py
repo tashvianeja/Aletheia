@@ -69,6 +69,27 @@ def _deadline(seconds: float) -> Iterator[None]:
             signal.signal(signal.SIGALRM, previous)
 
 
+# An e-Aadhaar names itself in the holder's own language, and the banner that says
+# "Aadhaar" and "Unique Identification Authority of India" in English is a picture on
+# the page, not text on it. On a card issued in Kannada, Tamil or Bengali the text a
+# reader gets back therefore contains the word "Aadhaar" nowhere at all, and a rule
+# that looks for the name alone takes a real Aadhaar for an ordinary document and
+# leaves its QR code and its photograph uncovered.
+#
+# What every e-Aadhaar does print in English, whatever language it was issued in, is
+# the labelled address column UIDAI lays out: VTC is its own name for the village,
+# town or city line and belongs to nothing else, and it always sits with an enrolment
+# number, a PIN code or a sub-district on the same page. Either the name or that
+# signature identifies the card. The same markers gate the bare-number match in
+# analysis/pii/detector.py, and the two lists are meant to stay in step.
+_AADHAAR_NAMED = r"aadhaar|aadhar|आधार|uidai|unique\s+identification\s+authority"
+_AADHAAR_LAYOUT = (
+    r"(?s:\bVTC\s*[:=].{0,2000}?(?:enrol?ment\s*no|PIN\s*Code|Sub[\s-]*District))"
+    r"|(?s:(?:enrol?ment\s*no|PIN\s*Code|Sub[\s-]*District).{0,2000}?\bVTC\s*[:=])"
+)
+_AADHAAR_SIGNATURE = re.compile(f"{_AADHAAR_NAMED}|{_AADHAAR_LAYOUT}", re.I)
+
+
 def classify_document(text: str, suffix: str = "") -> str:
     lower = text.lower()
     choices = {
@@ -80,6 +101,7 @@ def classify_document(text: str, suffix: str = "") -> str:
             r"aadhaar",
             r"आधार",
             r"unique identification authority",
+            _AADHAAR_LAYOUT,
         ),
         "bank_statement": (
             r"bank statement",
@@ -115,12 +137,12 @@ def classify_document(text: str, suffix: str = "") -> str:
 
 
 def identity_scheme(text: str) -> str:
-    """The scheme that issued an identity document, where the document names it.
+    """The scheme that issued an identity document, by its name or by its layout.
 
-    Only Aadhaar is recognised by name so far. Every other ID falls back to "", and
-    the redaction rules for an unrecognised scheme are the cautious ones.
+    Only Aadhaar is recognised so far. Every other ID falls back to "", and the
+    redaction rules for an unrecognised scheme are the cautious ones.
     """
-    if re.search(r"aadhaar|aadhar|आधार|uidai|unique\s+identification\s+authority", text, re.I):
+    if _AADHAAR_SIGNATURE.search(text):
         return "aadhaar"
     return ""
 

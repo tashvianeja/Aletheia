@@ -15,7 +15,7 @@ def _document(kind: str = "identity_document", scheme: str = "") -> ExtractedDoc
 def test_an_aadhaar_keeps_what_an_identity_check_reads_and_covers_the_rest() -> None:
     plan = plan_for(_document(scheme="aadhaar"))
     assert plan.scheme == "aadhaar"
-    for kept in (DataCategory.FULL_NAME, DataCategory.GENDER, DataCategory.BIOMETRIC_PHOTO):
+    for kept in (DataCategory.FULL_NAME, DataCategory.GENDER, DataCategory.AGE):
         assert not plan.covers(kept)
     for covered in (
         DataCategory.GOVERNMENT_ID_NATIONAL_ID,
@@ -23,11 +23,12 @@ def test_an_aadhaar_keeps_what_an_identity_check_reads_and_covers_the_rest() -> 
         DataCategory.PHONE,
         DataCategory.EMAIL,
         DataCategory.DOB,
+        DataCategory.BIOMETRIC_PHOTO,
     ):
         assert plan.covers(covered)
-    assert plan.cover_codes
-    # The face is what the card is shown to prove, so it is not painted over.
-    assert not plan.cover_pictures
+    # The code holds the whole record over again, and the face is a biometric that
+    # nothing asking for an Aadhaar is checking. Both come off.
+    assert plan.cover_codes and plan.cover_pictures
 
 
 def test_an_identity_document_of_an_unknown_scheme_keeps_nothing_readable() -> None:
@@ -93,6 +94,77 @@ def test_the_spans_to_cover_carry_both_a_fresh_look_and_what_was_flagged() -> No
     assert "Morgan Testperson" not in covered
 
 
+# The address column of an e-Aadhaar, set the way UIDAI sets it: a care-of line, then
+# house and street with no label of their own, then one labelled field to a line.
+_ADDRESS_COLUMN = """To
+Basant Raj
+C/O: Ramesh Raj
+Flat 9, Nehru Apartments
+Station Road
+VTC: Sikandarpur
+PO: Bhagwanpur
+Sub District: Hajipur
+District: Vaishali
+State: Bihar
+PIN Code: 844101
+Mobile: 9835412876
+आपका आधार क्रमांक / Your Aadhaar No. :
+2345 6789 0124
+"""
+
+
+def _covered(text: str, scheme: str = "aadhaar") -> set[str]:
+    plan = plan_for(_document(scheme=scheme))
+    return {text[start:end] for start, end in spans_to_cover(text, plan, None)}
+
+
+def test_the_address_column_of_an_aadhaar_is_covered_field_by_field() -> None:
+    """UIDAI does not print the address under the word "address" — it prints a column.
+
+    Nothing that looks for the word finds an Indian address at all, which left every
+    line of one readable on a copy the person had been told was redacted.
+    """
+    covered = _covered(_ADDRESS_COLUMN)
+    for value in ("Sikandarpur", "Bhagwanpur", "Hajipur", "Vaishali", "Bihar", "844101"):
+        assert value in covered, value
+    # The labels stay, so the copy still reads as an address that has been withheld
+    # rather than as a card with a hole in it.
+    assert not any(value.startswith(("VTC", "PIN", "State")) for value in covered)
+
+
+def test_the_house_and_street_lines_are_covered_and_the_care_of_name_is_not() -> None:
+    """The lines above the labelled fields carry no label, and are the street address.
+
+    They are found from the care-of line above them rather than by counting back from
+    the first labelled field, which would reach the addressee's own name.
+    """
+    covered = _covered(_ADDRESS_COLUMN)
+    assert "Flat 9, Nehru Apartments\nStation Road" in covered
+    assert not any("Ramesh" in value or "Basant" in value for value in covered)
+
+
+def test_an_address_nothing_can_read_is_covered_by_the_shape_of_its_block() -> None:
+    """The second copy of the address, in the language the card was issued in.
+
+    An e-Aadhaar embeds fonts that hand back nothing usable for most Indic scripts, so
+    neither the word above the block nor anything inside it can be matched, though all
+    of it is perfectly legible to whoever opens the file. What is left to go on is the
+    shape: a run of lines ending on the six-digit PIN, under the last thing the card
+    keeps readable.
+    """
+    text = "Basant Raj\n/ MALE\n2345 6789 0124\n(cid:30)(cid:31)\n(cid:34)(cid:35)\n, 844101\n"
+    covered = _covered(text)
+    assert any("(cid:30)(cid:31)" in value and value.endswith("844101") for value in covered)
+    # The walk stops at the line above, so what the card is shown to prove survives.
+    assert not any("MALE" in value or "Basant" in value for value in covered)
+
+
+def test_an_ordinary_document_is_not_put_through_the_aadhaar_address_rule() -> None:
+    """The block walk is the Aadhaar plan's, and an invoice is not an Aadhaar."""
+    text = "Order 4471\nThank you for your custom\nTotal 129.40\nReference 844101\n"
+    assert _covered(text, scheme="") == set()
+
+
 def test_a_category_filter_still_narrows_what_gets_a_box() -> None:
     text = "Aadhaar 2345 6789 0124, email morgan.testperson@example.test"
     plan = plan_for(_document(scheme="aadhaar"))
@@ -151,6 +223,60 @@ def test_a_qr_code_is_located_by_its_finder_patterns_alone() -> None:
     assert abs(x0 - margin) <= scale and abs(y0 - margin) <= scale
     assert abs(x1 - (margin + modules * scale)) <= scale
     assert abs(y1 - (margin + modules * scale)) <= scale
+
+
+def test_two_codes_on_one_page_do_not_come_back_as_one_enormous_code() -> None:
+    """An e-Aadhaar prints the card twice on a sheet, so it carries two codes.
+
+    Gathering whatever hits lay within reach of each other read the pair as a single
+    symbol spanning both, and the bar that followed covered everything printed
+    between them, which on an Aadhaar is most of the card.
+    """
+    from PIL import Image
+
+    symbol = _qr_image(modules=29, scale=5, margin=20)
+    page = Image.new("RGB", (900, 700), "white")
+    page.paste(symbol, (40, 40))
+    page.paste(symbol, (620, 460))
+    boxes = find_qr_codes(page)
+    assert len(boxes) == 2, boxes
+    for (x0, y0, x1, y1), (left, top) in zip(sorted(boxes), ((40, 40), (620, 460)), strict=True):
+        assert abs(x0 - (left + 20)) <= 5 and abs(y0 - (top + 20)) <= 5
+        assert abs((x1 - x0) - 145) <= 10 and abs((y1 - y0) - 145) <= 10
+
+
+def test_a_photograph_is_told_from_the_artwork_printed_beside_it() -> None:
+    """A card's pictures are mostly its logos, its banners and the rules between them.
+
+    Painting those out defaces the copy for whoever receives it while withholding
+    nothing, and a copy that looks destroyed is one the person sends the original
+    instead of. What a box is for is the face.
+    """
+    import random
+
+    from PIL import Image, ImageDraw
+
+    from aletheia.analysis.documents.redact import _is_photograph
+
+    page_area = 612.0 * 540.0
+    rng = random.Random(11)
+    face = Image.new("RGB", (160, 200))
+    pixels = face.load()
+    for y in range(face.height):
+        for x in range(face.width):
+            pixels[x, y] = tuple(rng.randint(60, 220) for _ in range(3))
+    # A wide banner in two flat colours, the shape of the one across an Aadhaar's head.
+    banner = Image.new("RGB", (920, 266), "white")
+    ImageDraw.Draw(banner).rectangle((0, 90, 920, 180), fill="#ff7722")
+    # A block of standing advice the issuer ships as a picture rather than as text.
+    advice = Image.new("RGB", (1063, 1636), "white")
+    ImageDraw.Draw(advice).text((40, 40), "Aadhaar is a proof of identity", fill="black")
+
+    assert _is_photograph((40.0, 50.0, 136.0, 170.0), face, page_area)
+    assert not _is_photograph((32.0, 103.0, 292.0, 265.0), banner, page_area)
+    assert not _is_photograph((302.0, 169.0, 561.0, 578.0), advice, page_area)
+    # A picture that will not decode is covered rather than trusted.
+    assert _is_photograph((32.0, 103.0, 292.0, 265.0), None, page_area)
 
 
 def test_a_page_of_ordinary_text_is_not_mistaken_for_a_code() -> None:

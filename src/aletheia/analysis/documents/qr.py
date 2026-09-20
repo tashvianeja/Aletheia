@@ -10,16 +10,24 @@ Every QR symbol, whatever it holds, is built around three finder patterns: seven
 modules square, concentric dark-light-dark, one at each corner but the bottom right.
 Their giveaway is the run of dark and light along any line through the middle of
 one, which is always 1:1:3:1:1. That ratio is what this module looks for, first
-across each row and then down the column through each hit, and three confirmed
-centres of a matching size fix the symbol's square exactly: the centres span the
-symbol less its two outer half-finders, so growing their box by three and a half
-modules on every side gives the symbol itself.
+across each row and then down the column through each hit.
+
+Three confirmed centres of a matching size then fix the symbol's square exactly: the
+centres span the symbol less its two outer half-finders, so growing their box by
+three and a half modules on every side gives the symbol itself. Which three go
+together is settled by the shape they make — two of them the same distance from the
+third and at a right angle to it — and not by how near to each other they lie. A
+sheet that carries two codes, as an e-Aadhaar does, otherwise comes back as one
+symbol spanning both, and the box that follows covers everything printed between
+them.
 
 Nothing here decodes anything. It locates, which is all a black box needs.
 """
 
 from __future__ import annotations
 
+import itertools
+import math
 from typing import Any
 
 import numpy as np
@@ -32,6 +40,15 @@ MIN_MODULE = 2.0
 # from 21 modules square to 177, so anything outside this is not one pair.
 MIN_SEPARATION = 12.0
 MAX_SEPARATION = 180.0
+# How far a trio may stray from the shape three finder patterns make: two of them the
+# same distance from the third and at a right angle to it. Loose enough for a scan
+# that sits slightly askew on the glass, tight enough that three hits scattered over
+# a page do not pass for one symbol.
+SHAPE_TOLERANCE = 0.2
+# Every trio of centres is tried, so a page that returns hundreds of hits — a dense
+# halftone, a photograph of a crowd — is cut down first. The largest modules are kept
+# because they are the symbols worth covering.
+MAX_CENTRES = 96
 # Working width for the scan. A symbol worth covering is a decent fraction of the
 # page, so shrinking a large scan keeps the cost down without losing the pattern.
 MAX_SCAN = 2000
@@ -122,42 +139,93 @@ def _finder_centres(dark: np.ndarray) -> list[tuple[float, float, float]]:
     return merged
 
 
+def _is_corner(
+    corner: tuple[float, float, float],
+    arm: tuple[float, float, float],
+    other: tuple[float, float, float],
+) -> bool:
+    """Whether `corner` sits at the right angle between the other two centres.
+
+    The three finder patterns of a symbol mark three corners of a square, so from the
+    one between the other two they are the same distance away and at ninety degrees
+    to each other. That is the whole test, and it holds however the page is turned.
+    """
+    first = (arm[0] - corner[0], arm[1] - corner[1])
+    second = (other[0] - corner[0], other[1] - corner[1])
+    reach = math.hypot(*first)
+    span = math.hypot(*second)
+    if reach <= 0 or span <= 0:
+        return False
+    if abs(reach - span) > SHAPE_TOLERANCE * max(reach, span):
+        return False
+    return abs(first[0] * second[0] + first[1] * second[1]) / (reach * span) <= SHAPE_TOLERANCE
+
+
+def _fuse(boxes: list[Box]) -> list[Box]:
+    """One box per symbol. Several trios of one symbol give boxes lying on each other."""
+    fused: list[Box] = []
+    for box in boxes:
+        grown = box
+        apart = []
+        for other in fused:
+            if (
+                grown[0] < other[2]
+                and other[0] < grown[2]
+                and grown[1] < other[3]
+                and other[1] < grown[3]
+            ):
+                grown = (
+                    min(grown[0], other[0]),
+                    min(grown[1], other[1]),
+                    max(grown[2], other[2]),
+                    max(grown[3], other[3]),
+                )
+            else:
+                apart.append(other)
+        fused = [*apart, grown]
+    return fused
+
+
 def _symbols(centres: list[tuple[float, float, float]]) -> list[Box]:
-    """Group centres that belong to one symbol, and give each group its square."""
-    remaining = list(centres)
+    """The square of every symbol whose three finder patterns are among `centres`.
+
+    A symbol is read off the shape its finders make, not off how near to each other
+    they happen to lie. Gathering whatever was within reach and calling the result one
+    symbol is what let a card carrying two codes come back as a single enormous one:
+    a stray hit in the white between them joined the two clusters, and the box that
+    followed covered everything printed in between — on an Aadhaar, most of the card.
+    Testing the shape costs a pass over the trios and cannot make that mistake, since
+    two centres from one code and a third from the other are not a right angle.
+    """
     boxes: list[Box] = []
-    while remaining:
-        group = [remaining.pop()]
-        changed = True
-        while changed:
-            changed = False
-            for candidate in list(remaining):
-                for member in group:
-                    module = (candidate[2] + member[2]) / 2
-                    gap = max(abs(candidate[0] - member[0]), abs(candidate[1] - member[1]))
-                    if (
-                        0.75 <= candidate[2] / member[2] <= 1.33
-                        and MIN_SEPARATION * module <= gap <= MAX_SEPARATION * module
-                    ):
-                        group.append(candidate)
-                        remaining.remove(candidate)
-                        changed = True
-                        break
-        # Two corners leave the symbol's size a guess, and a box guessed too small is
-        # worse than none: it would leave a readable code under a convincing bar.
-        if len(group) < 3:
+    limited = sorted(centres, key=lambda item: -item[2])[:MAX_CENTRES]
+    for trio in itertools.combinations(limited, 3):
+        sizes = [item[2] for item in trio]
+        # Finder patterns of one symbol are printed at one module size.
+        if min(sizes) <= 0 or max(sizes) / min(sizes) > 1.33:
             continue
-        module = sum(item[2] for item in group) / len(group)
-        margin = 3.5 * module
-        boxes.append(
-            (
-                min(item[0] for item in group) - margin,
-                min(item[1] for item in group) - margin,
-                max(item[0] for item in group) + margin,
-                max(item[1] for item in group) + margin,
+        module = sum(sizes) / 3
+        for index in range(3):
+            corner = trio[index]
+            arm, other = (trio[position] for position in range(3) if position != index)
+            reach = math.hypot(arm[0] - corner[0], arm[1] - corner[1]) / module
+            if not (MIN_SEPARATION <= reach <= MAX_SEPARATION) or not _is_corner(
+                corner, arm, other
+            ):
+                continue
+            # The centres span the symbol less its two outer half-finders, so growing
+            # their box by three and a half modules a side gives the symbol itself.
+            margin = 3.5 * module
+            boxes.append(
+                (
+                    min(item[0] for item in trio) - margin,
+                    min(item[1] for item in trio) - margin,
+                    max(item[0] for item in trio) + margin,
+                    max(item[1] for item in trio) + margin,
+                )
             )
-        )
-    return boxes
+            break
+    return _fuse(boxes)
 
 
 def find_qr_codes(image: Any) -> list[Box]:

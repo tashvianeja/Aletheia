@@ -6,14 +6,18 @@ ones the person is sharing it to prove, and what they get back is a file nobody 
 accept — so they send the original instead and the redaction has achieved nothing.
 
 What to cover is therefore a question about the kind of document, not about the fact
-that it is one. UIDAI answers it for Aadhaar itself: a Masked Aadhaar hides the first
-eight digits of the number and leaves the last four, and leaves the name, the
-photograph, the gender and the year of birth, because those are what an identity
-check reads. The number in full, the Virtual ID, the QR code, the exact date of
-birth, the address and any phone number or email printed on the card are what turn a
-shared copy into something that can be used to impersonate somebody, and those come
-off. This module holds that rule, and the cautious default for an ID whose scheme is
-not recognised.
+that it is one. UIDAI answers half of it for Aadhaar itself: a Masked Aadhaar hides
+the first eight digits of the number and leaves the last four, which is the form
+every Indian counter already accepts. The name, the gender and the year of birth go
+with it, because those are what an identity check reads.
+
+Everything else on the card comes off. The number in full, the Virtual ID, the exact
+date of birth, the address, the phone number and the email address are what turn a
+shared copy into something that can be used to impersonate somebody. So is the QR
+code, which holds all of it again in a form a phone reads in a second, and so is the
+photograph: a face is matched against a face, and no form asking for an Aadhaar is
+checking one. This module holds that rule, and the cautious default for an ID whose
+scheme is not recognised.
 """
 
 from __future__ import annotations
@@ -44,8 +48,9 @@ class RedactionPlan:
     # Look for QR and similar codes and cover them: they carry, in a form a phone
     # reads in a second, everything the printed side of the document says.
     cover_codes: bool = False
-    # Cover the pictures embedded in the page. On an ID that is the portrait, which
-    # comes off unless the scheme says the face is part of what is being proved.
+    # Cover the photographs embedded in the page. On an ID that is the portrait of
+    # the holder, which is a biometric: a face is matched against a face, and a copy
+    # that carries one hands over the means of that match to whoever holds the copy.
     cover_pictures: bool = False
 
     def covers(self, category: DataCategory) -> bool:
@@ -54,19 +59,15 @@ class RedactionPlan:
 
 _AADHAAR = RedactionPlan(
     scheme="aadhaar",
-    # Name, photograph, gender and age are what an Aadhaar is shown to prove. UIDAI's
-    # own Masked Aadhaar leaves all four, and covering them is what makes a copy
-    # useless for the check the person is sharing it for.
-    keep=frozenset(
-        {
-            DataCategory.FULL_NAME,
-            DataCategory.GENDER,
-            DataCategory.AGE,
-            DataCategory.BIOMETRIC_PHOTO,
-        }
-    ),
+    # Name, gender and age are what an Aadhaar is shown to prove, and a copy that
+    # covers them is useless for the check the person is sharing it for. The
+    # photograph is not in that list: a face is the one detail on the card that is
+    # matched automatically, against a photograph taken somewhere else, and it is
+    # never what a form asking for an Aadhaar is checking.
+    keep=frozenset({DataCategory.FULL_NAME, DataCategory.GENDER, DataCategory.AGE}),
     partial={DataCategory.GOVERNMENT_ID_NATIONAL_ID: "aadhaar", DataCategory.DOB: "year"},
     cover_codes=True,
+    cover_pictures=True,
 )
 # Any other identity document: cover everything found on it, including the portrait
 # and any code, because nothing here knows which of its details the holder needs to
@@ -135,6 +136,72 @@ def cover_ranges(plan: RedactionPlan, category: DataCategory, value: str) -> lis
     return [(0, len(value))]
 
 
+# A six-digit PIN, which is what an Indian address ends on.
+_PIN = re.compile(r"(?<!\d)\d{6}(?!\d)")
+# A line that stops an address block being walked back any further, because what it
+# holds is the last thing above the address that an Aadhaar keeps readable: the
+# gender, the date of birth, the printed number in whichever form the card shows it,
+# or the care-of line naming a parent.
+_ABOVE_THE_ADDRESS = re.compile(
+    r"\b(?:male|female|transgender|dob|d\.o\.b|born|year\s+of\s+birth)\b"
+    r"|पुरुष|महिला|जन्म"
+    r"|(?<![\dX*])[\dX*]{4}\s*[\dX*]{4}\s*[\dX*]{4}(?![\dX*])"
+    r"|\b[CSDW]/O\b",
+    re.I,
+)
+# How far back that walk may go. An Aadhaar prints the address twice, once in English
+# and once in the holder's own language, and a layout reader breaks the second onto a
+# line per comma, so the run is a good deal longer than it looks on the page.
+MAX_BLOCK_LINES = 40
+
+
+def _line_bounds(text: str) -> list[Span]:
+    bounds: list[Span] = []
+    start = 0
+    for line in text.split("\n"):
+        bounds.append((start, start + len(line)))
+        start += len(line) + 1
+    return bounds
+
+
+def _address_blocks(text: str, covered: list[Span], kept: list[Span]) -> list[Span]:
+    """An address found by its shape, for the copy of it that cannot be read at all.
+
+    An Aadhaar prints its address twice: once in English, and once in the language the
+    card was issued in. The second copy is routinely beyond reading — the fonts an
+    e-Aadhaar embeds hand back nothing usable for most Indic scripts, so neither the
+    word above the block nor anything inside it can be matched, though every one of
+    it is perfectly legible to whoever opens the file. Leaving it showing redacts the
+    address for a Hindi cardholder and nobody else.
+
+    What survives the encoding is the block's shape. It ends on the six-digit PIN, and
+    it begins after the last line carrying something the card keeps readable, which on
+    every Aadhaar layout is what sits directly above it. Only a PIN that nothing has
+    covered yet starts a walk, so the blocks found by their labels keep those labels
+    readable and this applies to the copy that has none.
+    """
+    bounds = _line_bounds(text)
+    blocks: list[Span] = []
+    for index, (start, end) in enumerate(bounds):
+        pins = list(_PIN.finditer(text, start, end))
+        if not pins:
+            continue
+        pin = pins[-1]
+        if any(span[0] <= pin.start() and pin.end() <= span[1] for span in covered):
+            continue
+        first = index
+        for step in range(1, min(MAX_BLOCK_LINES, index) + 1):
+            above = bounds[index - step]
+            if _ABOVE_THE_ADDRESS.search(text[above[0] : above[1]]) or any(
+                span[0] < above[1] and above[0] < span[1] for span in kept
+            ):
+                break
+            first = index - step
+        if first < index:
+            blocks.append((bounds[first][0], pin.end()))
+    return blocks
+
+
 def spans_to_cover(
     text: str,
     plan: RedactionPlan,
@@ -163,4 +230,9 @@ def spans_to_cover(
             (start + begin, start + finish)
             for begin, finish in cover_ranges(plan, category, text[start:end])
         )
+    if plan.scheme == "aadhaar" and (
+        categories is None or DataCategory.POSTAL_ADDRESS in categories
+    ):
+        kept = [(start, end) for start, end, category in found if not plan.covers(category)]
+        spans.extend(_address_blocks(text, spans, kept))
     return list(dict.fromkeys(spans))

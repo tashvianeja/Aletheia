@@ -337,18 +337,82 @@ def test_an_aadhaar_card_is_recognised_as_the_identity_document_it_is() -> None:
     } <= categories
 
 
-def _word_box(word: str, filename: str = "aadhaar_synthetic.pdf") -> tuple[float, ...]:
-    """Where a word sits on the page, as (x0, top, x1, bottom) in the layout's space."""
+def test_an_aadhaar_that_never_says_aadhaar_is_still_recognised_as_one() -> None:
+    """A card issued in Kannada, Tamil or Bengali names itself in that language only.
+
+    The banner that says "Aadhaar" and "Unique Identification Authority of India" in
+    English is a picture on the page, not text on it, so the text a reader gets back
+    carries the word nowhere at all. What it does carry, in English, whatever language
+    the card was issued in, is UIDAI's own address column — and a rule that looked for
+    the name alone took a real card for an ordinary document and left its QR code and
+    its photograph uncovered.
+    """
+    from aletheia.analysis.documents.extract import classify_document, identity_scheme
+
+    text = (
+        "/ Enrolment No.: 2049/30507/00690\nTo\nಪ(cid:11)ಣ(cid:13)\nBasant Raj\n"
+        "S/O: Ramesh Raj\nStation Road\nVTC: Sikandarpur\nPO: Bhagwanpur\n"
+        "District: Vaishali\nState: Bihar\nPIN Code: 844101\n"
+    )
+    assert "aadhaar" not in text.lower() and "आधार" not in text
+    assert classify_document(text) == "identity_document"
+    assert identity_scheme(text) == "aadhaar"
+
+
+def test_an_ordinary_document_is_not_taken_for_an_aadhaar() -> None:
+    """The signature is UIDAI's column, not any one of the words it is built from."""
+    from aletheia.analysis.documents.extract import classify_document, identity_scheme
+
+    for text in (
+        "Enrolment No.: 4471\nCourse: Structural Engineering\nState: enrolled\n",
+        "Ship to:\nDistrict: Camden\nState: NY\nPIN Code: 100170\n",
+    ):
+        assert identity_scheme(text) == "", text
+        assert classify_document(text) != "identity_document", text
+
+
+def _word_boxes(word: str, filename: str = "aadhaar_synthetic.pdf") -> list[tuple[float, ...]]:
+    """Every place a word sits on the page, as (x0, top, x1, bottom) in layout space.
+
+    A card prints its holder's name and its number twice, once on the letter and once
+    on the card below the cut line, and both copies have to come out the same way.
+    """
     import pdfplumber
 
     with pdfplumber.open(io.BytesIO((FIXTURES / filename).read_bytes())) as layout:
-        [found] = [item for item in layout.pages[0].extract_words() if str(item["text"]) == word]
-        return (
-            float(found["x0"]),
-            float(found["top"]),
-            float(found["x1"]),
-            float(found["bottom"]),
-        )
+        found = [item for item in layout.pages[0].extract_words() if str(item["text"]) == word]
+        assert found, f"{word!r} is not on the fixture at all"
+        return [
+            (
+                float(item["x0"]),
+                float(item["top"]),
+                float(item["x1"]),
+                float(item["bottom"]),
+            )
+            for item in found
+        ]
+
+
+def _word_box(word: str, filename: str = "aadhaar_synthetic.pdf") -> tuple[float, ...]:
+    """Where a word sits on the page, where it is printed only once."""
+    [found] = _word_boxes(word, filename)
+    return found
+
+
+def _picture_boxes(filename: str = "aadhaar_synthetic.pdf") -> list[tuple[float, ...]]:
+    """Where each picture embedded in the page sits, as (x0, top, x1, bottom)."""
+    import pdfplumber
+
+    with pdfplumber.open(io.BytesIO((FIXTURES / filename).read_bytes())) as layout:
+        return [
+            (
+                float(item["x0"]),
+                float(item["top"]),
+                float(item["x1"]),
+                float(item["bottom"]),
+            )
+            for item in layout.pages[0].images
+        ]
 
 
 def _blacked(page: Any, box: tuple[float, ...], across: float = 0.5) -> bool:
@@ -361,8 +425,8 @@ def _blacked(page: Any, box: tuple[float, ...], across: float = 0.5) -> bool:
     )
 
 
-def test_a_redacted_aadhaar_keeps_its_last_four_digits_name_and_photograph() -> None:
-    """A Masked Aadhaar, which is what UIDAI itself hands out: still usable, not blank."""
+def test_a_redacted_aadhaar_keeps_its_last_four_digits_name_and_year() -> None:
+    """What a shared Aadhaar should be: still usable for a check, not a blank page."""
     from tests.fixtures.generate.generate_documents import synthetic_aadhaar
 
     path = FIXTURES / "aadhaar_synthetic.pdf"
@@ -375,24 +439,32 @@ def test_a_redacted_aadhaar_keeps_its_last_four_digits_name_and_photograph() -> 
     page = _render(redacted.content).convert("RGB")
     first, second, last = synthetic_aadhaar().split()
 
-    # The first eight digits of the number go; the last four stay, which is the whole
-    # point of a masked Aadhaar: it still identifies the holder to somebody checking.
-    assert _blacked(page, _word_box(first)) and _blacked(page, _word_box(second))
-    assert not _blacked(page, _word_box(last))
+    # The first eight digits go, on both copies of the number; the last four stay,
+    # which is the point: the copy still identifies its holder to somebody checking.
+    for group in (first, second):
+        assert all(_blacked(page, box) for box in _word_boxes(group)), group
+    assert not any(_blacked(page, box) for box in _word_boxes(last))
     # What an identity check reads is left readable.
-    assert not _blacked(page, _word_box("Morgan"))
+    assert not any(_blacked(page, box) for box in _word_boxes("Morgan"))
     assert not _blacked(page, _word_box("Female"))
-    # The photograph is left alone: an ID with the face blacked out proves nothing.
-    assert page.getpixel((int(90 * 2), int(260 * 2))) != (0, 0, 0)
-    # The address, the mobile number and the email address come off.
-    assert _blacked(page, _word_box("Nehru"))
+    # Every picture comes off: the portrait, because a face is matched against a face
+    # and nothing asking for an Aadhaar is checking one, and the code, because it
+    # holds everything the card prints in a form a phone reads in a second.
+    for picture in _picture_boxes():
+        assert _blacked(page, picture), picture
+    # The address comes off, labelled fields and the unlabelled street lines alike,
+    # while the labels stay, so the copy reads as an address that has been withheld.
+    for value in ("Nehru", "Ward", "Kanpur", "Pradesh", "208001"):
+        assert all(_blacked(page, box) for box in _word_boxes(value)), value
+    assert not _blacked(page, _word_box("VTC:")) and not _blacked(page, _word_box("Code:"))
+    # The mobile number and the email address come off.
     assert _blacked(page, _word_box("9876543210"))
     assert _blacked(page, _word_box("morgan.testperson@example.test"))
     # The date of birth comes down to its year: covered at the day, clear at the year.
     birth = _word_box("29/02/1988")
     assert _blacked(page, birth, across=0.15)
     assert not _blacked(page, birth, across=0.85)
-    assert any("Masked the way UIDAI" in warning for warning in redacted.warnings)
+    assert any("Masked the way a shared Aadhaar" in warning for warning in redacted.warnings)
 
 
 def test_a_redacted_aadhaar_covers_the_qr_code_that_holds_the_whole_record() -> None:

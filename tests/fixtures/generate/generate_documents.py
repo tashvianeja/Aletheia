@@ -126,40 +126,86 @@ def _qr_symbol(modules: int = 33, scale: int = 6, seed: int = 7) -> Any:
     return image
 
 
+def _portrait() -> Any:
+    """A portrait the way a camera gives one, grain and all.
+
+    What this replaces was a head and shoulders drawn in three flat colours, which is
+    how a logo is built and not how a photograph is. A rule that tells a photograph
+    from a drawing passes straight over such a thing, so a fixture made of one proves
+    nothing about whether the face on a real card is covered.
+    """
+    import random
+
+    from PIL import Image
+
+    rng = random.Random(7)
+    image = Image.new("RGB", (160, 200))
+    pixels = image.load()
+    for y in range(image.height):
+        for x in range(image.width):
+            head = ((x - 80) / 38) ** 2 + ((y - 74) / 48) ** 2 <= 1
+            shoulders = y > 150 and abs(x - 80) < 66
+            base = (150, 116, 88) if head or shoulders else (206, 214, 222)
+            pixels[x, y] = tuple(max(0, min(255, band + rng.randint(-26, 26))) for band in base)
+    return image
+
+
 def _aadhaar_pdf() -> bytes:
-    """A synthetic Aadhaar card: the details UIDAI prints, in the places it prints them."""
-    from PIL import Image, ImageDraw
+    """A synthetic e-Aadhaar: the details UIDAI prints, laid out the way UIDAI lays them.
+
+    The address in particular. UIDAI does not print it under the word "Address"; it
+    prints it as a column of its own labelled fields, with the house and street lines
+    carrying no label at all, under a care-of line naming a parent. A fixture that
+    wrote "Address: ..." on one line instead passed a redaction that, on a real card,
+    left every line of the address showing.
+    """
     from reportlab.lib.utils import ImageReader
     from reportlab.pdfgen.canvas import Canvas
 
     output = io.BytesIO()
-    canvas = Canvas(output, pagesize=(612, 396), pageCompression=1)
+    canvas = Canvas(output, pagesize=(612, 540), pageCompression=1)
     canvas.setTitle("Synthetic Aadhaar fixture - not valid")
     canvas.setAuthor("")
     canvas.setFont("Helvetica-Bold", 15)
-    canvas.drawString(150, 360, "GOVERNMENT OF INDIA")
+    canvas.drawString(150, 504, "GOVERNMENT OF INDIA")
     canvas.setFont("Helvetica", 10)
-    canvas.drawString(120, 344, "Unique Identification Authority of India")
-    portrait = Image.new("RGB", (160, 200), "#e8dccb")
-    drawing = ImageDraw.Draw(portrait)
-    drawing.ellipse((45, 25, 115, 95), fill="#8a6f52")
-    drawing.rectangle((28, 98, 132, 185), fill="#8a6f52")
-    canvas.drawImage(ImageReader(portrait), 40, 200, width=96, height=120)
-    canvas.setFont("Helvetica", 13)
-    canvas.drawString(160, 300, f"Name: {SYNTHETIC_NAME}")
-    canvas.drawString(160, 280, "DOB: 29/02/1988")
-    canvas.drawString(160, 260, "Gender: Female")
+    canvas.drawString(120, 488, "Unique Identification Authority of India")
+    canvas.drawString(40, 466, "Enrolment No.: 2049/30507/00690")
+    # The addressee block, then the address column exactly as UIDAI sets it: the
+    # care-of line, then house and street with no labels, then the labelled fields.
+    canvas.setFont("Helvetica", 10)
+    for offset, line in enumerate(
+        (
+            "To",
+            SYNTHETIC_NAME,
+            "C/O Jordan Testperson",
+            "12 Nehru Marg",
+            "Ward 4",
+            "VTC: Kanpur",
+            "PO: Civil Lines",
+            "Sub District: Kanpur Nagar",
+            "District: Kanpur Nagar",
+            "State: Uttar Pradesh",
+            "PIN Code: 208001",
+            "Mobile: 9876543210",
+            "Email: morgan.testperson@example.test",
+        )
+    ):
+        canvas.drawString(40, 444 - offset * 14, line)
     canvas.setFont("Helvetica-Bold", 22)
-    canvas.drawString(160, 215, synthetic_aadhaar())
+    canvas.drawString(40, 236, synthetic_aadhaar())
     canvas.setFont("Helvetica", 11)
-    canvas.drawString(160, 196, f"VID : {synthetic_vid()}")
-    canvas.drawString(40, 170, "Aadhaar - Aam Aadmi ka Adhikar")
-    canvas.setFont("Helvetica", 10)
-    canvas.drawString(40, 140, "Address: S/O Jordan Testperson, 12 Nehru Marg,")
-    canvas.drawString(40, 126, "Ward 4, Kanpur Nagar, Uttar Pradesh 208001")
-    canvas.drawString(40, 104, "Mobile: 9876543210")
-    canvas.drawString(40, 90, "Email: morgan.testperson@example.test")
-    canvas.drawImage(ImageReader(_qr_symbol()), 470, 80, width=110, height=110)
+    canvas.drawString(40, 216, f"VID : {synthetic_vid()}")
+    canvas.drawString(40, 196, "Aadhaar - Aam Aadmi ka Adhikar")
+    # The card itself, below the cut line: portrait, name, birth date, gender, number.
+    canvas.drawImage(ImageReader(_portrait()), 40, 50, width=96, height=120)
+    canvas.setFont("Helvetica", 13)
+    canvas.drawString(160, 150, f"Name: {SYNTHETIC_NAME}")
+    canvas.drawString(160, 130, "DOB: 29/02/1988")
+    canvas.drawString(160, 110, "Gender: Female")
+    canvas.setFont("Helvetica-Bold", 16)
+    canvas.drawString(160, 74, synthetic_aadhaar())
+    canvas.drawImage(ImageReader(_qr_symbol()), 470, 50, width=110, height=110)
     canvas.save()
     return output.getvalue()
 

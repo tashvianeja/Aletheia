@@ -177,7 +177,7 @@ make build-mac          # dist/Aletheia.app and the .dmg
 `uv run aletheia --diagnose` prints platform, OCR availability, host registrations,
 detected browsers, database counts and permission status without starting the UI.
 
-Current state on macOS 26 arm64: **515 passed, 5 skipped** across `tests/unit`,
+Current state on macOS 26 arm64: **524 passed, 6 skipped** across `tests/unit`,
 `tests/integration`, `tests/platform` and `tests/packaging`; Ruff and strict mypy clean across 91
 modules. The
 browser end-to-end suite (`make e2e`) and the performance suite need a headed browser and are run

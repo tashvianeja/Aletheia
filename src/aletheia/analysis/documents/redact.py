@@ -4,6 +4,7 @@ import base64
 import io
 import json
 import re
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -42,8 +43,23 @@ OCR_SCALE = 2.0
 # pages can well afford. A long document that merely mentions a passport is classified
 # the same way, so the search stops after this many pages and the copy says it did.
 MAX_CODE_PAGES = 20
+# How much of a picture the single commonest colour may cover before the picture is
+# read as a drawing rather than a photograph. A logo, a banner, a rule between
+# sections, a QR symbol and a block of printed text are all built out of areas of one
+# flat colour; a photograph of a face has almost none of that. On a real Aadhaar the
+# commonest colour in the portrait covers well under a hundredth of it, and in every
+# other picture the card carries, two fifths or more.
+FLAT_COLOUR_SHARE = 0.3
+# The shape and size of a portrait on a page: about as tall as it is wide, and small
+# enough to sit beside the text rather than behind it. A picture of that shape counts
+# as a photograph whatever its colours, which is what catches a face shot against a
+# plain backdrop that the colour test alone would read as flat.
+PORTRAIT_ASPECT = (0.4, 1.2)
+PORTRAIT_PAGE_SHARE = 0.08
 Box = tuple[float, float, float, float]
 Span = tuple[int, int]
+# How deep a printed line runs on the page, top to bottom, or across when turned.
+Band = tuple[float, float]
 _MARK = re.compile(rb"/Aletheia\s*<<[^>]*>>\s*BDC")
 
 
@@ -119,6 +135,46 @@ def _ocr_boxes(page: Any, spans: list[Span]) -> tuple[list[Box], int]:
     return boxes, unplaced
 
 
+def _line_bands(words: list[Any], turned: bool) -> dict[int, Band]:
+    """For each word, how deep the printed line it stands on runs, top to bottom.
+
+    A bar the height of one word is not always a bar over the line it is printed on.
+    An Aadhaar sets its punctuation and its Latin digits on a baseline of their own, a
+    third of a line above the Indic script beside them, and a font that reports the
+    height of a bare consonant reports nothing for the vowel marks drawn above it. A
+    bar sized to one such word stops short of the marks on its neighbours and they
+    read clearly over the top of it.
+
+    So words are gathered into lines by whether their extents lie over one another —
+    not by whether their tops agree, which is what splits a line set on two baselines
+    into two — and every word on a line is given the whole line's depth. On a page
+    shown turned by a quarter a line runs down the page, and its extent is across.
+    """
+    near, far = ("x0", "x1") if turned else ("top", "bottom")
+    bands: dict[int, Band] = {}
+    line: list[Any] = []
+    band: Band = (0.0, 0.0)
+    for word in [*words, None]:
+        reach = (float(word[near]), float(word[far])) if word is not None else None
+        shared = (
+            min(reach[1], band[1]) - max(reach[0], band[0]) if line and reach is not None else -1.0
+        )
+        if (
+            line
+            and reach is not None
+            and shared > 0.5 * min(reach[1] - reach[0], band[1] - band[0])
+        ):
+            line.append(word)
+            band = (min(band[0], reach[0]), max(band[1], reach[1]))
+            continue
+        for member in line:
+            bands[id(member)] = band
+        if reach is None:
+            break
+        line, band = [word], reach
+    return bands
+
+
 def _compact(text: str) -> str:
     return "".join(text.split())
 
@@ -164,13 +220,23 @@ def _pdf_page_boxes(
         text += str(word["text"])
         spans.append((start, len(text), word))
         previous = float(word[line_key])
+    bands = _line_bands(words, turned)
 
     def rect(word: Any) -> Box:
+        """A word's box, drawn as deep as the whole printed line it stands on."""
+        low, high = bands[id(word)]
+        if turned:
+            return (
+                low - 1.5,
+                shown_height - float(word["bottom"]) - 1.5,
+                high + 1.5,
+                shown_height - float(word["top"]) + 1.5,
+            )
         return (
             float(word["x0"]) - 1.5,
-            shown_height - float(word["bottom"]) - 1.5,
+            shown_height - high - 1.5,
             float(word["x1"]) + 1.5,
-            shown_height - float(word["top"]) + 1.5,
+            shown_height - low + 1.5,
         )
 
     # On a page shown turned, a word's own characters do not run along the box that
@@ -402,11 +468,11 @@ def _scheme_notes(plan: RedactionPlan, document: ExtractedDocument, codes: int) 
     notes: list[str] = []
     if plan.scheme == "aadhaar":
         notes.append(
-            "Masked the way UIDAI masks an Aadhaar: the first eight digits of the number, "
-            "the Virtual ID, the QR code, the address, the phone number, the email address "
-            "and the exact date of birth are covered. The name, the photograph, the gender, "
-            "the year of birth and the last four digits stay readable, so the copy is still "
-            "worth something to an identity check."
+            "Masked the way a shared Aadhaar should be: the first eight digits of the "
+            "number, the Virtual ID, the QR code, the photograph, the address, the phone "
+            "number, the email address and the exact date of birth are covered. The name, "
+            "the gender, the year of birth and the last four digits stay readable, so the "
+            "copy is still worth something to an identity check."
         )
         if not codes:
             notes.append(
@@ -429,17 +495,90 @@ def _rendered_page(data: bytes, index: int) -> Any:
         return raster[index].render(scale=OCR_SCALE).to_pil()
 
 
-def _picture_boxes(layout_page: Any, shown_height: float) -> list[Box]:
-    """Where the pictures embedded in a page are, in its displayed space."""
-    return [
-        (
+def _embedded_pictures(reader_page: Any) -> dict[str, Any]:
+    """Every picture on a page, decoded, under the name its layout entry carries."""
+    pictures: dict[str, Any] = {}
+    try:
+        entries = list(reader_page.images)
+    except Exception:
+        return pictures
+    for entry in entries:
+        try:
+            pictures[Path(str(entry.name)).stem] = entry.image
+        except Exception:
+            continue
+    return pictures
+
+
+def _flat_colour_share(image: Any) -> float:
+    """How much of a picture its single commonest colour covers.
+
+    Measured on a sample of at most 128 by 128 pixels taken without interpolation, so
+    that the colours counted are the picture's own rather than averages of them.
+    """
+    from PIL import Image
+
+    sample = image.convert("RGB")
+    sample = sample.resize(
+        (min(128, sample.width), min(128, sample.height)), Image.Resampling.NEAREST
+    )
+    # Pillow 12 renamed this and deprecated the old name; the floor is Pillow 11.
+    read = getattr(sample, "get_flattened_data", None) or sample.getdata
+    pixels = list(read())
+    if not pixels:
+        return 1.0
+    return max(Counter(pixels).values()) / len(pixels)
+
+
+def _is_photograph(box: Box, image: Any | None, page_area: float) -> bool:
+    """Whether a picture placed at `box` is a photograph of somebody.
+
+    Either of two things says so, and either alone is enough, because the cost of
+    getting it wrong is not symmetric: a logo under a black box is untidy, a face
+    left showing is the biometric the copy was made to withhold. The first is the
+    picture's own colours, which separate a photograph from a drawing. The second is
+    its shape and size on the page: nothing else on an identity document is a small
+    upright rectangle, and reading that shape as a portrait covers a face shot
+    against a plain backdrop, which by colour alone looks like a drawing.
+    """
+    width, height = box[2] - box[0], box[3] - box[1]
+    if width <= 0 or height <= 0:
+        return False
+    if image is None:
+        # Nothing to look at. A picture that will not decode is covered rather than
+        # trusted, because what is printed on it cannot be ruled out.
+        return True
+    low, high = PORTRAIT_ASPECT
+    if low <= width / height <= high and width * height <= PORTRAIT_PAGE_SHARE * page_area:
+        return True
+    try:
+        return _flat_colour_share(image) < FLAT_COLOUR_SHARE
+    except (OSError, ValueError):
+        return True
+
+
+def _picture_boxes(layout_page: Any, reader_page: Any, shown_height: float) -> list[Box]:
+    """Where the photographs embedded in a page are, in its displayed space.
+
+    Only the photographs. A page's pictures also include its logos, its banners, the
+    rules between its sections and, on an e-Aadhaar, the whole block of standing
+    advice the issuer ships as an image rather than as text. Painting those out
+    defaces the copy for the person receiving it while withholding nothing at all,
+    and a copy that looks destroyed is one they send the original instead of.
+    """
+    pictures = _embedded_pictures(reader_page)
+    page_area = max(1.0, float(layout_page.width) * float(layout_page.height))
+    boxes = []
+    for picture in layout_page.images:
+        box = (
             float(picture["x0"]),
             shown_height - float(picture["bottom"]),
             float(picture["x1"]),
             shown_height - float(picture["top"]),
         )
-        for picture in layout_page.images
-    ]
+        if _is_photograph(box, pictures.get(str(picture.get("name", ""))), page_area):
+            boxes.append(box)
+    return boxes
 
 
 def _redact_pdf(
@@ -533,7 +672,7 @@ def _redact_pdf(
             if plan.cover_pictures and index < len(layout.pages):
                 boxes.extend(
                     _user_space(box, rotation, mediabox)
-                    for box in _picture_boxes(layout.pages[index], layout_height)
+                    for box in _picture_boxes(layout.pages[index], page, layout_height)
                 )
             clipped = []
             for x0, y0, x1, y1 in _merge(boxes):
@@ -615,8 +754,10 @@ def _redact_image(
         # A flat scan has no picture the file marks out as one, so unlike a PDF there
         # is nothing here to put a box over. Say so rather than imply the face is gone.
         notes.append(
-            "The photograph on this document is still visible: a scanned page gives "
-            "no way to tell it from the rest of the picture."
+            "One thing above is not true of this copy: the photograph is still visible. "
+            "This file is a scan, a single flat picture of the page, and it gives nothing "
+            "to tell the portrait on it from everything printed around it. Share the PDF "
+            "of this document instead if the photograph has to come off."
         )
     return output.getvalue(), len(covered), unplaced, notes
 
