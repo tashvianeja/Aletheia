@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QHeaderView,
     QLabel,
@@ -20,6 +21,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QSpinBox,
     QStackedWidget,
     QTableWidget,
@@ -30,12 +32,12 @@ from PySide6.QtWidgets import (
 )
 
 from privacy_guardian.engine.preferences import Preference, default_categories
-from privacy_guardian.llm.catalog import SUGGESTED_MODELS, ConnectionCheck
+from privacy_guardian.llm.catalog import SUGGESTED_MODELS, ConnectionCheck, flash_models
 from privacy_guardian.ui import icons
 from privacy_guardian.ui.theme import palette, stylesheet
 from privacy_guardian.util.i18n import tr
 
-# Preferences shows the kinds of information a person recognises, not the detector taxonomy.
+# Settings shows the kinds of information a person recognises, not the detector taxonomy.
 PREFERENCE_ROWS = (
     "medical",
     "government_id",
@@ -45,7 +47,11 @@ PREFERENCE_ROWS = (
     "analytics",
     "advertising",
 )
-SECTIONS = ("overview", "events", "preferences", "sites_and_apps", "about")
+SECTIONS = ("overview", "events", "settings", "sites_and_apps")
+# The Overview tiles, in reading order: three across, two down.
+TALLY_TILES = ("requesters", "trackers", "files", "documents", "banners", "permissions")
+# An ordinary adult reading pace, used only to turn analysed words into a time.
+READING_WORDS_PER_MINUTE = 230
 # What the outcome meant in practice, in the words the event history uses.
 DECISION_WORDS = {
     "cancel": "Did not share",
@@ -108,8 +114,31 @@ def _when(value: str) -> str:
     return moment.strftime("%d %b %H:%M")
 
 
+def _date(value: str) -> str:
+    """A day, not a moment: the tally starts at a date, and the year only when it is not this one."""
+    try:
+        moment = datetime.fromisoformat(value).astimezone()
+    except (TypeError, ValueError):
+        return value
+    return moment.strftime("%d %b" if moment.year == datetime.now().year else "%d %b %Y").lstrip(
+        "0"
+    )
+
+
+def _count(count: int, noun: str) -> str:
+    """'1 site', '12 sites': the singular sits under noun_<x>, the plural under noun_<x>s."""
+    return f"{count:,} " + tr("noun_" + noun + ("" if count == 1 else "s"))
+
+
+def _duration(words: int) -> str:
+    minutes = max(1, round(words / READING_WORDS_PER_MINUTE))
+    if minutes < 60:
+        return tr("minutes_short", count=minutes)
+    return tr("hours_short", hours=minutes // 60, minutes=minutes % 60)
+
+
 class Dashboard(QWidget):
-    """The optional window: history, preferences and the full thorough-check report."""
+    """The optional window: history, settings and the full thorough-check report."""
 
     def __init__(self, service: Any) -> None:
         super().__init__()
@@ -128,10 +157,9 @@ class Dashboard(QWidget):
         root.addWidget(self.stack, 1)
         self.stack.addWidget(self._overview_pane())
         self.stack.addWidget(self._events_pane())
-        self.stack.addWidget(self._preferences_pane())
+        self.stack.addWidget(self._settings_pane())
         self.stack.addWidget(self._sites_pane())
-        self.stack.addWidget(self._about_pane())
-        self.select("events")
+        self.select("overview")
 
         self.history.cellDoubleClicked.connect(self.show_event_detail)
         self.requester_filter.textChanged.connect(self.refresh)
@@ -172,11 +200,11 @@ class Dashboard(QWidget):
         return frame
 
     def select(self, section: str) -> None:
-        """Nav is also the public entry point: show_dashboard('preferences') lands here."""
-        aliases = {"history": "events", "settings": "preferences", "diagnostics": "about"}
+        """Nav is also the public entry point: show_dashboard('settings') lands here."""
+        aliases = {"history": "events", "preferences": "settings"}
         section = aliases.get(section, section)
         if section not in SECTIONS:
-            section = "events"
+            section = "overview"
         self.stack.setCurrentIndex(SECTIONS.index(section))
         for name, button in self.nav.items():
             button.setProperty("selected", "true" if name == section else "false")
@@ -201,17 +229,57 @@ class Dashboard(QWidget):
     # -- overview -------------------------------------------------------------
 
     def _overview_pane(self) -> QWidget:
-        page, layout = self._page(tr("app_name"), "")
+        inner = QWidget()
+        layout = QVBoxLayout(inner)
+        layout.setContentsMargins(28, 24, 28, 24)
+        layout.setSpacing(12)
+        layout.addWidget(_label(tr("app_name"), "h1"))
         self.overview_status = _label(tr("overview_quiet"), "section")
         self.overview_body = _label(tr("overview_quiet_body"), "body")
         layout.addWidget(self.overview_status)
         layout.addWidget(self.overview_body)
-        layout.addSpacing(8)
-        self.overview_counts = self._metric_row()
-        layout.addLayout(self.overview_counts[0])
-        layout.addSpacing(8)
+        layout.addSpacing(10)
+        # The tally: what has passed through the app, as Brave's new-tab page counts what
+        # it blocked. Each tile is one number and one line saying what it is made of.
+        self.tally_caption = _label("", "muted")
+        self.tally_caption.setWordWrap(False)
         self.overview_state = _label("", "muted")
-        layout.addWidget(_card(self.overview_state))
+        self.overview_state.setWordWrap(False)
+        self.overview_state.setAlignment(Qt.AlignmentFlag.AlignRight)
+        caption = QHBoxLayout()
+        caption.addWidget(self.tally_caption, 1)
+        caption.addWidget(self.overview_state)
+        layout.addLayout(caption)
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(12)
+        grid.setVerticalSpacing(12)
+        self.tally_tiles: dict[str, tuple[QLabel, QLabel]] = {}
+        for index, key in enumerate(TALLY_TILES):
+            value = _label("0", "metric")
+            detail = _label("", "muted")
+            self.tally_tiles[key] = (value, detail)
+            # A tile whose second line wraps must not push its number out of line
+            # with its neighbours': every tile in a row is as tall as the tallest.
+            stack = QVBoxLayout()
+            stack.setSpacing(8)
+            for widget in (_label(tr("tally_" + key), "column"), value, detail):
+                stack.addWidget(widget)
+            stack.addStretch(1)
+            tile = _card(stack)
+            tile.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Expanding)
+            grid.addWidget(tile, *divmod(index, 3))
+        for column in range(3):
+            grid.setColumnStretch(column, 1)
+        layout.addLayout(grid)
+        layout.addSpacing(10)
+        layout.addWidget(_label(tr("your_decisions"), "section"))
+        self.decision_box = QVBoxLayout()
+        self.decision_box.setSpacing(6)
+        self.no_decisions = _label(tr("no_decisions"), "muted")
+        self.decision_box.addWidget(self.no_decisions)
+        self._decided_shown: dict[str, dict[str, int]] | None = None
+        layout.addWidget(_card(self.decision_box))
+        layout.addSpacing(4)
         row = QHBoxLayout()
         check = QPushButton(tr("run_check_now"))
         check.setProperty("tier", "primary")
@@ -220,7 +288,93 @@ class Dashboard(QWidget):
         row.addStretch(1)
         layout.addLayout(row)
         layout.addStretch(1)
-        return page
+        return _scroller(inner)
+
+    def show_tally(self, tally: dict[str, Any]) -> None:
+        """Put the store's tally on the tiles; every line comes from a stored record."""
+        since = tally.get("since", "")
+        self.tally_caption.setText(
+            tr("tally_since", when=_date(str(since))) if since else tr("tally_empty")
+        )
+        tiles = {
+            "requesters": (
+                tally["sites"] + tally["apps"],
+                tr(
+                    "tally_requesters_detail",
+                    sites=_count(tally["sites"], "site"),
+                    apps=_count(tally["apps"], "app"),
+                ),
+            ),
+            "trackers": (
+                tally["trackers"],
+                tr(
+                    "tally_trackers_fingerprinting"
+                    if tally["fingerprinting_sites"]
+                    else "tally_trackers_detail",
+                    networks=_count(tally["tracker_networks"], "network"),
+                    sites=_count(tally["tracked_sites"], "site"),
+                    fingerprinting=tally["fingerprinting_sites"],
+                ),
+            ),
+            "files": (
+                tally["files"],
+                tr("tally_files_detail", count=tally["sensitive_files"]),
+            ),
+            "documents": (
+                tally["policies"] + tally["terms"],
+                tr("tally_documents_reading", time=_duration(tally["document_words"]))
+                if tally["document_words"]
+                else tr(
+                    "tally_documents_detail",
+                    policies=_count(tally["policies"], "policy"),
+                    terms=_count(tally["terms"], "terms"),
+                ),
+            ),
+            "banners": (
+                tally["banners"],
+                tr("tally_banners_detail", sites=_count(tally["banner_sites"], "site")),
+            ),
+            "permissions": (
+                tally["grants"],
+                tr(
+                    "tally_permissions_detail",
+                    grants=_count(tally["grants"], "grant"),
+                    apps=_count(tally["granted_apps"], "app"),
+                ),
+            ),
+        }
+        for key, (count, detail) in tiles.items():
+            value, caption = self.tally_tiles[key]
+            value.setText(f"{count:,}")
+            caption.setText(detail)
+        decided = tally.get("decided", {})
+        if decided == self._decided_shown:
+            return
+        self._decided_shown = decided
+        while self.decision_box.count():
+            item = self.decision_box.takeAt(0)
+            widget = item.widget()
+            if widget is not None and widget is not self.no_decisions:
+                widget.deleteLater()
+        self.no_decisions.setVisible(not decided)
+        self.decision_box.addWidget(self.no_decisions)
+        # Most-taken first, and only what was taken: a list of zeros says nothing.
+        for action, figures in sorted(decided.items(), key=lambda pair: -pair[1]["count"]):
+            row = QHBoxLayout()
+            row.setContentsMargins(0, 2, 0, 2)
+            row.setSpacing(8)
+            row.addWidget(_label(tr("decided_" + action)), 1)
+            if figures.get("automatic"):
+                row.addWidget(_label(tr("automatic_count", count=figures["automatic"]), "muted"))
+            count = _label(f"{figures['count']:,}", "section")
+            count.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            count.setMinimumWidth(48)
+            row.addWidget(count)
+            holder = QWidget()
+            holder.setLayout(row)
+            # The row is a grouping, not a surface: it takes the card's background.
+            holder.setStyleSheet("background: transparent;")
+            self.decision_box.addWidget(holder)
 
     def _metric_row(self) -> tuple[QHBoxLayout, dict[str, QLabel]]:
         row = QHBoxLayout()
@@ -272,13 +426,13 @@ class Dashboard(QWidget):
 
     # -- preferences ----------------------------------------------------------
 
-    def _preferences_pane(self) -> QWidget:
+    def _settings_pane(self) -> QWidget:
         inner = QWidget()
         outer = QVBoxLayout(inner)
         outer.setContentsMargins(28, 24, 28, 24)
         outer.setSpacing(12)
-        outer.addWidget(_label(tr("preferences"), "h1"))
-        outer.addWidget(_label(tr("preferences_subtitle"), "subtitle"))
+        outer.addWidget(_label(tr("settings"), "h1"))
+        outer.addWidget(_label(tr("settings_subtitle"), "subtitle"))
         outer.addSpacing(6)
 
         heading = QHBoxLayout()
@@ -323,7 +477,7 @@ class Dashboard(QWidget):
         )
 
         outer.addSpacing(8)
-        outer.addWidget(_label(tr("settings"), "section"))
+        outer.addWidget(_label(tr("application"), "section"))
         form = QFormLayout()
         form.setSpacing(8)
         self.retention = QSpinBox()
@@ -335,10 +489,9 @@ class Dashboard(QWidget):
         self.llm_enabled.setChecked(self.service.settings.llm.enabled)
         self.api_key = QLineEdit()
         self.api_key.setEchoMode(QLineEdit.EchoMode.Password)
-        # Editable, because the list of Gemini models changes faster than this app ships.
-        # A successful test replaces these suggestions with what the key can really call.
+        # A closed list of Flash models: the tier whose cost suits a few short requests per
+        # page. A successful test replaces it with the Flash models the key can really call.
         self.model = QComboBox()
-        self.model.setEditable(True)
         self.set_models(SUGGESTED_MODELS, self.service.settings.llm.model)
         self.llm_test = QPushButton(tr("llm_test"))
         self.llm_test.clicked.connect(self.test_llm)
@@ -406,7 +559,6 @@ class Dashboard(QWidget):
             buttons.addWidget(button)
         buttons.addStretch(1)
         outer.addLayout(buttons)
-        outer.addWidget(_label(tr("tracker_attribution"), "muted"))
         outer.addStretch(1)
         return _scroller(inner)
 
@@ -487,41 +639,6 @@ class Dashboard(QWidget):
         row.addLayout(text, 1)
         return row
 
-    # -- about ----------------------------------------------------------------
-
-    def _about_pane(self) -> QWidget:
-        inner = QWidget()
-        outer = QVBoxLayout(inner)
-        outer.setContentsMargins(28, 24, 28, 24)
-        outer.setSpacing(10)
-        outer.addWidget(_label(tr("about"), "h1"))
-        outer.addWidget(_label(tr("about_body"), "body"))
-        self.version_label = _label("", "muted")
-        outer.addWidget(self.version_label)
-        outer.addSpacing(8)
-        outer.addWidget(_label(tr("diagnostics"), "section"))
-        self.diagnostic_text = QTextEdit()
-        self.diagnostic_text.setReadOnly(True)
-        self.diagnostic_text.setMinimumHeight(150)
-        outer.addWidget(self.diagnostic_text)
-        row = QHBoxLayout()
-        support = QPushButton(tr("support"))
-        support.clicked.connect(self.export_support)
-        row.addWidget(support)
-        updates = QPushButton(tr("updates"))
-        updates.clicked.connect(lambda: self.service.check_updates())
-        row.addWidget(updates)
-        row.addStretch(1)
-        outer.addLayout(row)
-        outer.addWidget(_label(tr("logs"), "section"))
-        self.log_view = QTextEdit()
-        self.log_view.setReadOnly(True)
-        self.log_view.setAccessibleName(tr("logs"))
-        self.log_view.setMinimumHeight(150)
-        outer.addWidget(self.log_view)
-        outer.addStretch(1)
-        return _scroller(inner)
-
     # -- lifecycle ------------------------------------------------------------
 
     def showEvent(self, event: QShowEvent) -> None:
@@ -572,14 +689,13 @@ class Dashboard(QWidget):
         self.empty_history.setVisible(not rows)
         counts = self.service.core.store.outcome_counts()
         for key, target in (("intervened", "INTERVENE"), ("informed", "INFORM")):
-            for _, values in (self.event_counts, self.overview_counts):
-                values[key].setText(str(counts.get(target, 0)))
-        for _, values in (self.event_counts, self.overview_counts):
-            values["ignored"].setText(str(counts.get("IGNORE", 0)))
+            self.event_counts[1][key].setText(str(counts.get(target, 0)))
+        self.event_counts[1]["ignored"].setText(str(counts.get("IGNORE", 0)))
         attention = counts.get("INTERVENE", 0) + counts.get("INFORM", 0)
         self.overview_status.setText(
             tr("overview_quiet") if not attention else tr("overview_attention", count=attention)
         )
+        self.show_tally(self.service.core.store.tally())
         browsers = len(getattr(self.service.core, "connected_browsers", {}) or {})
         permissions = self.service.permissions_status()
         granted = sum(1 for value in permissions.values() if value)
@@ -588,16 +704,6 @@ class Dashboard(QWidget):
             f"{tr('desktop_monitoring')}: {granted}/{len(permissions) or 1}"
         )
         self.memory.setPlainText(json.dumps(self.service.core.store.export_preferences(), indent=2))
-        diagnostics = self.service.diagnostics()
-        self.diagnostic_text.setPlainText(json.dumps(diagnostics, indent=2))
-        self.version_label.setText(tr("version_label", version=diagnostics.get("version", "")))
-        log_file = self.service.settings.data_dir / "logs/guardian.log"
-        if log_file.exists():
-            from privacy_guardian.util.privacy import redact_text
-
-            self.log_view.setPlainText(
-                redact_text(log_file.read_text(encoding="utf-8", errors="replace")[-20000:])
-            )
 
     # -- actions --------------------------------------------------------------
 
@@ -724,9 +830,9 @@ class Dashboard(QWidget):
         self.service.core.store.purge(settings.retention_days)
 
     def set_models(self, names: Any, selected: str = "") -> None:
-        """Offer these models, keeping whatever is configured even if it is not among them."""
+        """Offer the Flash models among these, keeping whatever is configured regardless."""
         current = selected or self.model.currentText().strip()
-        options = list(dict.fromkeys([*names, *([current] if current else [])]))
+        options = list(dict.fromkeys([*flash_models(names), *([current] if current else [])]))
         self.model.clear()
         self.model.addItems(options)
         if current:
@@ -774,13 +880,3 @@ class Dashboard(QWidget):
         if not self.llm_enabled.isChecked():
             message += " " + tr("llm_not_enabled")
         self.llm_status.setText(message)
-
-    def export_support(self) -> None:
-        filename, _ = QFileDialog.getSaveFileName(
-            self, tr("support"), "privacy-guardian-support.json", "JSON (*.json)"
-        )
-        if filename:
-            # Counts/configuration status only: no URLs, event prose, paths or user content.
-            Path(filename).write_text(
-                json.dumps(self.service.diagnostics(), indent=2), encoding="utf-8"
-            )

@@ -68,7 +68,7 @@ class GuardianTray(QSystemTrayIcon):
                 ("resume", lambda: service.pause(0)),
             ],
             [
-                ("preferences", lambda: service.show_dashboard("preferences")),
+                ("settings", lambda: service.show_dashboard("settings")),
                 ("recent", lambda: service.show_dashboard("events")),
                 ("permissions", lambda: service.show_permissions()),
                 ("extensions", lambda: service.show_extensions()),

@@ -166,6 +166,99 @@ class Store:
             ).fetchall()
         return {str(row[0]): int(row[1]) for row in rows}
 
+    def tally(self) -> dict[str, Any]:
+        """What has passed through this app, counted from the records it keeps.
+
+        Every figure comes from stored events, decisions and responses, so the Overview
+        can never claim more than the history shows. Things are counted once: a tracker
+        is one tracker on one site however many page loads reported it, a permission is
+        one grant to one app however often it was polled, and a document is one text.
+        """
+        with self._lock:
+            since = self.connection.execute(
+                "SELECT MIN(ts) FROM (SELECT MIN(ts) AS ts FROM events"
+                " UNION ALL SELECT MIN(created_at) FROM document_cache)"
+            ).fetchone()[0]
+            kinds = {
+                str(row[0]): int(row[1])
+                for row in self.connection.execute(
+                    "SELECT json_extract(event_json,'$.requester.kind'), COUNT(DISTINCT requester)"
+                    " FROM events GROUP BY 1"
+                )
+            }
+            trackers = self.connection.execute(
+                "SELECT COUNT(*) FROM (SELECT DISTINCT e.requester, j.value FROM events e,"
+                " json_each(e.event_json,'$.tracker_domains') j WHERE e.event_type='tracking')"
+            ).fetchone()[0]
+            networks = self.connection.execute(
+                "SELECT COUNT(DISTINCT j.value) FROM events e,"
+                " json_each(e.event_json,'$.tracker_domains') j WHERE e.event_type='tracking'"
+            ).fetchone()[0]
+            tracked_sites, fingerprinting = self.connection.execute(
+                "SELECT COUNT(DISTINCT requester),"
+                " COUNT(DISTINCT CASE WHEN json_extract(event_json,'$.fingerprinting')"
+                " THEN requester END) FROM events WHERE event_type='tracking'"
+            ).fetchone()
+            files, sensitive = self.connection.execute(
+                "SELECT COALESCE(SUM(COALESCE(json_extract(e.event_json,'$.file_count'),1)),0),"
+                " COALESCE(SUM(d.outcome IN ('INFORM','INTERVENE')),0) FROM events e"
+                " LEFT JOIN decisions d ON d.id=(SELECT MAX(id) FROM decisions WHERE event_id=e.id)"
+                " WHERE e.event_type='file_upload' AND e.status='complete'"
+            ).fetchone()
+            banners, banner_sites = self.connection.execute(
+                "SELECT COUNT(*), COUNT(DISTINCT requester) FROM events"
+                " WHERE event_type='consent_banner'"
+            ).fetchone()
+            grants, granted_apps = self.connection.execute(
+                "SELECT COUNT(DISTINCT requester||'|'||json_extract(event_json,'$.permission')),"
+                " COUNT(DISTINCT requester) FROM events WHERE event_type='permission_request'"
+            ).fetchone()
+            documents = self.connection.execute(
+                "SELECT profile_json FROM document_cache WHERE expires_at>?",
+                (datetime.now(UTC).isoformat(),),
+            ).fetchall()
+            # The last answer to each event is the one that counts, and an answer the
+            # person authorised in advance is told apart from one they gave on the spot.
+            decided = self.connection.execute(
+                "SELECT r.action, COUNT(*),"
+                " COALESCE(SUM(json_extract(d.decision_json,'$.auto_action')=r.action),0)"
+                " FROM user_responses r LEFT JOIN decisions d"
+                " ON d.id=(SELECT MAX(id) FROM decisions WHERE event_id=r.event_id)"
+                " WHERE r.id=(SELECT MAX(id) FROM user_responses WHERE event_id=r.event_id)"
+                " GROUP BY r.action"
+            ).fetchall()
+        read = {"policy": 0, "terms": 0}
+        words = 0
+        for (profile_json,) in documents:
+            cached = json.loads(profile_json)
+            counts = cached.get("word_counts", {})
+            for kind in read:
+                document = cached.get(kind)
+                if isinstance(document, dict) and not document.get("missing"):
+                    read[kind] += 1
+                    words += int(counts.get(kind, 0) or 0)
+        return {
+            "since": str(since or ""),
+            "sites": kinds.get("website", 0),
+            "apps": kinds.get("application", 0) + kinds.get("extension", 0),
+            "trackers": int(trackers),
+            "tracker_networks": int(networks),
+            "tracked_sites": int(tracked_sites),
+            "fingerprinting_sites": int(fingerprinting),
+            "files": int(files),
+            "sensitive_files": int(sensitive),
+            "policies": read["policy"],
+            "terms": read["terms"],
+            "document_words": words,
+            "banners": int(banners),
+            "banner_sites": int(banner_sites),
+            "grants": int(grants),
+            "granted_apps": int(granted_apps),
+            "decided": {
+                str(row[0]): {"count": int(row[1]), "automatic": int(row[2])} for row in decided
+            },
+        }
+
     def set_preference(self, key: str, value: Any) -> None:
         with self._lock, self.connection:
             self.connection.execute(

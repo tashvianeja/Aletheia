@@ -5,7 +5,17 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QFileDialog, QLabel, QMessageBox, QPushButton, QTextEdit
 
-from privacy_guardian.core.events import DataCategory, Decision, Outcome, PrivacyEvent, Requester
+from privacy_guardian.core.events import (
+    ConsentBannerEvent,
+    DataCategory,
+    Decision,
+    FileUploadEvent,
+    Outcome,
+    PrivacyEvent,
+    Requester,
+    TrackingEvent,
+    UserResponse,
+)
 from privacy_guardian.engine.preferences import LearnedRule, Preference
 from privacy_guardian.llm.client import SUGGESTED_MODELS, ConnectionCheck
 from privacy_guardian.ui.dashboard import Dashboard
@@ -37,6 +47,7 @@ def test_history_filters_and_detail_view(qtbot, ui_controller) -> None:
     seed_history(ui_controller)
     dashboard = Dashboard(ui_controller)
     qtbot.addWidget(dashboard)
+    dashboard.select("events")
     assert dashboard.history.rowCount() == 2
 
     dashboard.requester_filter.setText("https://one.example")
@@ -193,26 +204,8 @@ def test_keychain_error_is_visible_and_does_not_apply_settings(
     assert ui_controller.core.adapter.autostart == []
 
 
-def test_support_bundle_contains_diagnostics_but_no_event_pii(
-    qtbot, ui_controller, tmp_path: Path, monkeypatch
-) -> None:
-    seed_history(ui_controller)
-    dashboard = Dashboard(ui_controller)
-    qtbot.addWidget(dashboard)
-    support = tmp_path / "support.json"
-    monkeypatch.setattr(QFileDialog, "getSaveFileName", lambda *args: (str(support), "JSON"))
-    dashboard.export_support()
-    payload = support.read_text()
-    assert '"version": "0.1.0"' in payload
-    assert "one.example" not in payload
-    assert "Decision for" not in payload
-
-
-def test_profile_lookup_and_log_view_redact_sensitive_text(qtbot, ui_controller) -> None:
+def test_profile_lookup_reads_the_stored_profile(qtbot, ui_controller) -> None:
     ui_controller.core.store.put_profile("site", "https://profile.example", {"purpose": "news"})
-    log = ui_controller.settings.data_dir / "logs/guardian.log"
-    log.parent.mkdir()
-    log.write_text("contact alice@example.com card 4111111111111111")
     dashboard = Dashboard(ui_controller)
     qtbot.addWidget(dashboard)
     dashboard.profile_key.setText("https://profile.example")
@@ -220,8 +213,6 @@ def test_profile_lookup_and_log_view_redact_sensitive_text(qtbot, ui_controller)
     dashboard.refresh()
 
     assert json.loads(dashboard.profile_detail.toPlainText()) == {"purpose": "news"}
-    assert "alice@example.com" not in dashboard.log_view.toPlainText()
-    assert "4111111111111111" not in dashboard.log_view.toPlainText()
 
 
 def test_refresh_timer_follows_dashboard_visibility(qtbot, ui_controller) -> None:
@@ -240,17 +231,18 @@ def test_refresh_timer_follows_dashboard_visibility(qtbot, ui_controller) -> Non
     qtbot.waitUntil(lambda: not dashboard.timer.isActive())
 
 
-def test_the_model_picker_offers_suggestions_and_keeps_a_configured_one(
+def test_the_model_picker_is_a_closed_list_of_flash_models_plus_the_configured_one(
     qtbot, ui_controller
 ) -> None:
-    """A hard-coded model list goes stale, so whatever is configured stays selectable."""
+    """Nothing can be typed in, but whatever is configured stays selectable."""
     ui_controller.settings.llm.model = "gemini-something-unreleased"
     dashboard = Dashboard(ui_controller)
     qtbot.addWidget(dashboard)
     offered = [dashboard.model.itemText(index) for index in range(dashboard.model.count())]
-    assert SUGGESTED_MODELS[0] in offered
+    assert offered == [*SUGGESTED_MODELS, "gemini-something-unreleased"]
+    assert all("flash" in name for name in SUGGESTED_MODELS)
     assert dashboard.model.currentText() == "gemini-something-unreleased"
-    assert dashboard.model.isEditable()
+    assert not dashboard.model.isEditable()
 
 
 def test_testing_the_model_asks_the_service_rather_than_blocking_the_window(
@@ -279,11 +271,17 @@ def test_a_successful_test_replaces_the_guesses_with_what_the_key_can_call(
             ok=True,
             model="gemini-2.5-flash",
             latency_ms=412,
-            models=["gemini-2.5-flash", "gemini-2.5-pro"],
+            models=[
+                "gemini-2.5-flash",
+                "gemini-2.5-flash-image",
+                "gemini-2.5-pro",
+                "gemini-3.5-flash-lite",
+            ],
         )
     )
+    # Only the text-answering Flash models make it into the list.
     offered = [dashboard.model.itemText(index) for index in range(dashboard.model.count())]
-    assert offered == ["gemini-2.5-flash", "gemini-2.5-pro"]
+    assert offered == ["gemini-2.5-flash", "gemini-3.5-flash-lite"]
     assert dashboard.model.currentText() == "gemini-2.5-flash"
     assert "412" in dashboard.llm_status.text()
     assert dashboard.llm_test.isEnabled() is True
@@ -306,9 +304,9 @@ def test_the_chosen_model_is_what_gets_saved(qtbot, ui_controller, monkeypatch) 
     monkeypatch.setattr(
         "privacy_guardian.sensors.hotkey.GlobalHotkey", lambda *_: FakeGlobalHotkey()
     )
-    dashboard.model.setCurrentText("gemini-2.5-pro")
+    dashboard.model.setCurrentText("gemini-2.5-flash-lite")
     dashboard.save_settings()
-    assert ui_controller.settings.llm.model == "gemini-2.5-pro"
+    assert ui_controller.settings.llm.model == "gemini-2.5-flash-lite"
 
 
 class FakeGlobalHotkey:
@@ -358,3 +356,95 @@ def test_sites_pane_is_a_report_not_a_json_console(qtbot, ui_controller) -> None
     dashboard.refresh()
     assert json.loads(dashboard.memory.toPlainText())
     dashboard.save_memory()
+
+
+def test_overview_is_the_landing_page_and_starts_honest_about_having_nothing(
+    qtbot, ui_controller
+) -> None:
+    dashboard = Dashboard(ui_controller)
+    qtbot.addWidget(dashboard)
+    assert dashboard.current_section == "overview"
+    assert "Nothing has been counted yet" in dashboard.tally_caption.text()
+    assert all(value.text() == "0" for value, _ in dashboard.tally_tiles.values())
+    assert dashboard.no_decisions.isVisibleTo(dashboard)
+    # A nonsense section lands on the same page rather than the history table.
+    dashboard.select("nowhere")
+    assert dashboard.current_section == "overview"
+
+
+def test_overview_tiles_say_what_was_counted_and_what_it_is_made_of(qtbot, ui_controller) -> None:
+    """Each number on the Overview must be traceable to stored records, and the words
+    under it must say what the number is made of rather than grade the app."""
+    store = ui_controller.core.store
+    site = Requester(origin="https://news.example", display_name="news.example")
+    for _ in range(2):
+        store.save_event(
+            TrackingEvent(requester=site, tracker_domains=["ads.example", "pixel.example"])
+        )
+    upload = FileUploadEvent(requester=site)
+    store.save_event(upload)
+    store.save_decision(
+        Decision(
+            event_id=upload.id,
+            outcome=Outcome.INTERVENE,
+            risk=0.9,
+            explanation="x",
+            actions=["cancel"],
+        )
+    )
+    store.save_response(UserResponse(event_id=upload.id, action="cancel"))
+    banner = ConsentBannerEvent(requester=site, cmp="onetrust")
+    store.save_event(banner)
+    store.save_decision(
+        Decision(
+            event_id=banner.id,
+            outcome=Outcome.INFORM,
+            risk=0.3,
+            explanation="x",
+            actions=["reject_optional"],
+            auto_action="reject_optional",
+        )
+    )
+    store.save_response(UserResponse(event_id=banner.id, action="reject_optional"))
+    store.cache_document(
+        "https://news.example",
+        "d" * 8,
+        {"policy": {"missing": False}, "word_counts": {"policy": 230 * 75}},
+    )
+
+    dashboard = Dashboard(ui_controller)
+    qtbot.addWidget(dashboard)
+    text = {
+        key: (value.text(), detail.text()) for key, (value, detail) in dashboard.tally_tiles.items()
+    }
+    assert text["requesters"] == ("1", "1 site  ·  0 apps")
+    assert text["trackers"] == ("2", "2 networks across 1 site")
+    assert text["files"] == ("1", "1 held sensitive information")
+    assert text["documents"] == ("1", "About 1 h 15 min of reading")
+    assert text["banners"] == ("1", "On 1 site")
+    assert text["permissions"] == ("0", "0 grants across 0 apps")
+    assert dashboard.tally_caption.text().startswith("Since ")
+    assert "Counted on this device" in dashboard.tally_caption.text()
+
+    shown = [label.text() for label in dashboard.findChildren(QLabel) if label.text()]
+    assert "Optional cookies rejected" in shown
+    assert "1 automatic" in shown
+    assert "Not shared" in shown
+    # Only what was decided is listed; a row of zeros would say nothing.
+    assert "Redacted copies created" not in shown
+    assert not dashboard.no_decisions.isVisibleTo(dashboard)
+    # The word the user asked never to see.
+    assert not any("help" in label.lower() for label in shown)
+
+
+def test_every_action_the_user_can_take_has_a_name_in_the_tally() -> None:
+    """The Overview names each decision, so none of them shows up as a raw key.
+
+    The tally renders `tr("decided_" + action)`, and `tr` falls back to the key
+    itself, so an action without a label reads as "decided_clear_fields" on the
+    page instead of English.
+    """
+    from privacy_guardian.core.ipc.protocol import ACTIONS
+    from privacy_guardian.util.i18n import EN
+
+    assert [action for action in sorted(ACTIONS) if "decided_" + action not in EN] == []

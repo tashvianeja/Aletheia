@@ -24,13 +24,17 @@ When a scanned passport goes into a free image compressor:
 *The safe option is the big one. "Upload anyway" is still there, in plain text, because it is your
 file and your decision.*
 
-| Event history | Preferences |
+| Overview | Event history |
 |---|---|
-| ![Events](docs/img/dashboard.png) | ![Preferences](docs/img/preferences.png) |
+| ![Overview](docs/img/overview.png) | ![Events](docs/img/dashboard.png) |
 
-| Thorough check | Full report |
+| Settings | Thorough check |
 |---|---|
-| ![Thorough check](docs/img/deep-check.png) | ![Sites and apps](docs/img/sites-and-apps.png) |
+| ![Settings](docs/img/settings.png) | ![Thorough check](docs/img/deep-check.png) |
+
+| Full report | |
+|---|---|
+| ![Sites and apps](docs/img/sites-and-apps.png) | |
 
 Screenshots are rendered from the real Qt widgets by
 [`tests/unit/ui/render_screenshots.py`](tests/unit/ui/render_screenshots.py), so they cannot drift
@@ -286,3 +290,6 @@ configured yourself. Remove the extension from your browser's extensions page.
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+The bundled tracker list is derived from [DuckDuckGo Tracker Radar](https://github.com/duckduckgo/tracker-radar),
+licensed CC-BY-NC-SA-4.0. It is updated only when you press **Update tracker list now** in Settings.

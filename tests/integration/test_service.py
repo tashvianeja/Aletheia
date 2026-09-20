@@ -588,3 +588,22 @@ async def test_dismissing_page_panels_reaches_only_a_connected_browser(service: 
 
     third = await service.handle_message(request("later", "ping", {"browser": "chromium"}))
     assert third["result"]["commands"] == [], "an ask is delivered once"
+
+
+@pytest.mark.asyncio
+async def test_a_document_read_is_recorded_with_how_much_was_read(service: Service) -> None:
+    """The Overview turns policy text into a reading time, so the number of words the
+    analysis actually saw is stored with the document, not estimated from the page."""
+    origin = "https://reader.example"
+    terms = "Subscriptions renew automatically. " * 40
+    await service.handle_message(
+        request("terms", "context", {"origin": origin, "terms": {"text": terms}})
+    )
+    tally = service.store.tally()
+    assert tally["terms"] == 1
+    assert tally["document_words"] == len(terms.split())
+    # A cached re-read keeps the count rather than doubling it.
+    await service.handle_message(
+        request("again", "context", {"origin": origin, "terms": {"text": terms}})
+    )
+    assert service.store.tally()["document_words"] == len(terms.split())

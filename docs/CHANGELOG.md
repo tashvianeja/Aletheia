@@ -6,6 +6,25 @@ All notable changes will be documented here. This project has not produced a ver
 
 ### Changed
 
+- Preferences is now Settings, and About is gone. The dashboard has four sections: Overview,
+  Events, Settings, Sites & apps. The Gemini model is a closed list of the current Flash models
+  (`gemini-flash-latest`, 3.8 / 3.7 / 3.6 / 3.5 Flash, 3.5 / 3.1 Flash-Lite, 2.5 Flash / Flash-Lite)
+  instead of an editable box; a successful **Test** replaces it with the text-answering Flash
+  models the key can call, and a configured model that is not among them stays selectable.
+  The tracker-list attribution line has moved off the page into the README. The About pane's
+  version, diagnostics JSON, redacted log view and support-bundle export are no longer in the
+  window; `privacy-guardian --diagnose` still prints the same diagnostics.
+- The Overview is now a tally of what has passed through the app, in the manner of a browser's
+  "trackers blocked" panel: sites & apps checked, trackers spotted, files checked before upload,
+  policies & terms summarised (with an estimated reading time once word counts exist), cookie
+  banners and desktop permissions, followed by a list of the decisions the person actually made,
+  with those taken automatically on their behalf marked as such. Every figure comes from stored
+  records via `Store.tally()`, and each thing is counted once — a tracker on a site however many
+  page loads reported it, a permission grant however often it was polled, a document however
+  many times it was re-read — so the page can never claim more than the history shows. The
+  service now records how many words of each policy or terms document it analysed. The dashboard
+  opens on the Overview; Intervened / Informed / Ignored stay on Events, where the table they
+  describe is.
 - Sites & apps is a report again, not a console. The pane ended in a "Site and app memory"
   section — a lookup field, a raw profile dump and an editable JSON copy of every stored
   preference — which is machinery for whoever built the thing, not for someone asking what a

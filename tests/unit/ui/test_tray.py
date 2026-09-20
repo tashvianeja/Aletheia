@@ -15,7 +15,7 @@ def test_tray_exposes_and_routes_all_actions(qtbot, ui_controller) -> None:
         "resume",
         "recent",
         "dashboard",
-        "preferences",
+        "settings",
         "permissions",
         "extensions",
         "onboarding",
@@ -30,7 +30,7 @@ def test_tray_exposes_and_routes_all_actions(qtbot, ui_controller) -> None:
     assert ("pause", 3600) in ui_controller.calls
     assert ("pause", 86400) in ui_controller.calls
     assert ("pause", 0) in ui_controller.calls
-    assert ("dashboard", "preferences") in ui_controller.calls
+    assert ("dashboard", "settings") in ui_controller.calls
     assert ("quit",) in ui_controller.calls
     tray.hide()
     tray.deleteLater()
