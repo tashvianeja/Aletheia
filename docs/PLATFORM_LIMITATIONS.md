@@ -26,7 +26,9 @@ The source assigns Chromium ID `bfdjphkbgihhbonhnmjbbfhckdddonob` and Firefox ID
 
 Clipboard monitoring is a foreground-change proxy: it classifies newly observed clipboard content and warns when the foreground requester changes. It does **not** detect every clipboard read by every process. It retains categories, not the clipboard text, after classification. The real clipboard/spawn-worker path measured 185.7 ms.
 
-Document redaction rebuilds text PDFs and removes images where applicable, so the result can change layout or formatting. Metadata stripping removes metadata; for a PNG, pixels remain visibly the same. Users should inspect an output before submitting it.
+Document redaction paints black boxes into the page's own content, leaving layout, fonts and images as they were; what a box covers stays in the file, which is what lets the original be restored from the copy. A redacted copy is therefore not a safe way to publish a document to an adversary who will open it in a tool — it is a way to hand somebody a file they will look at.
+
+What gets a box is set per document kind (see *What a redacted copy covers* in `DETECTORS.md`), so an identity document keeps whatever its scheme says an identity check needs. Placement depends on locating the detail on the page: a flagged detail with no word or OCR token under it refuses the copy rather than leaving it showing, but OCR that never read a detail cannot flag it in the first place. A scanned identity document gives no way to tell a photograph from the rest of the picture, so the portrait on one is left visible and the copy says so. QR-code detection needs at least three readable finder patterns and roughly two pixels per module, and is applied to the first 20 pages. Metadata stripping removes metadata; for a PNG, pixels remain visibly the same. Users should inspect an output before submitting it.
 
 ## Product boundaries
 

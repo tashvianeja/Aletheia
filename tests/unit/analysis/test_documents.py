@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 from pathlib import Path
 from typing import Any
 
@@ -301,3 +302,157 @@ def test_five_mib_plain_text_scans_pii_near_end_without_partial_result() -> None
     _start, end = map(int, emails[0].span_ref.split(":"))
     assert end > size - 100
     assert analysis.partial is False
+
+
+def _ocr_available() -> bool:
+    try:
+        import pytesseract
+
+        pytesseract.get_tesseract_version()
+    except Exception:
+        return False
+    return True
+
+
+def _text_of(content: bytes, filename: str) -> str:
+    return "\n".join(page.text for page in extract_document(content, filename).pages)
+
+
+def test_an_aadhaar_card_is_recognised_as_the_identity_document_it_is() -> None:
+    path = FIXTURES / "aadhaar_synthetic.pdf"
+    document = extract_document(path.read_bytes(), path.name)
+    assert document.document_type == "identity_document"
+    assert document.id_scheme == "aadhaar"
+    findings = [
+        finding for page in document.pages for finding in detect_pii(page.text, use_ner=True)
+    ]
+    categories = {finding.category for finding in findings} | document.metadata_categories
+    assert {
+        DataCategory.GOVERNMENT_ID_NATIONAL_ID,
+        DataCategory.DOB,
+        DataCategory.POSTAL_ADDRESS,
+        DataCategory.PHONE,
+        DataCategory.EMAIL,
+        DataCategory.BIOMETRIC_PHOTO,
+    } <= categories
+
+
+def _word_box(word: str, filename: str = "aadhaar_synthetic.pdf") -> tuple[float, ...]:
+    """Where a word sits on the page, as (x0, top, x1, bottom) in the layout's space."""
+    import pdfplumber
+
+    with pdfplumber.open(io.BytesIO((FIXTURES / filename).read_bytes())) as layout:
+        [found] = [item for item in layout.pages[0].extract_words() if str(item["text"]) == word]
+        return (
+            float(found["x0"]),
+            float(found["top"]),
+            float(found["x1"]),
+            float(found["bottom"]),
+        )
+
+
+def _blacked(page: Any, box: tuple[float, ...], across: float = 0.5) -> bool:
+    """Whether the copy is painted black a given fraction of the way across a word."""
+    x0, top, x1, bottom = box
+    return page.getpixel((int((x0 + (x1 - x0) * across) * 2), int((top + bottom) / 2 * 2))) == (
+        0,
+        0,
+        0,
+    )
+
+
+def test_a_redacted_aadhaar_keeps_its_last_four_digits_name_and_photograph() -> None:
+    """A Masked Aadhaar, which is what UIDAI itself hands out: still usable, not blank."""
+    from tests.fixtures.generate.generate_documents import synthetic_aadhaar
+
+    path = FIXTURES / "aadhaar_synthetic.pdf"
+    data = path.read_bytes()
+    analysis = analyze_payload({"kind": "document", "filename": path.name, "data": data})
+    assert analysis.payload_ref is not None
+    redacted = redact_payload(analysis.payload_ref)
+    assert redacted.verified
+    # The boxes are painted into the page, so what a viewer shows is what counts.
+    page = _render(redacted.content).convert("RGB")
+    first, second, last = synthetic_aadhaar().split()
+
+    # The first eight digits of the number go; the last four stay, which is the whole
+    # point of a masked Aadhaar: it still identifies the holder to somebody checking.
+    assert _blacked(page, _word_box(first)) and _blacked(page, _word_box(second))
+    assert not _blacked(page, _word_box(last))
+    # What an identity check reads is left readable.
+    assert not _blacked(page, _word_box("Morgan"))
+    assert not _blacked(page, _word_box("Female"))
+    # The photograph is left alone: an ID with the face blacked out proves nothing.
+    assert page.getpixel((int(90 * 2), int(260 * 2))) != (0, 0, 0)
+    # The address, the mobile number and the email address come off.
+    assert _blacked(page, _word_box("Nehru"))
+    assert _blacked(page, _word_box("9876543210"))
+    assert _blacked(page, _word_box("morgan.testperson@example.test"))
+    # The date of birth comes down to its year: covered at the day, clear at the year.
+    birth = _word_box("29/02/1988")
+    assert _blacked(page, birth, across=0.15)
+    assert not _blacked(page, birth, across=0.85)
+    assert any("Masked the way UIDAI" in warning for warning in redacted.warnings)
+
+
+def test_a_redacted_aadhaar_covers_the_qr_code_that_holds_the_whole_record() -> None:
+    """Masking the digits and leaving the square is no redaction: a phone reads it."""
+    from privacy_guardian.analysis.documents.qr import find_qr_codes
+
+    path = FIXTURES / "aadhaar_synthetic.pdf"
+    data = path.read_bytes()
+    assert find_qr_codes(_render(data)), "the fixture is supposed to carry a QR code"
+    analysis = analyze_payload({"kind": "document", "filename": path.name, "data": data})
+    assert analysis.payload_ref is not None
+    redacted = redact_payload(analysis.payload_ref)
+    # The code is gone from the copy a viewer paints, so nothing is left to scan.
+    assert find_qr_codes(_render(redacted.content)) == []
+
+
+def test_a_redacted_identity_document_is_not_simply_painted_black() -> None:
+    """Covering the whole page removes the detail the person is sharing it to prove."""
+    for name in ("passport_synthetic.pdf", "aadhaar_synthetic.pdf"):
+        path = FIXTURES / name
+        data = path.read_bytes()
+        document = extract_document(data, path.name)
+        assert document.document_type == "identity_document"
+        result = redact_document(data, path.name, document)
+        assert result.verified and result.boxes > 1
+        page = _render(result.content).convert("RGB")
+        black = sum(count for count, colour in page.getcolors(1 << 20) if colour == (0, 0, 0))
+        assert black / (page.width * page.height) < 0.5, f"{name} came back mostly black"
+
+
+def test_an_identity_document_with_nothing_covered_refuses_to_certify_a_copy() -> None:
+    """An ID copy with no box on it is the original under another name."""
+    document = ExtractedDocument(
+        pages=[Page("A passport, with no detail this can find.", 1)],
+        document_type="identity_document",
+    )
+    data = _pdf("A passport, with no detail this can find.")
+    with pytest.raises(ValueError, match="verification"):
+        redact_document(data, "id.pdf", document)
+
+
+@pytest.mark.skipif(not _ocr_available(), reason="needs the OCR engine")
+def test_a_scanned_aadhaar_is_masked_the_same_way_as_one_with_its_own_text() -> None:
+    """The usual way a card arrives: pixels, read back by OCR, boxes placed on them."""
+    from PIL import Image
+
+    path = FIXTURES / "aadhaar_synthetic.png"
+    data = path.read_bytes()
+    document = extract_document(data, path.name)
+    assert document.document_type == "identity_document" and document.id_scheme == "aadhaar"
+    analysis = analyze_payload({"kind": "document", "filename": path.name, "data": data})
+    assert DataCategory.GOVERNMENT_ID_NATIONAL_ID in {f.category for f in analysis.findings}
+    assert analysis.payload_ref is not None
+    redacted = redact_payload(analysis.payload_ref)
+    assert redacted.verified and redacted.boxes > 1
+    with Image.open(io.BytesIO(redacted.content)) as image:
+        page = image.convert("RGB")
+        black = sum(count for count, colour in page.getcolors(1 << 20) if colour == (0, 0, 0))
+        assert black / (page.width * page.height) < 0.5
+    # Nothing readable is left of the code, and the original can still be recovered.
+    restored = unredact_payload(redacted.content, redacted.filename)
+    assert restored.boxes == redacted.boxes
+    assert count_redaction_marks(restored.content, restored.filename) == 0

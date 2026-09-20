@@ -8,7 +8,17 @@ Raw bytes may move through the native transport during an active file upload. Th
 
 ## PII and document detection
 
-The detector combines regular expressions, validators, contextual patterns, and optional lazy spaCy named-entity recognition. Implemented validators include Luhn cards, IBAN mod-97, ABA routing numbers, NHS mod-11, US SSN structure, and passport MRZ checks. Regex/context detection covers names, email, phones, addresses, dates of birth, government IDs, financial identifiers, medical phrases, private keys, and API keys.
+The detector combines regular expressions, validators, contextual patterns, and optional lazy spaCy named-entity recognition. Implemented validators include Luhn cards, IBAN mod-97, ABA routing numbers, NHS mod-11, US SSN structure, passport MRZ checks, and the Verhoeff checksum an Aadhaar number and a Virtual ID carry. Regex/context detection covers names, email, phones, addresses, dates of birth, government IDs, financial identifiers, medical phrases, private keys, and API keys.
+
+An Aadhaar number is printed on the card with nothing to label it, so a bare twelve-digit group is only read as one where the surrounding text names the scheme — Aadhaar, UIDAI, the issuing authority — and the Verhoeff digit and the 2-9 opening digit both check out. Without that gate a checksum alone would call roughly one twelve-digit group in ten somebody's national ID. Indian mobile numbers and addresses ending in a six-digit PIN have their own contextual patterns, because `phonenumbers` cannot place a bare Indian mobile and the street-suffix address patterns are written for US and UK addresses.
+
+## What a redacted copy covers
+
+`analysis.documents.masking` decides what a redacted copy covers and what it leaves readable, per document. The rule is a property of the kind of document, not of the fact that it is one: covering an identity document entirely removes the details the person is sharing it to prove, and a copy nobody can accept is one that gets replaced by the original.
+
+For an Aadhaar card the copy is a Masked Aadhaar, which is what UIDAI itself issues: the first eight digits of the number, the Virtual ID, the QR code, the address, the phone number, the email address and the exact date of birth are covered; the name, the photograph, the gender, the year of birth and the last four digits stay readable. For an identity document whose scheme is not recognised, everything found on it is covered, including embedded pictures. For anything else, the detected findings are covered and nothing else is.
+
+QR codes are located by their finder patterns (`analysis.documents.qr`) rather than decoded, because an Aadhaar's QR holds everything the printed side says and masking the digits beside it would achieve nothing. Three confirmed finder centres of a matching module size fix the symbol's square; two do not, and a symbol that cannot be sized is reported as absent rather than covered with a guess.
 
 Document extraction supports PDF, DOCX, XLSX, PPTX, text-like files, and images. It looks for image metadata and can invoke Tesseract OCR, including for scanned PDF pages. Extraction has a configurable deadline; partial results/warnings must be surfaced instead of being represented as complete. The current default is 20 seconds, configurable as `analysis_timeout_seconds`.
 

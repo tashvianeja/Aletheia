@@ -3,12 +3,16 @@ from __future__ import annotations
 import pytest
 
 from privacy_guardian.analysis.pii.validators import (
+    aadhaar_number,
+    aadhaar_vid,
     aba_checksum,
     iban_mod97,
     luhn,
     nhs_mod11,
     passport_mrz,
     ssn_structure,
+    verhoeff,
+    verhoeff_digit,
 )
 
 
@@ -69,3 +73,37 @@ def test_passport_mrz_validates_all_td3_check_digits() -> None:
     )
     assert passport_mrz(valid)
     assert not passport_mrz(valid[:-1] + "1")
+
+
+@pytest.mark.parametrize("value", ["2345 6789 0124", "234567890124", "9999-8888-7779"])
+def test_aadhaar_number_accepts_twelve_digits_that_pass_verhoeff(value: str) -> None:
+    assert aadhaar_number(value)
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        # One digit off the checksum, and two neighbours swapped: Verhoeff catches both.
+        "2345 6789 0125",
+        "2345 6798 0124",
+        # UIDAI issues nothing opening 0 or 1, so a padded reference is not an Aadhaar.
+        "0345 6789 0128",
+        "1234 5678 9015",
+        "222222222222",
+        "2345 6789 01",
+    ],
+)
+def test_aadhaar_number_rejects_bad_checksums_leading_digits_and_lengths(value: str) -> None:
+    assert not aadhaar_number(value)
+
+
+def test_aadhaar_vid_takes_sixteen_digits_where_the_number_takes_twelve() -> None:
+    assert aadhaar_vid("9012 3456 7890 1235")
+    assert not aadhaar_vid("9012 3456 7890 1234")
+    # The twelve-digit number is not a VID, whatever its own checksum says.
+    assert not aadhaar_vid("2345 6789 0124")
+
+
+def test_verhoeff_digit_completes_a_number_its_check_accepts() -> None:
+    for body in ("23456789012", "901234567890123", "7"):
+        assert verhoeff(body + verhoeff_digit(body))

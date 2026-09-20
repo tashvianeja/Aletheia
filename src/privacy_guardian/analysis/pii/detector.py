@@ -9,6 +9,8 @@ from typing import Any
 
 from privacy_guardian.analysis.pii.validators import (
     IBAN_LENGTHS,
+    aadhaar_number,
+    aadhaar_vid,
     aba_checksum,
     iban_mod97,
     luhn,
@@ -78,6 +80,27 @@ _CONTEXT_PATTERNS: tuple[tuple[str, str, float], ...] = (
         r"(?:national\s*(?:id|identity)|aadhaar|aadhar)\s*(?:number|no\.?)?\s*[:=]?\s*([A-Z0-9][A-Z0-9 -]{5,19})",
         0.85,
     ),
+    # The Virtual ID a card prints under its Aadhaar number. It is always labelled,
+    # so the label is enough to find it and the checksum settles whether it is one.
+    (
+        "government_id.national_id",
+        r"\bV\.?I\.?D\.?\s*(?:number|no\.?)?\s*[:=]?\s*((?:\d{4}[ -]?){3}\d{4})\b",
+        0.95,
+    ),
+    # An Indian mobile number is ten digits opening 6-9 and is written without a
+    # country code as often as with one, which `phonenumbers` cannot place on its own.
+    (
+        "phone",
+        r"(?:mobile|mob\.?|phone|contact)\s*(?:number|no\.?|#)?\s*[:=]?\s*((?:\+?91[ -]?)?[6-9]\d{9})(?!\d)",
+        0.9,
+    ),
+    # An address that ends in a six-digit PIN: the street-suffix patterns above are
+    # written for US and UK addresses and do not see an Indian one at all.
+    (
+        "postal_address",
+        r"(?:address|पता)\s*[:=]?\s*((?:[^\n]{1,80}\n){0,4}?[^\n]{0,80}?\b\d{6}\b)",
+        0.9,
+    ),
     ("government_id.ssn", r"(?:ssn|social\s+security(?:\s+number)?)\s*[:=]?\s*(\d{9})\b", 0.99),
     (
         "government_id.drivers_license",
@@ -126,6 +149,20 @@ _CONTEXT_PATTERNS: tuple[tuple[str, str, float], ...] = (
         0.95,
     ),
 )
+# What says a block of text came off an Aadhaar card. The number itself is printed
+# bare, in a 4-4-4 group with nothing to label it, so nothing but the card around it
+# tells an Aadhaar number apart from any other twelve digits. Matching it only where
+# one of these appears is what keeps a reference number on an invoice from being
+# announced to the person as their national ID; the checksum then does the rest.
+_AADHAAR_MARKERS = re.compile(
+    r"aadhaar|aadhar|आधार|uidai|unique\s+identification\s+authority"
+    r"|government\s+of\s+india|भारत\s*सरकार|\bvid\b",
+    re.I,
+)
+# A bare Aadhaar number as the card prints it: 4-4-4, or run together.
+_AADHAAR_BARE = re.compile(r"(?<!\d)([2-9]\d{3}[ -]?\d{4}[ -]?\d{4})(?!\d)")
+# A bare Virtual ID, which is sixteen digits in the same 4-4-4-4 shape.
+_VID_BARE = re.compile(r"(?<!\d)(\d{4}[ -]?\d{4}[ -]?\d{4}[ -]?\d{4})(?!\d)")
 _COMPILED = [
     (DataCategory(category), re.compile(pattern, re.I), confidence)
     for category, pattern, confidence in _PATTERNS
@@ -197,7 +234,30 @@ def _find_matches_block(text: str, *, use_ner: bool = False, region: str = "US")
                 valid = nhs_mod11(value)
                 if not valid:
                     continue
+            if category == DataCategory.GOVERNMENT_ID_NATIONAL_ID:
+                digits = re.sub(r"[ -]", "", value)
+                # Other countries' national IDs carry no checksum we can test, so only a
+                # value shaped like an Aadhaar number or a VID has to survive Verhoeff.
+                if len(digits) == 12 and digits.isdigit():
+                    valid = aadhaar_number(value)
+                elif len(digits) == 16 and digits.isdigit():
+                    valid = aadhaar_vid(value)
+                if valid is False:
+                    continue
             matches.append(Match(category, match.start(1), match.end(1), confidence, valid is True))
+    if _AADHAAR_MARKERS.search(text):
+        for pattern, validator in ((_AADHAAR_BARE, aadhaar_number), (_VID_BARE, aadhaar_vid)):
+            for match in pattern.finditer(text):
+                if validator(match.group(1)):
+                    matches.append(
+                        Match(
+                            DataCategory.GOVERNMENT_ID_NATIONAL_ID,
+                            match.start(1),
+                            match.end(1),
+                            0.95,
+                            True,
+                        )
+                    )
     try:
         import phonenumbers
 

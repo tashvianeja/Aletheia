@@ -36,6 +36,10 @@ class ExtractedDocument:
     warnings: list[str] = field(default_factory=list)
     document_type: str = "generic"
     has_images: bool = False
+    # Which national scheme an identity document belongs to, when it says so. What
+    # may be covered on an ID and what has to stay readable is set by the scheme
+    # that issued it, not by the fact that it is an ID: see documents/masking.py.
+    id_scheme: str = ""
 
 
 class AnalysisTimeout(TimeoutError):
@@ -73,6 +77,9 @@ def classify_document(text: str, suffix: str = "") -> str:
             r"national identity",
             r"P<[A-Z<]{3}",
             r"driver.s licen[cs]e",
+            r"aadhaar",
+            r"आधार",
+            r"unique identification authority",
         ),
         "bank_statement": (
             r"bank statement",
@@ -107,6 +114,17 @@ def classify_document(text: str, suffix: str = "") -> str:
     )
 
 
+def identity_scheme(text: str) -> str:
+    """The scheme that issued an identity document, where the document names it.
+
+    Only Aadhaar is recognised by name so far. Every other ID falls back to "", and
+    the redaction rules for an unrecognised scheme are the cautious ones.
+    """
+    if re.search(r"aadhaar|aadhar|आधार|uidai|unique\s+identification\s+authority", text, re.I):
+        return "aadhaar"
+    return ""
+
+
 def _ocr(image: Any, number: int, remaining: float) -> Page:
     import pytesseract
 
@@ -114,7 +132,11 @@ def _ocr(image: Any, number: int, remaining: float) -> Page:
         image.convert("RGB"),
         output_type=pytesseract.Output.DICT,
         timeout=max(0.1, remaining),
-        config="--psm 6",
+        # Automatic page segmentation, which is what a page is. Reading a page as one
+        # uniform block instead drops whatever does not share the body's layout, and on
+        # an identity card the line it drops is the number printed large across the
+        # middle: the one detail on the card that most needs a box over it.
+        config="--psm 3",
     )
     text = ""
     boxes = []
@@ -368,6 +390,8 @@ def extract_document(
         result.warnings.append("Extraction limit reached; omitted content has not been checked.")
     all_text = "\n".join(page.text for page in result.pages)
     result.document_type = classify_document(all_text, suffix)
-    if result.document_type == "identity_document" and result.has_images:
-        result.metadata_categories.add(DataCategory.BIOMETRIC_PHOTO)
+    if result.document_type == "identity_document":
+        result.id_scheme = identity_scheme(all_text)
+        if result.has_images:
+            result.metadata_categories.add(DataCategory.BIOMETRIC_PHOTO)
     return result

@@ -177,8 +177,9 @@ make build-mac          # dist/PrivacyGuardian.app and the .dmg
 `uv run privacy-guardian --diagnose` prints platform, OCR availability, host registrations,
 detected browsers, database counts and permission status without starting the UI.
 
-Current state on macOS 26 arm64: **274 passed, 4 skipped** across `tests/unit`,
-`tests/integration` and `tests/platform`; Ruff and strict mypy clean across 76 modules. The
+Current state on macOS 26 arm64: **515 passed, 5 skipped** across `tests/unit`,
+`tests/integration`, `tests/platform` and `tests/packaging`; Ruff and strict mypy clean across 91
+modules. The
 browser end-to-end suite (`make e2e`) and the performance suite need a headed browser and are run
 separately. Windows support is in the codebase but has not been validated on a physical machine,
 and `install.sh` is macOS only.

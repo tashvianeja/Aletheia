@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 from privacy_guardian.analysis.pii import detect_pii, redact_text
 from privacy_guardian.core.events import DataCategory
 
@@ -36,9 +38,12 @@ def test_detector_finds_validated_and_contextual_synthetic_pii_without_values() 
         DataCategory.CREDENTIALS_PASSWORD,
         DataCategory.LOCATION_PRECISE,
     } <= categories
-    serialized = "".join(finding.model_dump_json() for finding in findings)
+    # The keyed hash is opaque hex that no value can be read out of, and a short
+    # digit run turns up inside one by chance often enough to fail this on its own.
+    serialized = "".join(finding.model_dump_json(exclude={"stable_hash"}) for finding in findings)
     for raw_value in ("Morgan", "4111", "X12345678", "synthetic-only-secret"):
         assert raw_value not in serialized
+    assert all(re.fullmatch(r"[0-9a-f]{40}", finding.stable_hash) for finding in findings)
     assert all(finding.page == 2 for finding in findings)
 
 
@@ -112,3 +117,51 @@ def test_ner_finds_unlabelled_person_late_in_large_text_and_across_chunk_boundar
     findings = detect_pii(source, use_ner=True)
     assert any(finding.category == DataCategory.FULL_NAME for finding in findings)
     assert "Alice Testperson" not in "".join(finding.model_dump_json() for finding in findings)
+
+
+AADHAAR_TEXT = """
+GOVERNMENT OF INDIA
+Unique Identification Authority of India
+Name: Morgan Testperson
+DOB: 29/02/1988
+Gender: Female
+2345 6789 0124
+VID : 9012 3456 7890 1235
+Address: S/O Jordan Testperson, 12 Nehru Marg,
+Ward 4, Kanpur Nagar, Uttar Pradesh 208001
+Mobile: 9876543210
+""".strip()
+
+
+def _values(text: str, category: DataCategory) -> set[str]:
+    return {
+        text[int(finding.span_ref.split(":")[0]) : int(finding.span_ref.split(":")[1])]
+        for finding in detect_pii(text, use_ner=True)
+        if finding.category == category
+    }
+
+
+def test_an_aadhaar_card_gives_up_its_number_vid_address_and_mobile() -> None:
+    """The number is printed bare, so the card around it is what says what it is."""
+    assert {"2345 6789 0124", "9012 3456 7890 1235"} <= _values(
+        AADHAAR_TEXT, DataCategory.GOVERNMENT_ID_NATIONAL_ID
+    )
+    assert "9876543210" in _values(AADHAAR_TEXT, DataCategory.PHONE)
+    # An Indian address ends in a PIN rather than a street suffix, and runs over lines.
+    [address] = [
+        value for value in _values(AADHAAR_TEXT, DataCategory.POSTAL_ADDRESS) if "Nehru" in value
+    ]
+    assert address.endswith("208001")
+
+
+def test_twelve_digits_on_a_page_that_is_not_an_aadhaar_card_are_left_alone() -> None:
+    """A checksum alone would call one invoice line in ten somebody's national ID."""
+    invoice = "Invoice 2345 6789 0124 for order 9012 3456 7890 1235, paid 02/02/2024."
+    assert not _values(invoice, DataCategory.GOVERNMENT_ID_NATIONAL_ID)
+    # The same digits, on a card that names the scheme, are exactly what to look for.
+    assert _values("Aadhaar card\n" + invoice, DataCategory.GOVERNMENT_ID_NATIONAL_ID)
+
+
+def test_a_number_that_fails_its_checksum_is_not_reported_as_an_aadhaar() -> None:
+    card = AADHAAR_TEXT.replace("2345 6789 0124", "2345 6789 0125")
+    assert "2345 6789 0125" not in _values(card, DataCategory.GOVERNMENT_ID_NATIONAL_ID)

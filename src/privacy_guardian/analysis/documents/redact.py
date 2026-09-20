@@ -10,7 +10,15 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from privacy_guardian.analysis.documents.extract import ExtractedDocument, extract_document
-from privacy_guardian.analysis.pii import detect_pii, find_matches, redact_text
+from privacy_guardian.analysis.documents.masking import (
+    Flagged,
+    RedactionPlan,
+    cover_ranges,
+    plan_for,
+    spans_to_cover,
+)
+from privacy_guardian.analysis.documents.qr import find_qr_codes
+from privacy_guardian.analysis.pii import detect_pii, redact_text
 from privacy_guardian.core.events import DataCategory, Finding
 
 # How a redaction box announces itself inside the file it was drawn on, so the same
@@ -30,6 +38,10 @@ IMAGE_SUFFIXES = frozenset({".png", ".jpg", ".jpeg", ".webp", ".tiff", ".tif", "
 TEXT_SUFFIXES = frozenset({".txt", ".csv", ".json", ".md", ".log", ""})
 # OCR runs on a page rendered at twice its natural size (extract.py, scale=2).
 OCR_SCALE = 2.0
+# Looking for codes means rendering the page, which an identity document of one or two
+# pages can well afford. A long document that merely mentions a passport is classified
+# the same way, so the search stops after this many pages and the copy says it did.
+MAX_CODE_PAGES = 20
 Box = tuple[float, float, float, float]
 Span = tuple[int, int]
 _MARK = re.compile(rb"/PrivacyGuardian\s*<<[^>]*>>\s*BDC")
@@ -51,36 +63,53 @@ def _wanted(category: Any, categories: set[DataCategory] | None) -> bool:
 
 def _flagged_spans(
     findings: list[Finding] | None, page: int, categories: set[DataCategory] | None
-) -> list[Span]:
-    """The spans the analysis flagged on this page, as offsets into its text."""
-    spans: list[Span] = []
+) -> list[Flagged]:
+    """The details the analysis flagged on this page, as offsets into its text."""
+    spans: list[Flagged] = []
     for finding in findings or []:
         if finding.page not in (None, page) or not _wanted(finding.category, categories):
             continue
         start, _, end = finding.span_ref.partition(":")
         if start.isdigit() and end.isdigit() and int(end) > int(start):
-            spans.append((int(start), int(end)))
+            spans.append((int(start), int(end), finding.category))
     return spans
 
 
-def _ocr_boxes(
-    page: Any, categories: set[DataCategory] | None, flagged: list[Span] | None = None
-) -> tuple[list[Box], int]:
-    """Pixel boxes for every flagged and every detected match on an OCR'd page.
+def _slice(box: Box, length: int, begin: int, end: int) -> Box:
+    """The part of a word's box holding characters [begin, end) of it.
 
-    Returns the boxes and how many spans had no token under them.
+    Characters are taken to be evenly spaced across the word, which is what lets the
+    first eight digits of a number be covered while its last four stay readable when
+    a scan hands back all twelve as one token.
     """
-    spans = list(flagged or [])
-    spans.extend(
-        (match.start, match.end)
-        for match in find_matches(page.text, use_ner=True)
-        if _wanted(match.category, categories)
+    if length <= 0 or (begin <= 0 and end >= length):
+        return box
+    width = box[2] - box[0]
+    return (
+        box[0] + width * max(0, begin) / length,
+        box[1],
+        box[0] + width * min(length, end) / length,
+        box[3],
     )
+
+
+def _ocr_boxes(page: Any, spans: list[Span]) -> tuple[list[Box], int]:
+    """Pixel boxes on an OCR'd page for each of `spans`.
+
+    The boxes are measured on the page as a viewer shows it, so a token's characters
+    always run along its box and part of one can be covered. Returns the boxes and
+    how many spans had no token under them at all.
+    """
     boxes: list[Box] = []
     unplaced = 0
-    for start, end in dict.fromkeys(spans):
+    for start, end in spans:
         hits = [
-            (left - 2, top - 2, left + width + 2, top + height + 2)
+            _slice(
+                (left - 2, top - 2, left + width + 2, top + height + 2),
+                token_end - token_start,
+                start - token_start,
+                end - token_start,
+            )
             for token_start, token_end, left, top, width, height in page.boxes
             if start < token_end and end > token_start
         ]
@@ -94,22 +123,30 @@ def _compact(text: str) -> str:
     return "".join(text.split())
 
 
+def _compact_range(value: str, begin: int, end: int) -> Span:
+    """A range within `value` restated as a range within `value` with spaces removed."""
+    start = len(_compact(value[:begin]))
+    return start, start + len(_compact(value[begin:end]))
+
+
 def _pdf_page_boxes(
     layout_page: Any,
+    plan: RedactionPlan,
     categories: set[DataCategory] | None,
-    values: list[str],
+    flagged: list[tuple[str, DataCategory]],
     shown_height: float,
     turned: bool = False,
 ) -> tuple[list[Box], int]:
     """Boxes, in the page's displayed space, for the matches on a page with its own text.
 
-    `values` are the flagged strings themselves, found again here word by word and
-    regardless of spacing, because the text the analysis read and the words the
-    layout gives back are not laid out identically. `shown_height` is the height of
-    the page as displayed: the layout measures a word's top from there, but reports
-    the unrotated height as the page's, so a turned page cannot be trusted for it.
-    Returns the boxes and how many values or matches could not be placed: one with
-    no word under it is one the box cannot cover, and the copy is not certified.
+    `flagged` are the strings the analysis flagged and the category it flagged each
+    one under, found again here word by word and regardless of spacing, because the
+    text the analysis read and the words the layout gives back are not laid out
+    identically. `shown_height` is the height of the page as displayed: the layout
+    measures a word's top from there, but reports the unrotated height as the page's,
+    so a turned page cannot be trusted for it. Returns the boxes and how many values
+    or matches could not be placed: one with no word under it is one the box cannot
+    cover, and the copy is not certified.
     """
     # Reading in content order keeps a column's words together, but that reading
     # breaks the letters of a turned page apart; there, cluster by position instead.
@@ -136,15 +173,23 @@ def _pdf_page_boxes(
             shown_height - float(word["top"]) + 1.5,
         )
 
+    # On a page shown turned, a word's own characters do not run along the box that
+    # the layout reports for it, so part of one cannot be covered reliably; there the
+    # whole word goes under the bar, which covers more rather than less.
+    def bar(word: Any, length: int, begin: int, finish: int) -> Box:
+        return _slice(rect(word), 0 if turned else length, begin, finish)
+
     boxes: list[Box] = []
     unplaced = 0
-    for match in find_matches(text, use_ner=True):
-        if not _wanted(match.category, categories):
-            continue
-        hits = [word for start, end, word in spans if match.start < end and match.end > start]
+    for begin, finish in spans_to_cover(text, plan, categories):
+        hits = [
+            bar(word, end - start, begin - start, finish - start)
+            for start, end, word in spans
+            if begin < end and finish > start
+        ]
         if not hits:
             unplaced += 1
-        boxes.extend(rect(word) for word in hits)
+        boxes.extend(hits)
     # Every word's characters, run together, with the word each character came from.
     joined = ""
     owner: list[int] = []
@@ -152,18 +197,33 @@ def _pdf_page_boxes(
         compact = _compact(str(word["text"]))
         joined += compact
         owner.extend([index] * len(compact))
-    for value in dict.fromkeys(_compact(value) for value in values):
-        if not value:
+    # Where each word's characters begin within that run-together text.
+    starts: list[int] = []
+    position = 0
+    for _start, _end, word in spans:
+        starts.append(position)
+        position += len(_compact(str(word["text"])))
+    for value, category in dict.fromkeys(flagged):
+        ranges = [
+            _compact_range(value, begin, finish)
+            for begin, finish in cover_ranges(plan, category, value)
+        ]
+        needle = _compact(value)
+        if not needle or not ranges:
+            # Nothing to look for, or a detail this plan leaves readable on purpose.
             continue
         found = False
-        position = joined.find(value)
-        while position >= 0:
+        at = joined.find(needle)
+        while at >= 0:
             found = True
-            boxes.extend(
-                rect(spans[index][2])
-                for index in sorted(set(owner[position : position + len(value)]))
-            )
-            position = joined.find(value, position + 1)
+            for begin, finish in ranges:
+                for index in sorted(set(owner[at + begin : at + finish])):
+                    word = spans[index][2]
+                    length = len(_compact(str(word["text"])))
+                    boxes.append(
+                        bar(word, length, at + begin - starts[index], at + finish - starts[index])
+                    )
+            at = joined.find(needle, at + 1)
         if not found:
             unplaced += 1
     return boxes, unplaced
@@ -333,13 +393,62 @@ def redaction_marks(data: bytes, filename: str) -> int:
     return 0
 
 
+def _scheme_notes(plan: RedactionPlan, document: ExtractedDocument, codes: int) -> list[str]:
+    """What the person needs to know about the rule this copy was made under.
+
+    A plan that leaves details readable has to say which ones, or the copy looks more
+    redacted than it is and gets shared somewhere it should not be.
+    """
+    notes: list[str] = []
+    if plan.scheme == "aadhaar":
+        notes.append(
+            "Masked the way UIDAI masks an Aadhaar: the first eight digits of the number, "
+            "the Virtual ID, the QR code, the address, the phone number, the email address "
+            "and the exact date of birth are covered. The name, the photograph, the gender, "
+            "the year of birth and the last four digits stay readable, so the copy is still "
+            "worth something to an identity check."
+        )
+        if not codes:
+            notes.append(
+                "No QR code could be found on this copy. An Aadhaar carries one, and it "
+                "holds everything the card prints, so check the copy before sharing it."
+            )
+    elif plan.cover_pictures:
+        notes.append(
+            "Every detail found on this identity document is covered. Privacy Guardian "
+            "does not know this document's scheme, so it keeps nothing readable."
+        )
+    return notes
+
+
+def _rendered_page(data: bytes, index: int) -> Any:
+    """The page as a viewer shows it, at the scale the OCR boxes are measured in."""
+    import pypdfium2
+
+    with pypdfium2.PdfDocument(data) as raster:
+        return raster[index].render(scale=OCR_SCALE).to_pil()
+
+
+def _picture_boxes(layout_page: Any, shown_height: float) -> list[Box]:
+    """Where the pictures embedded in a page are, in its displayed space."""
+    return [
+        (
+            float(picture["x0"]),
+            shown_height - float(picture["bottom"]),
+            float(picture["x1"]),
+            shown_height - float(picture["top"]),
+        )
+        for picture in layout_page.images
+    ]
+
+
 def _redact_pdf(
     data: bytes,
     document: ExtractedDocument,
     categories: set[DataCategory] | None,
     findings: list[Finding] | None,
-) -> tuple[bytes, int, int]:
-    """Paint a box over every flagged detail, on the document as it is.
+) -> tuple[bytes, int, int, list[str]]:
+    """Paint a box over every detail the plan covers, on the document as it is.
 
     Nothing else in the file is touched: its images, fonts, layout and compressed
     streams all stay as they were. That is also what lets a restored copy be made
@@ -352,12 +461,11 @@ def _redact_pdf(
     if reader.is_encrypted and not reader.decrypt(""):
         raise ValueError("Encrypted document requires a password")
     writer = PdfWriter(clone_from=reader)
+    plan = plan_for(document)
     by_number = {page.number: page for page in document.pages}
-    cover_whole = document.document_type == "identity_document" and (
-        document.has_images or DataCategory.BIOMETRIC_PHOTO in (categories or set())
-    )
     drawn = 0
     unplaced = 0
+    codes = 0
     with pdfplumber.open(io.BytesIO(data)) as layout:
         for index, page in enumerate(writer.pages):
             extracted = by_number.get(index + 1)
@@ -371,43 +479,62 @@ def _redact_pdf(
             rotation = int(layout.pages[index].rotation) if index < len(layout.pages) else 0
             turned = rotation in (90, 270)
             flagged = _flagged_spans(findings, index + 1, categories)
-            boxes: list[Box]
-            if cover_whole:
-                boxes = [mediabox]
-            elif extracted is not None and extracted.boxes:
-                # A scanned page: the OCR token boxes are pixels on a render of the page
-                # as displayed, at OCR_SCALE, measured from its top-left corner.
-                crop = page.cropbox
-                cropbox = (float(crop.left), float(crop.bottom), float(crop.right), float(crop.top))
-                shown_height = cropbox[2] - cropbox[0] if turned else cropbox[3] - cropbox[1]
-                pixel_boxes, missed = _ocr_boxes(extracted, categories, flagged)
-                unplaced += missed
-                boxes = [
+            crop = page.cropbox
+            cropbox = (float(crop.left), float(crop.bottom), float(crop.right), float(crop.top))
+            # A render covers the crop box; the layout measures against the whole page.
+            render_height = cropbox[2] - cropbox[0] if turned else cropbox[3] - cropbox[1]
+            layout_height = mediabox[2] - mediabox[0] if turned else mediabox[3] - mediabox[1]
+
+            def from_pixels(
+                pixels: list[Box],
+                height: float = render_height,
+                turn: int = rotation,
+                box: Box = cropbox,
+            ) -> list[Box]:
+                """Pixel boxes on the render, mapped onto the page's own coordinates."""
+                return [
                     _user_space(
                         (
                             left / OCR_SCALE,
-                            shown_height - bottom / OCR_SCALE,
+                            height - bottom / OCR_SCALE,
                             right / OCR_SCALE,
-                            shown_height - top / OCR_SCALE,
+                            height - top / OCR_SCALE,
                         ),
-                        rotation,
-                        cropbox,
+                        turn,
+                        box,
                     )
-                    for left, top, right, bottom in pixel_boxes
+                    for left, top, right, bottom in pixels
                 ]
+
+            boxes: list[Box] = []
+            if extracted is not None and extracted.boxes:
+                # A scanned page: the OCR token boxes are pixels on a render of the page
+                # as displayed, at OCR_SCALE, measured from its top-left corner.
+                pixel_boxes, missed = _ocr_boxes(
+                    extracted, spans_to_cover(extracted.text, plan, categories, flagged)
+                )
+                unplaced += missed
+                boxes = from_pixels(pixel_boxes)
             elif index < len(layout.pages):
-                values = [extracted.text[start:end] for start, end in flagged] if extracted else []
+                values = (
+                    [(extracted.text[start:end], category) for start, end, category in flagged]
+                    if extracted is not None
+                    else []
+                )
                 shown_boxes, missed = _pdf_page_boxes(
-                    layout.pages[index],
-                    categories,
-                    values,
-                    mediabox[2] - mediabox[0] if turned else mediabox[3] - mediabox[1],
-                    turned,
+                    layout.pages[index], plan, categories, values, layout_height, turned
                 )
                 unplaced += missed
                 boxes = [_user_space(box, rotation, mediabox) for box in shown_boxes]
-            else:
-                boxes = []
+            if plan.cover_codes and index < MAX_CODE_PAGES:
+                found = from_pixels(find_qr_codes(_rendered_page(data, index)))
+                codes += len(found)
+                boxes.extend(found)
+            if plan.cover_pictures and index < len(layout.pages):
+                boxes.extend(
+                    _user_space(box, rotation, mediabox)
+                    for box in _picture_boxes(layout.pages[index], layout_height)
+                )
             clipped = []
             for x0, y0, x1, y1 in _merge(boxes):
                 box = (
@@ -423,7 +550,13 @@ def _redact_pdf(
                 drawn += len(clipped)
     output = io.BytesIO()
     writer.write(output)
-    return output.getvalue(), drawn, unplaced
+    notes = _scheme_notes(plan, document, codes)
+    if plan.cover_codes and len(writer.pages) > MAX_CODE_PAGES:
+        notes.append(
+            f"Codes were looked for on the first {MAX_CODE_PAGES} pages only; any QR "
+            "code further in is not covered."
+        )
+    return output.getvalue(), drawn, unplaced, notes
 
 
 def _redact_image(
@@ -431,28 +564,30 @@ def _redact_image(
     document: ExtractedDocument,
     categories: set[DataCategory] | None,
     findings: list[Finding] | None,
-) -> tuple[bytes, int, int]:
+) -> tuple[bytes, int, int, list[str]]:
     """Paint the boxes onto the pixels, keeping what they covered inside the file."""
     from PIL import Image, ImageDraw
     from PIL.PngImagePlugin import PngInfo
 
     with Image.open(io.BytesIO(data)) as original:
         image = original.convert("RGB")
-    boxes: list[Box]
+    plan = plan_for(document)
+    boxes: list[Box] = []
     unplaced = 0
-    if (
-        DataCategory.BIOMETRIC_PHOTO in (categories or set())
-        or document.document_type == "identity_document"
-    ):
-        boxes = [(0, 0, image.width, image.height)]
-    else:
-        boxes = []
-        for page in document.pages:
-            found, missed = _ocr_boxes(
-                page, categories, _flagged_spans(findings, page.number, categories)
-            )
-            boxes.extend(found)
-            unplaced += missed
+    for page in document.pages:
+        found, missed = _ocr_boxes(
+            page,
+            spans_to_cover(
+                page.text, plan, categories, _flagged_spans(findings, page.number, categories)
+            ),
+        )
+        boxes.extend(found)
+        unplaced += missed
+    codes = 0
+    if plan.cover_codes:
+        found_codes = find_qr_codes(image)
+        codes = len(found_codes)
+        boxes.extend(found_codes)
     drawing = ImageDraw.Draw(image)
     covered: list[dict[str, Any]] = []
     for x0, y0, x1, y1 in _merge(boxes):
@@ -475,7 +610,15 @@ def _redact_image(
     output = io.BytesIO()
     # New encoder, no exif/icc/xmp parameters: metadata bytes are not copied.
     image.save(output, format="PNG", pnginfo=info)
-    return output.getvalue(), len(covered), unplaced
+    notes = _scheme_notes(plan, document, codes)
+    if plan.cover_pictures:
+        # A flat scan has no picture the file marks out as one, so unlike a PDF there
+        # is nothing here to put a box over. Say so rather than imply the face is gone.
+        notes.append(
+            "The photograph on this document is still visible: a scanned page gives "
+            "no way to tell it from the rest of the picture."
+        )
+    return output.getvalue(), len(covered), unplaced, notes
 
 
 def unredact_document(data: bytes, filename: str) -> RedactionResult:
@@ -574,6 +717,7 @@ def redact_document(
     warnings: list[str] = []
     boxes = 0
     unplaced = 0
+    identity = document.document_type == "identity_document"
     if suffix in IMAGE_SUFFIXES:
         if strip_metadata:
             from PIL import Image
@@ -584,7 +728,11 @@ def redact_document(
             image.save(output, format="PNG")
             content = output.getvalue()
         else:
-            content, boxes, unplaced = _redact_image(data, document, categories, findings)
+            if identity and document.partial:
+                # Half-read text on an ID is where the number goes uncovered.
+                raise ValueError("Cannot certify redaction of an incompletely read document")
+            content, boxes, unplaced, notes = _redact_image(data, document, categories, findings)
+            warnings.extend(notes)
         new_name, mime = "redacted-image.png", "image/png"
     elif suffix in TEXT_SUFFIXES:
         if document.partial:
@@ -597,7 +745,8 @@ def redact_document(
             raise ValueError("Cannot certify redaction of an incompletely extracted document")
         if suffix != ".pdf" and not data.startswith(b"%PDF-"):
             raise ValueError("Only PDF, image and plain-text files can be given a redacted copy")
-        content, boxes, unplaced = _redact_pdf(data, document, categories, findings)
+        content, boxes, unplaced, notes = _redact_pdf(data, document, categories, findings)
+        warnings.extend(notes)
         new_name, mime = "redacted-document.pdf", "application/pdf"
     if unplaced:
         raise ValueError("Some details could not be located on the page to be covered")
@@ -618,8 +767,14 @@ def redact_document(
     else:
         # The boxes are the redaction: every one drawn must be in the file, and any
         # match that had nowhere to be drawn has already refused the copy above.
+        # An identity document with nothing covered is not a redacted copy, whatever
+        # the extraction made of it; anything else may legitimately have nothing on it.
         verified = redaction_marks(content, new_name) == boxes and (
-            boxes > 0 or not document.pages or not any(page.text.strip() for page in document.pages)
+            boxes > 0
+            or (
+                not identity
+                and (not document.pages or not any(page.text.strip() for page in document.pages))
+            )
         )
         warnings.append(
             "Black boxes cover the details. What is under them stays in the file, so the "

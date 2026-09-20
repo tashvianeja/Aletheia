@@ -4,6 +4,7 @@ import argparse
 import io
 import zipfile
 from pathlib import Path
+from typing import Any
 from xml.sax.saxutils import escape
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -11,6 +12,11 @@ ROOT = Path(__file__).resolve().parents[1]
 SYNTHETIC_NAME = "Morgan Testperson"
 SYNTHETIC_DOB = "1988-02-29"
 SYNTHETIC_CARD = "4111111111111111"
+# An Aadhaar number carries a Verhoeff check digit, so the fixture computes its own
+# rather than hard-coding one: a number that fails the checksum would not be detected
+# at all and the fixture would pass a test that proves nothing.
+SYNTHETIC_AADHAAR_BODY = "23456789012"
+SYNTHETIC_VID_BODY = "901234567890123"
 
 
 def _mrz_digit(value: str) -> str:
@@ -54,6 +60,119 @@ def synthetic_mrz() -> str:
     second = second_without_composite + _mrz_digit(composite_source)
     assert len(first) == len(second) == 44
     return first + "\n" + second
+
+
+def synthetic_aadhaar() -> str:
+    """A synthetic Aadhaar number, 4-4-4, with a real Verhoeff check digit."""
+    from privacy_guardian.analysis.pii.validators import verhoeff_digit
+
+    digits = SYNTHETIC_AADHAAR_BODY + verhoeff_digit(SYNTHETIC_AADHAAR_BODY)
+    return " ".join(digits[start : start + 4] for start in (0, 4, 8))
+
+
+def synthetic_vid() -> str:
+    """A synthetic Virtual ID, the sixteen-digit stand-in printed under the number."""
+    from privacy_guardian.analysis.pii.validators import verhoeff_digit
+
+    digits = SYNTHETIC_VID_BODY + verhoeff_digit(SYNTHETIC_VID_BODY)
+    return " ".join(digits[start : start + 4] for start in (0, 4, 8, 12))
+
+
+def _qr_symbol(modules: int = 33, scale: int = 6, seed: int = 7) -> Any:
+    """A QR-shaped symbol: the three finder patterns, timing rows, and noise between.
+
+    Nothing reads this, and nothing in Privacy Guardian decodes a QR code either — it
+    locates one by its finder patterns, which is exactly what this draws.
+    """
+    import random
+
+    from PIL import Image, ImageDraw
+
+    rng = random.Random(seed)
+    grid = [[rng.randint(0, 1) for _ in range(modules)] for _ in range(modules)]
+
+    def finder(row: int, column: int) -> None:
+        for down in range(-1, 8):
+            for across in range(-1, 8):
+                y, x = row + down, column + across
+                if not (0 <= y < modules and 0 <= x < modules):
+                    continue
+                if down in (-1, 7) or across in (-1, 7):
+                    grid[y][x] = 0
+                elif down in (0, 6) or across in (0, 6) or (2 <= down <= 4 and 2 <= across <= 4):
+                    grid[y][x] = 1
+                else:
+                    grid[y][x] = 0
+
+    finder(0, 0)
+    finder(0, modules - 7)
+    finder(modules - 7, 0)
+    for index in range(8, modules - 8):
+        grid[6][index] = grid[index][6] = 1 - index % 2
+    image = Image.new("RGB", (modules * scale, modules * scale), "white")
+    draw = ImageDraw.Draw(image)
+    for row in range(modules):
+        for column in range(modules):
+            if grid[row][column]:
+                draw.rectangle(
+                    (
+                        column * scale,
+                        row * scale,
+                        column * scale + scale - 1,
+                        row * scale + scale - 1,
+                    ),
+                    fill="black",
+                )
+    return image
+
+
+def _aadhaar_pdf() -> bytes:
+    """A synthetic Aadhaar card: the details UIDAI prints, in the places it prints them."""
+    from PIL import Image, ImageDraw
+    from reportlab.lib.utils import ImageReader
+    from reportlab.pdfgen.canvas import Canvas
+
+    output = io.BytesIO()
+    canvas = Canvas(output, pagesize=(612, 396), pageCompression=1)
+    canvas.setTitle("Synthetic Aadhaar fixture - not valid")
+    canvas.setAuthor("")
+    canvas.setFont("Helvetica-Bold", 15)
+    canvas.drawString(150, 360, "GOVERNMENT OF INDIA")
+    canvas.setFont("Helvetica", 10)
+    canvas.drawString(120, 344, "Unique Identification Authority of India")
+    portrait = Image.new("RGB", (160, 200), "#e8dccb")
+    drawing = ImageDraw.Draw(portrait)
+    drawing.ellipse((45, 25, 115, 95), fill="#8a6f52")
+    drawing.rectangle((28, 98, 132, 185), fill="#8a6f52")
+    canvas.drawImage(ImageReader(portrait), 40, 200, width=96, height=120)
+    canvas.setFont("Helvetica", 13)
+    canvas.drawString(160, 300, f"Name: {SYNTHETIC_NAME}")
+    canvas.drawString(160, 280, "DOB: 29/02/1988")
+    canvas.drawString(160, 260, "Gender: Female")
+    canvas.setFont("Helvetica-Bold", 22)
+    canvas.drawString(160, 215, synthetic_aadhaar())
+    canvas.setFont("Helvetica", 11)
+    canvas.drawString(160, 196, f"VID : {synthetic_vid()}")
+    canvas.drawString(40, 170, "Aadhaar - Aam Aadmi ka Adhikar")
+    canvas.setFont("Helvetica", 10)
+    canvas.drawString(40, 140, "Address: S/O Jordan Testperson, 12 Nehru Marg,")
+    canvas.drawString(40, 126, "Ward 4, Kanpur Nagar, Uttar Pradesh 208001")
+    canvas.drawString(40, 104, "Mobile: 9876543210")
+    canvas.drawString(40, 90, "Email: morgan.testperson@example.test")
+    canvas.drawImage(ImageReader(_qr_symbol()), 470, 80, width=110, height=110)
+    canvas.save()
+    return output.getvalue()
+
+
+def _aadhaar_png(pdf: bytes) -> bytes:
+    """The same card as a scan, which is how one usually arrives: pixels and no text."""
+    import pypdfium2
+
+    with pypdfium2.PdfDocument(pdf) as document:
+        image = document[0].render(scale=2.5).to_pil().convert("RGB")
+    output = io.BytesIO()
+    image.save(output, format="PNG")
+    return output.getvalue()
 
 
 def _minimal_pdf(lines: list[str]) -> bytes:
@@ -146,8 +265,11 @@ def _jpeg_with_gps() -> bytes:
 
 def generate(output_dir: Path = ROOT) -> list[Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
+    aadhaar = _aadhaar_pdf()
     documents = {
         "passport_synthetic.pdf": _passport_pdf(),
+        "aadhaar_synthetic.pdf": aadhaar,
+        "aadhaar_synthetic.png": _aadhaar_png(aadhaar),
         "financial_synthetic.docx": _minimal_docx(
             ["SYNTHETIC TEST DOCUMENT", SYNTHETIC_NAME, f"Test card: {SYNTHETIC_CARD}"]
         ),

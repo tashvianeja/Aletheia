@@ -124,6 +124,69 @@ def nhs_mod11(value: str) -> bool:
     return check != 10 and (0 if check == 11 else check) == int(digits[-1])
 
 
+# Verhoeff's dihedral-group checksum, which is what an Aadhaar number carries in its
+# twelfth digit. Unlike Luhn it catches every single-digit error and every transposition
+# of neighbours, which is what makes it worth checking a bare twelve-digit group against:
+# a number that passes this, starts 2-9 and sits on a card that names UIDAI is an Aadhaar
+# number, not a reference or an order code that happens to be twelve digits long.
+_VERHOEFF_MULTIPLY = (
+    (0, 1, 2, 3, 4, 5, 6, 7, 8, 9),
+    (1, 2, 3, 4, 0, 6, 7, 8, 9, 5),
+    (2, 3, 4, 0, 1, 7, 8, 9, 5, 6),
+    (3, 4, 0, 1, 2, 8, 9, 5, 6, 7),
+    (4, 0, 1, 2, 3, 9, 5, 6, 7, 8),
+    (5, 9, 8, 7, 6, 0, 4, 3, 2, 1),
+    (6, 5, 9, 8, 7, 1, 0, 4, 3, 2),
+    (7, 6, 5, 9, 8, 2, 1, 0, 4, 3),
+    (8, 7, 6, 5, 9, 3, 2, 1, 0, 4),
+    (9, 8, 7, 6, 5, 4, 3, 2, 1, 0),
+)
+_VERHOEFF_PERMUTE = (
+    (0, 1, 2, 3, 4, 5, 6, 7, 8, 9),
+    (1, 5, 7, 6, 2, 8, 3, 0, 9, 4),
+    (5, 8, 0, 3, 7, 9, 6, 1, 4, 2),
+    (8, 9, 1, 6, 0, 4, 3, 5, 2, 7),
+    (9, 4, 5, 3, 1, 2, 6, 8, 7, 0),
+    (4, 2, 8, 6, 5, 7, 3, 9, 0, 1),
+    (2, 7, 9, 3, 8, 0, 6, 4, 1, 5),
+    (7, 0, 4, 6, 9, 1, 3, 2, 5, 8),
+)
+
+
+def verhoeff(value: str) -> bool:
+    digits = re.sub(r"[\s-]", "", value)
+    if not digits.isascii() or not digits.isdigit():
+        return False
+    check = 0
+    for index, char in enumerate(reversed(digits)):
+        check = _VERHOEFF_MULTIPLY[check][_VERHOEFF_PERMUTE[index % 8][int(char)]]
+    return check == 0
+
+
+def verhoeff_digit(body: str) -> str:
+    """The digit that completes `body` into a number Verhoeff accepts."""
+    check = 0
+    for index, char in enumerate(reversed(body)):
+        check = _VERHOEFF_MULTIPLY[check][_VERHOEFF_PERMUTE[(index + 1) % 8][int(char)]]
+    return str((0, 4, 3, 2, 1, 5, 6, 7, 8, 9)[check])
+
+
+def aadhaar_number(value: str) -> bool:
+    digits = re.sub(r"[\s-]", "", value)
+    # UIDAI never issues a number starting 0 or 1, which is what keeps a date, a
+    # quantity or a zero-padded reference from being read as somebody's Aadhaar.
+    if not re.fullmatch(r"[2-9]\d{11}", digits) or len(set(digits)) == 1:
+        return False
+    return verhoeff(digits)
+
+
+def aadhaar_vid(value: str) -> bool:
+    digits = re.sub(r"[\s-]", "", value)
+    if not re.fullmatch(r"\d{16}", digits) or len(set(digits)) == 1:
+        return False
+    return verhoeff(digits)
+
+
 def ssn_structure(value: str) -> bool:
     compact = re.sub(r"[\s-]", "", value)
     if not re.fullmatch(r"\d{9}", compact):

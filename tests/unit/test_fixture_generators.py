@@ -4,10 +4,14 @@ import json
 import zipfile
 from pathlib import Path
 
-from privacy_guardian.analysis.pii.validators import passport_mrz
+from privacy_guardian.analysis.pii.validators import aadhaar_number, aadhaar_vid, passport_mrz
 from tests.fixtures.generate.generate_corpora import generate as generate_corpora
 from tests.fixtures.generate.generate_documents import generate as generate_documents
-from tests.fixtures.generate.generate_documents import synthetic_mrz
+from tests.fixtures.generate.generate_documents import (
+    synthetic_aadhaar,
+    synthetic_mrz,
+    synthetic_vid,
+)
 from tests.fixtures.generate.generate_scenarios import (
     build_scenarios,
 )
@@ -65,12 +69,23 @@ def test_corpus_generator_produces_annotated_balanced_corpora(tmp_path: Path) ->
 def test_document_generator_outputs_parseable_formats(tmp_path: Path) -> None:
     generated = {path.name: path for path in generate_documents(tmp_path)}
     assert generated["passport_synthetic.pdf"].read_bytes().startswith(b"%PDF-")
+    assert generated["aadhaar_synthetic.pdf"].read_bytes().startswith(b"%PDF-")
+    assert generated["aadhaar_synthetic.png"].read_bytes().startswith(b"\x89PNG")
     with zipfile.ZipFile(generated["financial_synthetic.docx"]) as archive:
         document = archive.read("word/document.xml").decode("utf-8")
         assert "SYNTHETIC TEST DOCUMENT" in document
         assert "4111111111111111" in document
     jpeg = generated["social_photo_gps_synthetic.jpg"].read_bytes()
     assert jpeg.startswith(b"\xff\xd8") and jpeg.endswith(b"\xff\xd9")
+
+
+def test_synthetic_aadhaar_and_vid_carry_real_verhoeff_check_digits() -> None:
+    """A fixture number that failed its checksum would not be detected at all."""
+    assert aadhaar_number(synthetic_aadhaar())
+    assert aadhaar_vid(synthetic_vid())
+    assert synthetic_aadhaar().split() == [
+        synthetic_aadhaar()[index : index + 4] for index in (0, 5, 10)
+    ]
 
 
 def test_synthetic_passport_mrz_has_valid_td3_check_digits() -> None:
