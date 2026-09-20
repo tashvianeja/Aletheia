@@ -151,7 +151,7 @@ medical, financial or credential data. That boundary is in the code
   extracted text. It is deleted after your retention period.
 - There is no telemetry, no account and no server.
 
-Network access is limited to four things, all of which you trigger: an optional OpenAI call when
+Network access is limited to four things, all of which you trigger: an optional Gemini call when
 you enable cloud assistance, fetching a policy page the site itself links to, the tracker-list
 refresh button, and the update check. Cloud assistance is off by default; when on, it sends
 category tokens rather than values and drops anything that still looks like an identifier. See
@@ -231,7 +231,7 @@ booleans are `true`/`false` and lists are JSON arrays.
 | `llm.deep_check_narrative` | `..._LLM__DEEP_CHECK_NARRATIVE` | `true` | Improve thorough-check summaries. |
 
 API keys never go in `settings.toml` or the environment. The app stores them in the system keychain
-under service `PrivacyGuardian`, account `openai_api_key`.
+under service `PrivacyGuardian`, account `gemini_api_key`.
 
 ---
 

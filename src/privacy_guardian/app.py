@@ -115,6 +115,7 @@ def diagnose(settings: Settings) -> dict[str, Any]:
         "python": ".".join(str(i) for i in sys.version_info[:3]),
         "ocr_available": bool(shutil.which("tesseract")),
         "llm_enabled": settings.llm.enabled,
+        "llm_model": settings.llm.model,
         "database_present": database.exists(),
         "database_counts": counts,
         "token_present": (settings.data_dir / "ipc.token").exists(),
@@ -211,6 +212,7 @@ def main() -> int:
         error = Signal(str)
         update_ready = Signal(str)
         action_ready = Signal(str, str)
+        llm_test_ready = Signal(object)
 
     class Controller:
         def __init__(self) -> None:
@@ -242,6 +244,7 @@ def main() -> int:
             )
             self.bridge.focus_requested.connect(self.show_dashboard)
             self.bridge.deep_check_requested.connect(self.deep_check)
+            self.bridge.llm_test_ready.connect(self._llm_test_ready)
             from privacy_guardian.sensors.hotkey import GlobalHotkey
 
             self.hotkey = GlobalHotkey(settings.hotkey, self.bridge.deep_check_requested.emit)
@@ -526,6 +529,28 @@ def main() -> int:
             if not registered:
                 return False, tr("bridge_none")
             return True, tr("bridge_ready", browsers=", ".join(registered))
+
+        def test_llm_connection(self, key: str, model: str) -> None:
+            """Try the key and model the person is looking at, off the interface thread.
+
+            A twenty-second timeout is a frozen window if it is awaited where the
+            buttons live, so this goes the same way every other slow thing does.
+            """
+
+            async def run() -> None:
+                from privacy_guardian.llm.client import ConnectionCheck, check_connection
+
+                try:
+                    result = await asyncio.to_thread(check_connection, model, key or None)
+                except Exception:
+                    result = ConnectionCheck(ok=False, reason="api_status", model=model)
+                self.bridge.llm_test_ready.emit(result)
+
+            self.submit(run())
+
+        def _llm_test_ready(self, check: object) -> None:
+            if self.dashboard is not None:
+                self.dashboard.show_llm_result(check)
 
         def update_trackers(self) -> None:
             async def update() -> None:

@@ -66,6 +66,9 @@ class UiController:
     def deep_check(self) -> None:
         self.calls.append(("deep_check",))
 
+    def test_llm_connection(self, key: str, model: str) -> None:
+        self.calls.append(("test_llm", key, model))
+
     def pause(self, seconds: int) -> None:
         self.calls.append(("pause", seconds))
 

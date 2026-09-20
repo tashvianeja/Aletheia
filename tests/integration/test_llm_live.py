@@ -9,13 +9,18 @@ from privacy_guardian.llm.client import LLMClient
 from privacy_guardian.llm.schemas import PolishedExplanation
 
 
-@pytest.mark.llm
-def test_opt_in_real_responses_api_uses_only_synthetic_category_context() -> None:
+def _live_key() -> str:
     if os.getenv("PRIVACY_GUARDIAN_RUN_LLM_TEST") != "1":
         pytest.skip("set PRIVACY_GUARDIAN_RUN_LLM_TEST=1 to opt into the provider call")
-    key = os.getenv("OPENAI_API_KEY")
+    key = os.getenv("GEMINI_API_KEY")
     if not key:
-        pytest.skip("OPENAI_API_KEY is absent")
+        pytest.skip("GEMINI_API_KEY is absent")
+    return key
+
+
+@pytest.mark.llm
+def test_opt_in_real_gemini_call_uses_only_synthetic_category_context() -> None:
+    key = _live_key()
     fallback = PolishedExplanation(
         explanation="A site requests an email address.", rationale=["Account contact"]
     )
@@ -33,3 +38,15 @@ def test_opt_in_real_responses_api_uses_only_synthetic_category_context() -> Non
     assert result.value.explanation
     assert result.assisted is True
     assert result.fallback_reason is None
+
+
+@pytest.mark.llm
+def test_opt_in_connection_check_reaches_the_real_api() -> None:
+    """What the Preferences "Test" button does, against the provider rather than a fake."""
+    from privacy_guardian.llm.client import check_connection
+
+    key = _live_key()
+    check = check_connection(LLMSettings().model, key=key)
+    assert check.ok is True, check.reason
+    assert check.latency_ms > 0
+    assert check.models, "a working key should be able to list the models it can call"

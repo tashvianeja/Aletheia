@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 from privacy_guardian.core.events import DataCategory, Decision, Outcome, PrivacyEvent, Requester
 from privacy_guardian.engine.preferences import LearnedRule, Preference
+from privacy_guardian.llm.client import SUGGESTED_MODELS, ConnectionCheck
 from privacy_guardian.ui.dashboard import Dashboard
 
 
@@ -235,3 +236,101 @@ def test_refresh_timer_follows_dashboard_visibility(qtbot, ui_controller) -> Non
     qtbot.waitUntil(dashboard.timer.isActive)
     dashboard.close()
     qtbot.waitUntil(lambda: not dashboard.timer.isActive())
+
+
+def test_the_model_picker_offers_suggestions_and_keeps_a_configured_one(
+    qtbot, ui_controller
+) -> None:
+    """A hard-coded model list goes stale, so whatever is configured stays selectable."""
+    ui_controller.settings.llm.model = "gemini-something-unreleased"
+    dashboard = Dashboard(ui_controller)
+    qtbot.addWidget(dashboard)
+    offered = [dashboard.model.itemText(index) for index in range(dashboard.model.count())]
+    assert SUGGESTED_MODELS[0] in offered
+    assert dashboard.model.currentText() == "gemini-something-unreleased"
+    assert dashboard.model.isEditable()
+
+
+def test_testing_the_model_asks_the_service_rather_than_blocking_the_window(
+    qtbot, ui_controller
+) -> None:
+    dashboard = Dashboard(ui_controller)
+    qtbot.addWidget(dashboard)
+    dashboard.api_key.setText("synthetic-key")
+    dashboard.model.setCurrentText("gemini-2.5-flash")
+    dashboard.test_llm()
+
+    assert ("test_llm", "synthetic-key", "gemini-2.5-flash") in ui_controller.calls
+    # The button stays down until an answer comes back, so it cannot be fired twice.
+    assert dashboard.llm_test.isEnabled() is False
+    assert dashboard.llm_status.text()
+
+
+def test_a_successful_test_replaces_the_guesses_with_what_the_key_can_call(
+    qtbot, ui_controller
+) -> None:
+    dashboard = Dashboard(ui_controller)
+    qtbot.addWidget(dashboard)
+    dashboard.llm_enabled.setChecked(True)
+    dashboard.show_llm_result(
+        ConnectionCheck(
+            ok=True,
+            model="gemini-2.5-flash",
+            latency_ms=412,
+            models=["gemini-2.5-flash", "gemini-2.5-pro"],
+        )
+    )
+    offered = [dashboard.model.itemText(index) for index in range(dashboard.model.count())]
+    assert offered == ["gemini-2.5-flash", "gemini-2.5-pro"]
+    assert dashboard.model.currentText() == "gemini-2.5-flash"
+    assert "412" in dashboard.llm_status.text()
+    assert dashboard.llm_test.isEnabled() is True
+
+
+def test_a_failed_test_says_which_setting_to_change(qtbot, ui_controller) -> None:
+    dashboard = Dashboard(ui_controller)
+    qtbot.addWidget(dashboard)
+    dashboard.show_llm_result(ConnectionCheck(ok=False, reason="key_unavailable"))
+    status = dashboard.llm_status.text()
+    assert "API key" in status
+    # The reason is in the reader's terms, never the provider's error code.
+    assert "key_unavailable" not in status
+    assert dashboard.llm_test.isEnabled() is True
+
+
+def test_the_chosen_model_is_what_gets_saved(qtbot, ui_controller, monkeypatch) -> None:
+    dashboard = Dashboard(ui_controller)
+    qtbot.addWidget(dashboard)
+    monkeypatch.setattr(
+        "privacy_guardian.sensors.hotkey.GlobalHotkey", lambda *_: FakeGlobalHotkey()
+    )
+    dashboard.model.setCurrentText("gemini-2.5-pro")
+    dashboard.save_settings()
+    assert ui_controller.settings.llm.model == "gemini-2.5-pro"
+
+
+class FakeGlobalHotkey:
+    def start(self) -> None:
+        return None
+
+    def stop(self) -> None:
+        return None
+
+
+def test_a_working_key_behind_an_unticked_box_says_so(qtbot, ui_controller) -> None:
+    """The one outcome that looks like success and does nothing."""
+    dashboard = Dashboard(ui_controller)
+    qtbot.addWidget(dashboard)
+    dashboard.llm_enabled.setChecked(False)
+    dashboard.show_llm_result(ConnectionCheck(ok=True, model="gemini-2.5-flash", latency_ms=90))
+    assert "still switched off" in dashboard.llm_status.text()
+
+
+def test_a_failure_is_not_drawn_as_a_hint(qtbot, ui_controller) -> None:
+    dashboard = Dashboard(ui_controller)
+    qtbot.addWidget(dashboard)
+    dashboard.show_llm_result(ConnectionCheck(ok=False, reason="timeout"))
+    assert dashboard.llm_status.property("role") == "warn"
+    dashboard.llm_enabled.setChecked(True)
+    dashboard.show_llm_result(ConnectionCheck(ok=True, model="gemini-2.5-flash", latency_ms=90))
+    assert dashboard.llm_status.property("role") == "muted"

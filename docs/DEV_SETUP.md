@@ -50,7 +50,7 @@ The extension source is in `extension/`. Chromium uses the fixed development ext
 
 The data directory defaults to `~/Library/Application Support/PrivacyGuardian` on macOS and `%APPDATA%\\PrivacyGuardian` on Windows. Override it with `PRIVACY_GUARDIAN_DATA_DIR` for a disposable development profile.
 
-Optional OpenAI credentials are stored through the operating-system keychain only, using service `PrivacyGuardian` and account `openai_api_key`. The UI/API rejects unsupported keyring backends. Do not put keys in `.env`, `settings.toml`, or test fixtures.
+Optional Gemini credentials are stored through the operating-system keychain only, using service `PrivacyGuardian` and account `gemini_api_key`. The UI/API rejects unsupported keyring backends. Do not put keys in `.env`, `settings.toml`, or test fixtures.
 
 ## Fresh-clone verification procedure
 
@@ -78,7 +78,7 @@ make build-mac
 make uninstall-mac
 ```
 
-The worker must record command exit codes, test/coverage totals, generated extension/archive and app/DMG paths, and whether the `make e2e` and packaging stages completed. Run the browser E2E only after installing Playwright’s required browser under the environment’s documented process. Do not configure an OpenAI key: the default path must remain offline. A corresponding Windows fresh-clone/installer procedure is pending a green Windows runner.
+The worker must record command exit codes, test/coverage totals, generated extension/archive and app/DMG paths, and whether the `make e2e` and packaging stages completed. Run the browser E2E only after installing Playwright’s required browser under the environment’s documented process. Do not configure a Gemini key: the default path must remain offline. A corresponding Windows fresh-clone/installer procedure is pending a green Windows runner.
 
 ## Useful commands
 

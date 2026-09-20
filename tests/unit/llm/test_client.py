@@ -1,14 +1,25 @@
 from __future__ import annotations
 
+import subprocess
+import sys
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 import httpx
 import pytest
-from openai import APIConnectionError, APITimeoutError
+from google.genai import errors as genai_errors
+from google.genai import types as genai_types
 
 from privacy_guardian.config import LLMSettings
-from privacy_guardian.llm.client import LLMClient
+from privacy_guardian.llm.client import (
+    BASE_URL,
+    LLMClient,
+    Probe,
+    available_models,
+    build_client,
+    check_connection,
+)
 from privacy_guardian.llm.schemas import (
     DeepCheckNarrative,
     PolishedExplanation,
@@ -23,41 +34,60 @@ def fallback() -> PolishedExplanation:
 
 
 def response(
-    parsed: PolishedExplanation | None = None,
+    parsed: Any = None,
     *,
-    status: str = "completed",
-    incomplete: object | None = None,
-    refusal: bool = False,
+    finish: genai_types.FinishReason = genai_types.FinishReason.STOP,
+    block: str | None = None,
+    text: str | None = None,
 ) -> SimpleNamespace:
-    content = [SimpleNamespace(type="refusal" if refusal else "output_text")]
+    body = text if text is not None else (parsed.model_dump_json() if parsed else "")
     return SimpleNamespace(
-        status=status,
-        incomplete_details=incomplete,
-        output=[SimpleNamespace(type="message", content=content)],
-        usage=SimpleNamespace(total_tokens=17),
-        output_parsed=parsed,
+        candidates=[SimpleNamespace(finish_reason=finish)],
+        prompt_feedback=SimpleNamespace(block_reason=block),
+        usage_metadata=SimpleNamespace(
+            total_token_count=17, prompt_token_count=11, candidates_token_count=6
+        ),
+        parsed=parsed,
+        text=body,
     )
 
 
-class FakeResponses:
-    def __init__(self, result: object) -> None:
+class FakeModels:
+    def __init__(self, result: object, listing: list[Any] | None = None) -> None:
         self.result = result
+        self.listing = listing or []
         self.calls: list[dict[str, Any]] = []
 
-    def parse(self, **kwargs: Any) -> object:
+    def generate_content(self, **kwargs: Any) -> object:
         self.calls.append(kwargs)
         if isinstance(self.result, BaseException):
             raise self.result
         return self.result
 
+    def generate_content_stream(self, **kwargs: Any) -> Any:
+        self.calls.append(kwargs)
+        if isinstance(self.result, BaseException):
+            raise self.result
+        body = str(getattr(self.result, "text", ""))
+        # Fragments, the way the API actually delivers them: no single chunk is the object.
+        for start in range(0, len(body), 9):
+            yield response(None, text=body[start : start + 9])
+
+    def list(self) -> list[Any]:
+        return self.listing
+
 
 class FakeClient:
-    def __init__(self, result: object) -> None:
-        self.responses = FakeResponses(result)
+    def __init__(self, result: object, listing: list[Any] | None = None) -> None:
+        self.models = FakeModels(result, listing)
 
 
 def enabled_settings() -> LLMSettings:
-    return LLMSettings(enabled=True, model="test-reasoning-model")
+    return LLMSettings(enabled=True, model="gemini-test-model")
+
+
+def transport(code: int) -> genai_errors.ClientError:
+    return genai_errors.ClientError(code, {"error": {"message": "synthetic", "status": "ERROR"}})
 
 
 def test_disabled_client_returns_fallback_without_touching_provider() -> None:
@@ -68,10 +98,10 @@ def test_disabled_client_returns_fallback_without_touching_provider() -> None:
     assert result.value == fallback()
     assert result.assisted is False
     assert result.fallback_reason == "disabled"
-    assert provider.responses.calls == []
+    assert provider.models.calls == []
 
 
-def test_success_uses_typed_responses_and_sanitizes_input() -> None:
+def test_success_uses_structured_output_and_sanitizes_input() -> None:
     parsed = PolishedExplanation(
         explanation="This site requests a card number.", rationale=["Payment"]
     )
@@ -84,31 +114,44 @@ def test_success_uses_typed_responses_and_sanitizes_input() -> None:
     )
     assert result.assisted is True
     assert result.value == parsed
-    call = provider.responses.calls[0]
-    assert call["model"] == "test-reasoning-model"
-    assert call["text_format"] is PolishedExplanation
-    assert call["store"] is False
-    assert call["prompt_cache_key"].endswith("explanation_polishing")
-    assert "4111111111111111" not in repr(call["input"])
+    call = provider.models.calls[0]
+    assert call["model"] == "gemini-test-model"
+    assert call["config"].response_schema is PolishedExplanation
+    assert call["config"].response_mime_type == "application/json"
+    assert call["config"].automatic_function_calling.disable is True
+    assert "4111111111111111" not in str(call["contents"])
+
+
+def test_a_streamed_answer_is_assembled_before_it_is_validated() -> None:
+    """No single fragment is the object, so the schema is applied to the whole of it."""
+    parsed = PolishedExplanation(explanation="A long public policy was read.", rationale=["Terms"])
+    provider = FakeClient(response(parsed))
+    progress: list[str] = []
+    result = LLMClient(enabled_settings(), client=provider).complete(
+        "policy_refinement",
+        {"public_document": "synthetic"},
+        PolishedExplanation,
+        fallback(),
+        stream=True,
+        on_progress=progress.append,
+    )
+    assert result.assisted is True
+    assert result.value == parsed
+    assert progress and set(progress) == {"Receiving privacy analysis"}
 
 
 @pytest.mark.parametrize(
     ("provider_result", "reason"),
     [
         (response(None), "unparsed"),
-        (response(fallback(), status="incomplete", incomplete=object()), "incomplete"),
-        (response(fallback(), refusal=True), "refusal"),
+        (response(fallback(), finish=genai_types.FinishReason.MAX_TOKENS), "incomplete"),
+        (response(fallback(), finish=genai_types.FinishReason.SAFETY), "refusal"),
+        (response(fallback(), block="PROHIBITED_CONTENT"), "refusal"),
         (ValueError("invalid typed response"), "invalid_output"),
-        (
-            APIConnectionError(
-                request=httpx.Request("POST", "https://api.openai.com/v1/responses")
-            ),
-            "connection",
-        ),
-        (
-            APITimeoutError(request=httpx.Request("POST", "https://api.openai.com/v1/responses")),
-            "timeout",
-        ),
+        (httpx.ConnectError("unreachable"), "connection"),
+        (httpx.ConnectTimeout("too slow"), "timeout"),
+        (transport(429), "rate_limit"),
+        (transport(400), "api_status"),
     ],
 )
 def test_provider_failures_return_local_fallback(provider_result: object, reason: str) -> None:
@@ -119,6 +162,14 @@ def test_provider_failures_return_local_fallback(provider_result: object, reason
     assert result.value == fallback()
     assert result.assisted is False
     assert result.fallback_reason == reason
+
+
+def test_a_missing_key_never_reaches_the_network() -> None:
+    result = LLMClient(enabled_settings(), key_provider=lambda: None).complete(
+        "explanation_polishing", {"category": "email"}, PolishedExplanation, fallback()
+    )
+    assert result.fallback_reason == "key_unavailable"
+    assert result.assisted is False
 
 
 def test_invalid_or_sensitive_model_output_falls_back() -> None:
@@ -183,4 +234,78 @@ def test_all_four_llm_uses_accept_typed_responses(use: str, schema: type[Any], v
     )
     assert result.assisted is True
     assert result.value == value
-    assert provider.responses.calls[0]["text_format"] is schema
+    assert provider.models.calls[0]["config"].response_schema is schema
+
+
+def test_the_client_pins_the_endpoint_and_declines_the_sdk_retries() -> None:
+    """An assessment that already fell back locally must not retry in the background.
+
+    The SDK attempts five times by default and will take its base URL from the
+    environment, which is a request going somewhere nobody in this app chose.
+    """
+    options = build_client("synthetic-key")._api_client._http_options
+    assert options.base_url == BASE_URL
+    assert options.retry_options.attempts == 1
+    assert options.timeout == 20_000
+
+
+def test_a_connection_test_reports_the_round_trip_and_what_the_key_can_call() -> None:
+    provider = FakeClient(
+        response(Probe(ok=True)),
+        listing=[
+            SimpleNamespace(name="models/gemini-2.5-flash", supported_actions=["generateContent"]),
+            SimpleNamespace(name="models/text-embedding-004", supported_actions=["embedContent"]),
+        ],
+    )
+    check = check_connection("gemini-2.5-flash", key="synthetic-key", client=provider)
+    assert check.ok is True
+    assert check.model == "gemini-2.5-flash"
+    # Only models that can answer a prompt: an embedding model is not a choice here.
+    assert check.models == ["gemini-2.5-flash"]
+
+
+@pytest.mark.parametrize(
+    ("model", "key", "result", "reason"),
+    [
+        ("gemini-2.5-flash", None, response(Probe(ok=True)), "key_unavailable"),
+        ("", "synthetic-key", response(Probe(ok=True)), "model_unavailable"),
+        ("gemini-2.5-flash", "synthetic-key", transport(400), "api_status"),
+        ("gemini-2.5-flash", "synthetic-key", transport(429), "rate_limit"),
+        ("gemini-2.5-flash", "synthetic-key", httpx.ConnectError("down"), "connection"),
+        ("gemini-2.5-flash", "synthetic-key", response(None), "unparsed"),
+    ],
+)
+def test_a_connection_test_says_which_setting_is_wrong(
+    model: str, key: str | None, result: object, reason: str
+) -> None:
+    check = check_connection(model, key=key, client=FakeClient(result))
+    assert check.ok is False
+    assert check.reason == reason
+
+
+def test_listing_models_survives_a_provider_that_will_not_answer() -> None:
+    assert available_models("synthetic-key", client=FakeClient(transport(400))) == []
+
+
+def test_opening_preferences_does_not_load_a_network_client() -> None:
+    """Cloud assistance is off by default, so its SDK must not be on the startup path.
+
+    Importing the provider SDK costs roughly a third of a second, and the model picker
+    needs nothing from it but a list of strings and a result type.
+    """
+    dashboard = Path(__file__).resolve().parents[3] / "src/privacy_guardian/ui/dashboard.py"
+    source = dashboard.read_text(encoding="utf-8").splitlines()
+    imports = [line for line in source if line.startswith(("import ", "from "))]
+    assert not [line for line in imports if "llm.client" in line]
+    assert any("llm.catalog" in line for line in imports)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import privacy_guardian.ui.dashboard, sys; print('google.genai' in sys.modules)",
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert result.stdout.strip() == "False"

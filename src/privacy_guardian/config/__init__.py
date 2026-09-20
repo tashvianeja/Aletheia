@@ -26,7 +26,7 @@ def data_directory(*, ignore_environment: bool = False) -> Path:
 class LLMSettings(BaseModel):
     model_config = ConfigDict(extra="forbid", validate_assignment=True)
     enabled: bool = False
-    model: str = "gpt-6-astra"
+    model: str = "gemini-flash-latest"
     policy_refinement: bool = True
     purpose_refinement: bool = True
     explanation_polishing: bool = True

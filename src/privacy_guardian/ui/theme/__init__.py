@@ -63,6 +63,7 @@ QLabel[role="section"] {{ font-size: 14px; font-weight: 600; color: {c["ink"]}; 
 QLabel[role="column"] {{ font-size: 11px; font-weight: 600; color: {c["faint"]}; }}
 QLabel[role="body"] {{ color: {c["body"]}; }}
 QLabel[role="muted"] {{ color: {c["muted"]}; }}
+QLabel[role="warn"] {{ color: {c["warn"]}; }}
 QLabel[role="metric"] {{ font-size: 26px; font-weight: 700; color: {c["ink"]}; }}
 QPushButton {{
   background: {c["surface"]}; color: {c["ink"]};

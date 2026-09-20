@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 )
 
 from privacy_guardian.engine.preferences import Preference, default_categories
+from privacy_guardian.llm.catalog import SUGGESTED_MODELS, ConnectionCheck
 from privacy_guardian.ui import icons
 from privacy_guardian.ui.theme import palette, stylesheet
 from privacy_guardian.util.i18n import tr
@@ -334,21 +335,40 @@ class Dashboard(QWidget):
         self.llm_enabled.setChecked(self.service.settings.llm.enabled)
         self.api_key = QLineEdit()
         self.api_key.setEchoMode(QLineEdit.EchoMode.Password)
-        self.model = QLineEdit(self.service.settings.llm.model)
+        # Editable, because the list of Gemini models changes faster than this app ships.
+        # A successful test replaces these suggestions with what the key can really call.
+        self.model = QComboBox()
+        self.model.setEditable(True)
+        self.set_models(SUGGESTED_MODELS, self.service.settings.llm.model)
+        self.llm_test = QPushButton(tr("llm_test"))
+        self.llm_test.clicked.connect(self.test_llm)
+        model_row = QHBoxLayout()
+        model_row.setSpacing(8)
+        model_row.addWidget(self.model, 1)
+        model_row.addWidget(self.llm_test)
+        self.llm_status = _label("", "muted")
+        self.llm_status.setWordWrap(True)
         self.hotkey = QLineEdit(self.service.settings.hotkey)
         self.theme = QComboBox()
         self.theme.addItems([tr("system"), tr("light"), tr("dark")])
+        self.model.setAccessibleName(tr("llm_model"))
+        self.llm_test.setAccessibleName(tr("llm_test"))
         for key, widget in (
             ("retention", self.retention),
             ("autostart", self.autostart),
             ("llm_enable", self.llm_enabled),
             ("api_key", self.api_key),
-            ("llm_model", self.model),
-            ("hotkey", self.hotkey),
-            ("theme", self.theme),
         ):
             widget.setAccessibleName(tr(key))
             form.addRow(tr(key), widget)
+        # Key, model and the way to prove they work belong together: a key that is
+        # present is not a key that works, and a model name that reads like a real one is
+        # not one this account can call.
+        form.addRow(tr("llm_model"), model_row)
+        form.addRow("", self.llm_status)
+        for key, control in (("hotkey", self.hotkey), ("theme", self.theme)):
+            control.setAccessibleName(tr(key))
+            form.addRow(tr(key), control)
         self.llm_toggles: dict[str, QCheckBox] = {}
         for key in (
             "policy_refinement",
@@ -686,7 +706,7 @@ class Dashboard(QWidget):
         settings.autostart = self.autostart.isChecked()
         settings.learning_enabled = self.learning_enabled.isChecked()
         settings.llm.enabled = self.llm_enabled.isChecked()
-        settings.llm.model = self.model.text()
+        settings.llm.model = self.model.currentText().strip() or settings.llm.model
         settings.hotkey = self.hotkey.text()
         settings.log_level = self.log_level.currentText()
         settings.reject_optional_cookies = self.reject_optional.isChecked()
@@ -707,6 +727,58 @@ class Dashboard(QWidget):
         if self.service.core.adapter:
             self.service.core.adapter.set_autostart(settings.autostart)
         self.service.core.store.purge(settings.retention_days)
+
+    def set_models(self, names: Any, selected: str = "") -> None:
+        """Offer these models, keeping whatever is configured even if it is not among them."""
+        current = selected or self.model.currentText().strip()
+        options = list(dict.fromkeys([*names, *([current] if current else [])]))
+        self.model.clear()
+        self.model.addItems(options)
+        if current:
+            self.model.setCurrentText(current)
+
+    def test_llm(self) -> None:
+        """Ask the configured model to answer, using the key typed here or the saved one."""
+        model = self.model.currentText().strip()
+        if not model:
+            self.show_llm_result(ConnectionCheck(ok=False, reason="model_unavailable"))
+            return
+        self.llm_test.setEnabled(False)
+        self._status_tone("muted")
+        self.llm_status.setText(tr("llm_testing"))
+        self.service.test_llm_connection(self.api_key.text().strip(), model)
+
+    def _status_tone(self, role: str) -> None:
+        """A failure that looks like a hint reads as one, so the colour follows the news."""
+        self.llm_status.setProperty("role", role)
+        style = self.llm_status.style()
+        style.unpolish(self.llm_status)
+        style.polish(self.llm_status)
+
+    def show_llm_result(self, check: Any) -> None:
+        self.llm_test.setEnabled(True)
+        if not check.ok:
+            self._status_tone("warn")
+            self.llm_status.setText(
+                tr("llm_test_failed", reason=tr("llm_reason_" + (check.reason or "api_status")))
+            )
+            return
+        self._status_tone("muted")
+        if check.models:
+            self.set_models(check.models, check.model)
+            message = tr(
+                "llm_test_ok_listed",
+                model=check.model,
+                ms=check.latency_ms,
+                count=len(check.models),
+            )
+        else:
+            message = tr("llm_test_ok", model=check.model, ms=check.latency_ms)
+        # A working key behind an unticked box is the one outcome that looks like success
+        # and does nothing, so say so rather than letting them find out later.
+        if not self.llm_enabled.isChecked():
+            message += " " + tr("llm_not_enabled")
+        self.llm_status.setText(message)
 
     def export_support(self) -> None:
         filename, _ = QFileDialog.getSaveFileName(
