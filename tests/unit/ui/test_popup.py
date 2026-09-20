@@ -67,6 +67,62 @@ def test_informational_card_can_be_closed_and_closing_it_does_nothing_else(qtbot
     assert actions == [("inform", "cancel", False)]
 
 
+def test_a_notice_offers_the_way_out_as_a_button_and_not_only_as_a_cross(qtbot) -> None:
+    """The bug this guards: a card with nothing to decide had no button at all, so the
+    only way to put it down was the cross in its corner — which reads as a card still
+    waiting for an answer nobody can find. OK is that cross, spelled out, and the two
+    have to record the same thing or the card offers two exits that mean different things."""
+    by_button: list[tuple[str, str, bool]] = []
+    by_cross: list[tuple[str, str, bool]] = []
+    with_button = InterventionPopup(
+        decision("inform", Outcome.INFORM), lambda *args: by_button.append(args)
+    )
+    with_cross = InterventionPopup(
+        decision("inform", Outcome.INFORM), lambda *args: by_cross.append(args)
+    )
+    qtbot.addWidget(with_button)
+    qtbot.addWidget(with_cross)
+    with_button.show()
+    with_cross.show()
+
+    ok = with_button.buttons["acknowledge"]
+    assert ok.text() == "OK" and ok.accessibleName() == "OK"
+    qtbot.mouseClick(ok, Qt.MouseButton.LeftButton)
+    assert with_cross.card.close_button is not None
+    qtbot.mouseClick(with_cross.card.close_button, Qt.MouseButton.LeftButton)
+
+    assert not with_button.isVisible()
+    assert by_button == by_cross == [("inform", "cancel", False)]
+
+
+def test_a_card_that_asks_for_a_decision_is_not_given_an_ok_button(qtbot) -> None:
+    """An OK beside "Don't share" and "Upload anyway" would be a third answer to a
+    question that has two, and no way to know which one it gave."""
+    popup = InterventionPopup(decision())
+    qtbot.addWidget(popup)
+
+    assert "acknowledge" not in popup.buttons
+    assert set(popup.buttons) == {"cancel", "continue", "redact"}
+
+
+def test_the_reasoning_on_a_notice_opens_inside_the_card(qtbot) -> None:
+    """The bug this guards: "Don't ask again" was never put into the notice's card, so
+    it was a window in its own right, and opening the reasoning dropped a stray tick
+    box in the middle of the screen."""
+    notice = decision("inform", Outcome.INFORM)
+    popup = InterventionPopup(notice)
+    qtbot.addWidget(popup)
+    popup.show()
+
+    assert popup.card.why_button is not None, "a notice with reasoning offers to show it"
+    assert popup.remember.isVisible() is False
+    qtbot.mouseClick(popup.card.why_button, Qt.MouseButton.LeftButton)
+
+    assert popup.remember.parent() is not None
+    assert popup.remember.window() is popup, "nothing on the card may open a window of its own"
+    assert popup.rationale.isVisible() and popup.remember.isVisible()
+
+
 def test_closing_a_desktop_notice_does_not_act_on_the_person_s_behalf(qtbot) -> None:
     """Dismissing a permission notice must not open system settings by itself."""
     from privacy_guardian.core.events import DataCategory, PermissionRequestEvent, Requester
@@ -206,7 +262,9 @@ def test_an_informational_card_still_lists_what_was_found(qtbot) -> None:
     assert popup.card.findings_box is not None
     texts = [label.text() for label in popup.card.findings_box.findChildren(QLabel)]
     assert "Shares what you do here with 4 other companies" in texts
-    assert not popup.buttons, "a notice still asks nothing"
+    assert list(popup.buttons) == ["acknowledge"], (
+        "a notice still asks nothing: its one button only says it has been read"
+    )
 
 
 def test_the_band_pulses_when_an_act_now_card_lands_and_then_rests(qtbot) -> None:

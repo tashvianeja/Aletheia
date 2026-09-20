@@ -205,6 +205,53 @@ async def test_deep_check_uses_cached_real_analyses_and_reports_all_risks(servic
 
 
 @pytest.mark.asyncio
+async def test_deep_check_says_a_part_has_started_while_it_is_still_running(
+    service: Service,
+) -> None:
+    """The bug this guards: every part of a run reported only once it was over.
+
+    Waiting for the page to answer is the longest thing a check does, and it used to
+    happen behind a checklist of four lines that all still read as "not started". The
+    lines then filled in together the moment the reply landed, so the part of the run
+    the person actually sat through was the part the card said nothing about.
+    """
+    import time
+
+    from privacy_guardian.deepcheck import PAGE_STAGES, run_deep_check
+
+    updates: list[tuple[str, str]] = []
+    service.progress_listeners.append(
+        lambda update: updates.append((update["stage"], update["state"]))
+    )
+    service.connected_browsers = {"chromium": time.monotonic()}
+    service.contexts["https://audit.example"] = {
+        "origin": "https://audit.example",
+        "analyses": {"tracking": {"profile": {"tracker_domains": ["doubleclick.net"]}}},
+    }
+    check = asyncio.create_task(run_deep_check(service, {"origin": "https://audit.example"}))
+
+    async def under_way() -> None:
+        while ("tracking", "running") not in updates:
+            await asyncio.sleep(0.01)
+
+    # The page has not answered yet, and will not until this test lets it.
+    await asyncio.wait_for(under_way(), timeout=2)
+    assert {stage for stage, state in updates if state == "running"} >= set(PAGE_STAGES)
+    assert not [stage for stage, state in updates if state in {"done", "unavailable"}], (
+        "nothing may report an answer before the page has given one"
+    )
+
+    service.context_updated.set()
+    await asyncio.wait_for(check, timeout=10)
+
+    for stage in PAGE_STAGES:
+        answers = [index for index, item in enumerate(updates) if item[0] == stage]
+        assert len(answers) == 2 and updates[answers[0]][1] == "running"
+        assert updates[answers[1]][1] in {"done", "unavailable"}
+    assert updates[-1] == ("complete", "done"), "the run is complete last, and only once"
+
+
+@pytest.mark.asyncio
 async def test_deep_check_reports_a_contract_in_words_not_in_its_own_clauses(
     service: Service,
 ) -> None:

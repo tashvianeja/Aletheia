@@ -70,16 +70,29 @@ GLYPHS = {
 }
 
 
-def svg(name: str, color: str, inner: str = "#ffffff") -> str:
-    """The glyph in `color`; `inner` is the mark cut out of a filled shape."""
+def svg(name: str, color: str, inner: str = "#ffffff", turn: float = 0.0) -> str:
+    """The glyph in `color`; `inner` is the mark cut out of a filled shape.
+
+    `turn` rotates the glyph about its own centre, in degrees. It is done inside the
+    drawing rather than to the finished pixmap so the icon keeps its exact size at
+    every angle: a spinner whose bounding box grew as it turned would nudge the row
+    beside it back and forth on every frame.
+    """
     body = GLYPHS[name].replace("{c}", color).replace("{i}", inner)
+    if turn:
+        body = f'<g transform="rotate({turn:.1f} 10 10)">{body}</g>'
     return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">{body}</svg>'
 
 
 def pixmap(
-    name: str, color: str, size: int = 16, ratio: float = 2.0, inner: str = "#ffffff"
+    name: str,
+    color: str,
+    size: int = 16,
+    ratio: float = 2.0,
+    inner: str = "#ffffff",
+    turn: float = 0.0,
 ) -> QPixmap:
-    renderer = QSvgRenderer(QByteArray(svg(name, color, inner).encode()))
+    renderer = QSvgRenderer(QByteArray(svg(name, color, inner, turn).encode()))
     scaled = max(1, int(size * ratio))
     image = QPixmap(scaled, scaled)
     image.fill(Qt.GlobalColor.transparent)

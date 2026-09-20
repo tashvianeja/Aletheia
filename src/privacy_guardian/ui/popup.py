@@ -93,15 +93,24 @@ class InterventionPopup(QWidget):
         if informational:
             # A notice reports a fact: the band says how much it matters, the headline
             # says what, the rows say exactly which things, the context line says
-            # where. No buttons to press, but a close control, because it waits for
-            # the person rather than expiring.
+            # where. Nothing on it needs deciding, so it is given no row of choices —
+            # but it is given the one button there is to give, because a card whose
+            # only control is a cross reads as a card still waiting for an answer, and
+            # leaves the person hunting for the way to put it down.
             self.explanation = card.add_body(decision.detail) if decision.detail else self.headline
             if decision.findings:
                 card.add_rows(decision.findings)
-            card.add_context(decision.subject, decision.destination)
             self._add_rationale()
+            # Hidden until "Why am I seeing this?" is opened, and a child of the card
+            # from the start: a checkbox with no parent is a window of its own, and
+            # showing it put a stray tick box in the middle of the screen.
             self.remember = QCheckBox(tr("remember"))
+            self.remember.installEventFilter(self)
             self.remember.hide()
+            card.add_widget(self.remember)
+            card.add_context(decision.subject, decision.destination)
+            acknowledge = card.add_acknowledgement(tr("acknowledge"), self.acknowledge)
+            acknowledge.installEventFilter(self)
             card.add_footer(on_why=self.toggle_rationale if decision.rationale else None)
             if card.why_button is not None:
                 card.why_button.installEventFilter(self)
@@ -187,6 +196,15 @@ class InterventionPopup(QWidget):
         self._resolved = True
         self.action_selected.emit(self.decision.event_id, action, self.remember.isChecked())
         self._close()
+
+    def acknowledge(self) -> None:
+        """The OK button on a notice: the close control, said out loud.
+
+        A notice asks nothing, so reading it is the whole of the answer. Pressing OK
+        and pressing the cross therefore have to mean the same thing, or the card
+        would be offering two ways out that record different things.
+        """
+        self.dismiss()
 
     def dismiss_action(self) -> str:
         """What stepping away means, when it means anything at all."""

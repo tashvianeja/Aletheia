@@ -416,3 +416,143 @@ def test_a_rerun_check_forgets_the_page_the_last_one_was_about(qtbot, ui_control
     assert window.report is None
     assert window.origin == "https://bank.test"
     assert "https://bank.test" in _labels(window)
+
+
+def test_the_running_check_shows_each_part_starting_rather_than_only_finishing(
+    qtbot, ui_controller
+) -> None:
+    """The bug this guards: every part of a run reported only when it was over, and the
+    parts that take seconds all report within a moment of each other at the end. The
+    card was a list of four things that sat still and then filled in at once, which
+    tells the person nothing about whether it is working."""
+    window = DeepCheckWindow(ui_controller)
+    qtbot.addWidget(window)
+
+    assert set(window.stage_states.values()) == {"pending"}
+    assert window.steps is not None and window.steps.value() == 0
+
+    window.show_progress({"stage": "tracking", "state": "running"})
+    window.show_progress({"stage": "policy", "state": "running"})
+
+    assert window.stage_states["tracking"] == "running"
+    assert window.stage_states["policy"] == "running"
+    assert window.stage_states["permissions"] == "pending", "nothing claims to be under way early"
+    assert window.steps.value() == 0, "starting is not finishing"
+
+    window.show_progress({"stage": "tracking", "state": "done"})
+    window.show_progress({"stage": "policy", "state": "unavailable"})
+    window.show_progress({"stage": "permissions", "state": "running"})
+
+    assert window.stage_states["tracking"] == "done"
+    assert window.stage_states["policy"] == "unavailable"
+    assert window.stage_states["permissions"] == "running"
+    # A line that cannot be answered here has stopped moving too, so the bar counts it.
+    assert window.steps.value() == 2
+
+
+def test_a_line_is_answered_by_whichever_part_behind_it_answers_first(qtbot, ui_controller) -> None:
+    """The Tracking line covers the trackers and the cookie banner. A page with a
+    banner and no trackers has still been checked for tracking, so the line may not
+    slide back to "under way" because the second part of it reported later."""
+    window = DeepCheckWindow(ui_controller)
+    qtbot.addWidget(window)
+
+    window.show_progress({"stage": "tracking", "state": "done"})
+    window.show_progress({"stage": "consent", "state": "running"})
+
+    assert window.stage_states["tracking"] == "done"
+
+
+def test_the_mark_on_a_running_line_keeps_turning_and_then_stops(qtbot, ui_controller) -> None:
+    """Motion is the whole point: a still list is indistinguishable from a stuck one.
+    It also has to stop, because a card that spins after it has finished is lying."""
+    window = DeepCheckWindow(ui_controller)
+    qtbot.addWidget(window)
+    window.show()
+
+    window.show_progress({"stage": "tracking", "state": "running"})
+    assert window.spinner.isActive()
+    qtbot.waitUntil(lambda: window._turn > 0, timeout=2_000)
+    turned = window._turn
+    qtbot.waitUntil(lambda: window._turn != turned, timeout=2_000)
+
+    for stage in ("tracking", "consent", "policy", "terms", "forms", "uploads", "permissions"):
+        window.show_progress({"stage": stage, "state": "done"})
+
+    assert not window.spinner.isActive(), "nothing turns once nothing is running"
+    assert window.steps is not None and window.steps.value() == 4
+
+
+def test_the_running_check_says_what_it_is_doing_now(qtbot, ui_controller) -> None:
+    """The two longest waits in a run have no line of their own on the checklist:
+    asking the page for its context, and writing the summary once every line is
+    ticked. Without a word for them the card sits there looking finished."""
+    window = DeepCheckWindow(ui_controller)
+    qtbot.addWidget(window)
+    assert window.activity is not None
+
+    window.show_progress({"stage": "start", "state": "running"})
+    assert window.activity.text() == "Getting ready…"
+    window.show_progress({"stage": "tracking", "state": "running"})
+    assert window.activity.text() == "Reading this page…"
+    window.show_progress({"stage": "permissions", "state": "running"})
+    assert window.activity.text() == "Checking application permissions…"
+
+    for stage in ("tracking", "consent", "policy", "terms", "forms", "uploads", "permissions"):
+        window.show_progress({"stage": stage, "state": "done"})
+    window.show_progress({"stage": "summary", "state": "running"})
+
+    assert window.activity.text() == "Writing the summary…"
+    assert window.steps is not None and window.steps.maximum() == 0, (
+        "no line left to count and no way to know how long: the bar says busy, not done"
+    )
+
+
+def test_a_rerun_starts_the_checklist_over_and_leaves_nothing_turning(qtbot, ui_controller) -> None:
+    window = DeepCheckWindow(ui_controller)
+    qtbot.addWidget(window)
+    window.show()
+    window.show_progress({"stage": "tracking", "state": "running"})
+    assert window.spinner.isActive()
+
+    window.show_report({"summary": "Nothing to review", "findings": [], "groups": []})
+
+    assert not window.spinner.isActive(), "the card the spinner was drawing on has gone"
+    assert not window.stage_glyphs
+
+    window._show_running()
+
+    assert set(window.stage_states.values()) == {"pending"}
+    assert window.steps is not None and window.steps.value() == 0
+    assert window.activity is not None and window.activity.text() == "Getting ready…"
+
+
+def test_a_check_card_taken_down_mid_run_leaves_nothing_turning(qtbot, ui_controller) -> None:
+    """The browser moving to another page takes the card away while the run carries on
+    reporting in. Nothing is left animating a card nobody can see."""
+    ui_controller.core.active_origin = "https://shop.test"
+    window = DeepCheckWindow(ui_controller)
+    qtbot.addWidget(window)
+    window.show()
+    window.show_progress({"stage": "tracking", "state": "running"})
+    assert window.spinner.isActive()
+
+    window.show_report(_report("https://shop.test"))
+    window.page_changed("https://bank.test")
+    qtbot.waitUntil(lambda: not window.isVisible())
+    window.show_progress({"stage": "permissions", "state": "running"})
+
+    assert not window.spinner.isActive()
+
+
+def test_progress_arriving_after_the_result_is_ignored(qtbot, ui_controller) -> None:
+    """A late report from a step that had already timed out must not redraw a card
+    that is now showing the answer."""
+    window = DeepCheckWindow(ui_controller)
+    qtbot.addWidget(window)
+    window.show_report({"summary": "Nothing to review", "findings": [], "groups": []})
+
+    window.show_progress({"stage": "permissions", "state": "done"})
+    window.show_progress("start")
+
+    assert window.status.text() == "Nothing to review"

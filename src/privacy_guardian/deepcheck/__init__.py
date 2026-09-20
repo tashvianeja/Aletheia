@@ -15,6 +15,9 @@ GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("policy", "Privacy policy", ("policy", "terms")),
     ("forms", "Current form", ("forms", "uploads")),
 )
+# Everything the page itself answers for, in the order the reply is read. They all
+# arrive together in one reply from the extension, so they all start together too.
+PAGE_STAGES = ("tracking", "consent", "policy", "terms", "forms", "uploads")
 # What a clean section says, so an all-clear is as readable as a warning.
 CLEAN = {
     "permissions": (
@@ -150,6 +153,12 @@ async def run_deep_check(
     if browser_foreground and service.connected_browsers and not payload.get("cached_only"):
         from uuid import uuid4
 
+        # Waiting for the page to answer is the longest part of most runs. Everything
+        # that waiting is for is under way from here, and saying so is the difference
+        # between a card that is working and a card that looks stuck: the alternative
+        # is a list that sits still for seconds and then fills in all at once.
+        for name in PAGE_STAGES:
+            progress(name, "running")
         service.context_updated.clear()
         service.pending_context_id = str(uuid4())
         service.browser_commands.append(
@@ -170,7 +179,7 @@ async def run_deep_check(
     # A policy and a set of terms usually repeat one another. Say each clause once.
     seen_clauses: set[str] = set()
     analyses = context.get("analyses", {})
-    for name in ("tracking", "consent", "policy", "terms", "forms", "uploads"):
+    for name in PAGE_STAGES:
         analysis = analyses.get(name, {})
         profile = analysis.get("profile", {})
         if analysis.get("partial") or profile.get("partial"):
@@ -302,6 +311,7 @@ async def run_deep_check(
         )
         progress(name, "done" if analysis else "unavailable")
     if service.adapter:
+        progress("permissions", "running")
         before_desktop = len(findings)
         try:
             desktop_events = await asyncio.wait_for(
@@ -372,9 +382,11 @@ async def run_deep_check(
         "context_available": bool(context) or service.adapter is not None,
         "fresh": fresh,
     }
-    progress("complete", "done")
-
     if service.settings.llm.enabled and service.settings.llm.deep_check_narrative:
+        # Up to another twenty seconds, after every line of the checklist has been
+        # answered. Reporting the run complete here and then waiting it out left the
+        # card sitting fully ticked with nothing to say for itself.
+        progress("summary", "running")
         from functools import partial
 
         from privacy_guardian.core.worker_dispatch import refine_context
@@ -401,5 +413,7 @@ async def run_deep_check(
             report["summary"] = narrative["summary"]
         except (TimeoutError, RuntimeError):
             pass
+        progress("summary", "done")
 
+    progress("complete", "done")
     return report

@@ -619,6 +619,34 @@ async def test_a_card_nobody_answered_is_raised_again_until_it_is_put_down(
 
 
 @pytest.mark.asyncio
+async def test_a_notice_in_the_page_offers_a_way_out_that_is_not_only_a_cross(
+    real_browser: RealBrowser, fixture_site: tuple[str, object]
+) -> None:
+    """The user's report: a card that asks nothing had no button at all, so the only
+    way to put it down was the cross in its corner — which reads as a card still
+    waiting for an answer nobody can find. OK is that cross, said out loud, and it has
+    to record the same thing the cross records."""
+    base_url, _ = fixture_site
+    page = await real_browser.context.new_page()
+    await page.goto(f"{base_url}/fixtures/tracker-late-fingerprint")
+    panel = page.locator(".pg-panel").first
+    await panel.wait_for(timeout=10_000)
+    before = answered(real_browser)
+
+    assert await panel.locator("[data-pg-action]").count() == 0, "a notice still asks nothing"
+    ok = panel.locator("[data-pg-ack]")
+    assert (await ok.inner_text()).strip() == "OK"
+
+    await ok.click()
+    await panel.wait_for(state="detached", timeout=5_000)
+    for _attempt in range(100):
+        if answered(real_browser) > before:
+            break
+        await asyncio.sleep(0.05)
+    assert answered(real_browser) == before + 1, "pressing OK is an answer, as closing it is"
+
+
+@pytest.mark.asyncio
 async def test_the_advertising_card_fits_what_a_person_will_actually_read(
     real_browser: RealBrowser, fixture_site: tuple[str, object]
 ) -> None:

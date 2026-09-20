@@ -44,6 +44,22 @@ EN: dict[str, str] = {
     "urgency_note": "For your information",
     "urgency_checking": "Checking",
     "done": "Done",
+    # A notice asks for nothing, so its one button only says the person has read it.
+    "acknowledge": "OK",
+    # What the thorough check is doing right now, so the card is visibly working
+    # rather than a list that sits still until every answer arrives at once.
+    "checking_start": "Getting ready\u2026",
+    "checking_page": "Reading this page\u2026",
+    "checking_permissions": "Checking application permissions\u2026",
+    "checking_summary": "Writing the summary\u2026",
+    "checking_finished": "Finishing up\u2026",
+    "checking_steps": "{done} of {total} checks done",
+    # Where a line of the running checklist has got to, for anyone who cannot see
+    # which mark is beside it.
+    "stage_pending": "waiting",
+    "stage_running": "checking",
+    "stage_done": "checked",
+    "stage_unavailable": "not available here",
     "watching_quietly": "Watching quietly · Nothing needs your attention",
     "watching_attention": "{count} thing needs your attention",
     "watching_attention_plural": "{count} things need your attention",

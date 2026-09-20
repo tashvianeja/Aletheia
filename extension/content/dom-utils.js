@@ -125,6 +125,17 @@
       if((decision.actions||[]).includes(primary))actions.append(make(primary,'primary'));
       if(tertiary&&(decision.actions||[]).includes(tertiary))actions.prepend(make(tertiary,'tertiary'));
       panel.append(actions);
+    }else{
+      // A notice asks for no decision, so it gets no row of choices. It still needs a
+      // way out that looks like one: a card whose only control is the cross in its
+      // corner reads as a card still waiting for something, and the person is left
+      // hunting for the button that would put it down. This is that cross, said out
+      // loud, and it does exactly what the cross does.
+      const actions=element('div','pg-actions');
+      const ok=element('button','pg-primary','OK');
+      ok.type='button';ok.dataset.pgAck='1';ok.setAttribute('aria-label','OK');
+      ok.addEventListener('click',()=>state.dismiss());
+      actions.append(ok);panel.append(actions);
     }
     const foot=element('div','pg-foot');
     foot.append(icon('shield'),element('span',null,'Analysed on this device'));

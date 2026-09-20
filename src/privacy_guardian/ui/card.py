@@ -445,6 +445,28 @@ class GuardianCard(QFrame):
             row.addWidget(widget)
         self._content.addLayout(row)
 
+    def add_acknowledgement(self, label: str, on_click: Callable[[], None]) -> QPushButton:
+        """The single button on a card that is only reporting something.
+
+        A notice asks for no decision, so it gets no row of choices. It still needs a
+        way out that looks like one: a card whose only control is the cross in its
+        corner reads as a card still waiting for something, and the person is left
+        hunting for the button that would put it down. This is that button, and it
+        does exactly what the cross does.
+        """
+        button = QPushButton(label)
+        button.setProperty("tier", "primary")
+        button.setAccessibleName(label)
+        button.setCursor(Qt.CursorShape.PointingHandCursor)
+        button.clicked.connect(lambda _checked=False: on_click())
+        self.buttons["acknowledge"] = button
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        row.addStretch(1)
+        row.addWidget(button)
+        self._content.addLayout(row)
+        return button
+
     # -- footer ---------------------------------------------------------------
 
     def add_footer(self, on_why: Callable[[], None] | None = None) -> None:
