@@ -135,6 +135,19 @@
       "default": "cancel",
       "title": "Default Action",
       "type": "string"
+    },
+    "urgency": {
+      "default": "",
+      "enum": [
+        "",
+        "act_now",
+        "attention",
+        "heads_up",
+        "all_clear",
+        "note"
+      ],
+      "title": "Urgency",
+      "type": "string"
     }
   },
   "required": [

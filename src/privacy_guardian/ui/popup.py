@@ -1,23 +1,25 @@
 from __future__ import annotations
 
 from collections import deque
-from typing import Any, Literal
+from typing import Any
 
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from privacy_guardian.core.events import Decision, Outcome
+from privacy_guardian.engine.presentation import urgency_for
+from privacy_guardian.ui import icons
 from privacy_guardian.ui.card import (
     CARD_WIDTH,
     FLOATING_FLAGS,
     SCREEN_MARGIN,
     GuardianCard,
     anchor_bottom_right,
-    glyph,
     make_floating,
     release_surface,
     scrollable,
+    urgency_label,
 )
 from privacy_guardian.ui.theme import card_stylesheet, palette
 from privacy_guardian.util.i18n import tr
@@ -26,6 +28,9 @@ from privacy_guardian.util.i18n import tr
 # refusal it stands; where it would do something — open system settings, say — the
 # close control only closes.
 PROTECTIVE_DEFAULTS = frozenset({"cancel", "reject_optional", "block"})
+# How many times the band pulses when a card of each tier arrives. Bounded, always:
+# a light that never stops flashing is one people learn to stop seeing.
+PULSES = {"act_now": 3, "attention": 1}
 
 
 class InterventionPopup(QWidget):
@@ -57,9 +62,10 @@ class InterventionPopup(QWidget):
         self.setStyleSheet(card_stylesheet(mode))
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
-        self.card = GuardianCard(mode)
+        self.card = GuardianCard(mode, urgency=self.urgency())
         self.scroller = scrollable(self.card)
         outer.addWidget(self.scroller)
+        self._pulsed = False
         self._build()
         self.buttons = self.card.buttons
         if on_action:
@@ -70,27 +76,36 @@ class InterventionPopup(QWidget):
 
     # -- construction ---------------------------------------------------------
 
+    def urgency(self) -> str:
+        """The tier the card is shown in; computed here for decisions built by hand."""
+        return self.decision.urgency or urgency_for(self.decision)
+
+    def _band_label(self) -> str:
+        return urgency_label(self.urgency(), handled=bool(self.decision.auto_action))
+
     def _build(self) -> None:
         decision = self.decision
         informational = decision.outcome == Outcome.INFORM
         card = self.card
+        card.add_header(title=self._band_label(), right=tr("app_name"))
+        card.closed.connect(self.dismiss)
+        self.headline = card.add_headline(decision.title or decision.explanation)
         if informational:
-            # A toast reports a fact: a status glyph and a line. No buttons to press,
-            # but a close control, because it waits for the person rather than expiring.
-            card.add_header(right=self._origin())
-            card.closed.connect(self.dismiss)
-            self.headline = self._status_row()
-            # Falling back to the explanation printed the headline a second time on
-            # any card whose rows already say what the body used to say in prose.
+            # A notice reports a fact: the band says how much it matters, the headline
+            # says what, the rows say exactly which things, the context line says
+            # where. No buttons to press, but a close control, because it waits for
+            # the person rather than expiring.
             self.explanation = card.add_body(decision.detail) if decision.detail else self.headline
+            if decision.findings:
+                card.add_rows(decision.findings)
+            card.add_context(decision.subject, decision.destination)
             self._add_rationale()
             self.remember = QCheckBox(tr("remember"))
             self.remember.hide()
-            card.add_footer()
+            card.add_footer(on_why=self.toggle_rationale if decision.rationale else None)
+            if card.why_button is not None:
+                card.why_button.installEventFilter(self)
             return
-        card.add_header(right=self._origin())
-        card.closed.connect(self.dismiss)
-        self.headline = card.add_headline(decision.title or decision.explanation)
         blocks = ("rows", "body") if decision.layout == "findings_first" else ("body", "rows")
         self.explanation = self.headline
         for block in blocks:
@@ -125,37 +140,12 @@ class InterventionPopup(QWidget):
         self.rationale.hide()
         self.card.add_widget(self.rationale)
 
-    def _status_row(self) -> QLabel:
-        decision = self.decision
-        severity: Literal["warn", "ok", "info"] = (
-            "warn"
-            if any(finding.severity == "warn" for finding in decision.findings)
-            else "ok"
-            if decision.auto_action or decision.risk < 0.25
-            else "info"
-        )
-        label = QLabel(self.decision.title or self.decision.explanation)
-        label.setObjectName("cardHeadline")
-        label.setWordWrap(True)
-        row = QHBoxLayout()
-        row.setSpacing(9)
-        row.addWidget(
-            glyph(severity, self.card.colors[{"ok": "ok", "warn": "warn"}.get(severity, "faint")])
-        )
-        row.addWidget(label, 1)
-        self.card.add_layout(row)
-        return label
-
-    def _origin(self) -> str:
-        return self.decision.destination if self.decision.subject else ""
-
     # -- behaviour ------------------------------------------------------------
 
     def set_theme(self, mode: str) -> None:
         self.mode = mode
         self.setStyleSheet(card_stylesheet(mode))
-        self.card.colors = palette(mode)
-        self.card.setStyleSheet(card_stylesheet(mode))
+        self.card.set_mode(mode)
 
     def toggle_rationale(self) -> None:
         showing = not self.rationale.isVisible()
@@ -172,6 +162,11 @@ class InterventionPopup(QWidget):
         # A word-wrapped label only reports its real height once it has been laid out
         # at its final width, so the first honest measurement is after the first show.
         QTimer.singleShot(0, self.reanchor)
+        if not self._pulsed:
+            # The band breathes when the card lands, and only then: three times for a
+            # card that has stopped something, once for one that wants a decision.
+            self._pulsed = True
+            self.card.pulse(PULSES.get(self.urgency(), 0))
 
     def update_decision(self, decision: Decision) -> None:
         """Refinement arriving after the widget is up must not rewrite it underneath the user."""
@@ -181,6 +176,10 @@ class InterventionPopup(QWidget):
             self.explanation.setText(decision.detail)
         self.rationale.setText("\n".join(f"· {line}" for line in decision.rationale))
         self.setAccessibleDescription(decision.explanation)
+        if self.urgency() != self.card.urgency:
+            self.card.set_urgency(self.urgency(), self._band_label())
+        elif self.card.band_label is not None:
+            self.card.band_label.setText(self._band_label())
 
     def choose(self, action: str) -> None:
         if self._resolved or action not in self.decision.actions:
@@ -341,21 +340,19 @@ class ConfirmationBar(QWidget):
 
     def __init__(self, message: str, parent: QWidget | None = None, mode: str = "system") -> None:
         super().__init__(parent, FLOATING_FLAGS)
-        from privacy_guardian.ui import icons
-
         make_floating(self)
         self.setStyleSheet(card_stylesheet(mode))
         colors = palette(mode)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(SCREEN_MARGIN, SCREEN_MARGIN, SCREEN_MARGIN, SCREEN_MARGIN)
-        card = GuardianCard(mode, self)
+        card = GuardianCard(mode, self, urgency="all_clear")
         card.setFixedWidth(320)
         card.finish()
         row = QHBoxLayout()
         row.setSpacing(10)
-        lock = QLabel()
-        lock.setPixmap(icons.pixmap("padlock", colors["accent"], 16))
-        row.addWidget(lock)
+        tick = QLabel()
+        tick.setPixmap(icons.pixmap("ok", colors["ok"], 18))
+        row.addWidget(tick)
         label = QLabel(message)
         label.setObjectName("cardRow")
         row.addWidget(label, 1)

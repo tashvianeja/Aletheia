@@ -34,6 +34,15 @@ EN: dict[str, str] = {
     "app_name": "Privacy Guardian",
     "why": "Why am I seeing this?",
     "analysed_locally": "Analysed on this device",
+    # The word on the band across the top of a card. It says in words what the colour
+    # says in colour, so the two never disagree and neither is needed on its own.
+    "urgency_act_now": "Act now",
+    "urgency_attention": "Needs your attention",
+    "urgency_heads_up": "Heads up",
+    "urgency_all_clear": "All clear",
+    "urgency_handled": "Handled for you",
+    "urgency_note": "For your information",
+    "urgency_checking": "Checking",
     "done": "Done",
     "watching_quietly": "Watching quietly · Nothing needs your attention",
     "watching_attention": "{count} thing needs your attention",
