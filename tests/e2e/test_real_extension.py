@@ -743,6 +743,46 @@ async def test_social_photo_strip_metadata_upload_has_no_gps(
 
 
 @pytest.mark.asyncio
+async def test_a_failed_fetch_the_page_never_catches_stays_the_pages_error(
+    real_browser: RealBrowser, fixture_site: tuple[str, object]
+) -> None:
+    """A request with nothing to review goes to the browser's own fetch untouched.
+
+    Ad and tracker calls fail all day, and a site that leaves the rejection unhandled
+    used to have it logged against Aletheia: the wrapper's frame sat on top of the
+    stack, so chrome://extensions filed "Failed to fetch" under our card. That error
+    must carry no frame of ours, and a request that does carry a file must still be
+    held for review.
+    """
+    base_url, _ = fixture_site
+    page = await real_browser.context.new_page()
+    errors: list[str] = []
+    page.on("pageerror", lambda error: errors.append(error.stack or error.message))
+    await page.goto(f"{base_url}/fixtures/clean-blog")
+    # Port 1 is one Chromium refuses to connect to, so this fails the way a blocked
+    # tracker does, and nobody catches it.
+    await page.evaluate("() => { fetch('http://127.0.0.1:1/beacon', {method: 'POST', body: 'x=1'}); }")
+    for _attempt in range(100):
+        if errors:
+            break
+        await asyncio.sleep(0.05)
+    assert errors and "Failed to fetch" in errors[0], errors
+    assert "main-world.js" not in errors[0], errors[0]
+    # The same fetch carrying a chosen file is still reviewed before it leaves.
+    held = await page.evaluate(
+        """() => new Promise(resolve => {
+          window.addEventListener('message', event => {
+            if (event.data?.pgBridge === 'upload_check') resolve(event.data.files.map(file => file.name));
+          });
+          const file = new File(['%PDF-1.4 stub'], 'chosen.pdf', {type: 'application/pdf'});
+          const body = new FormData(); body.append('upload', file);
+          fetch('http://127.0.0.1:1/upload', {method: 'POST', body}).catch(() => {});
+        })"""
+    )
+    assert held == ["chosen.pdf"]
+
+
+@pytest.mark.asyncio
 async def test_terms_interception_shows_three_risks_and_preserves_checkbox_state(
     real_browser: RealBrowser, fixture_site: tuple[str, object]
 ) -> None:

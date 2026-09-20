@@ -67,24 +67,39 @@
     if(body instanceof FormData){const replacement=new FormData();let index=0;for(const [name,value] of body.entries()){if(chosenFile(value)){const file=result.files[index++]||value;replacement.append(name,file,file.name);}else replacement.append(name,value);}return {allowed:true,body:replacement};}
     const replacement=result.files[0]||body;return {allowed:true,body:binary?await blobArrayBuffer.call(replacement):replacement};
   }
-  // A Request swallows its body, so remember when one was built around a chosen file.
+  // A Request swallows its body, so remember when one was built around a chosen file:
+  // the file itself, or the form it sits in.
   const NativeRequest=window.Request,requestFiles=new WeakMap();
   try{window.Request=new Proxy(NativeRequest,{construct(target,args,newTarget){
     const request=Reflect.construct(target,args,newTarget);
-    const carried=args[0] instanceof NativeRequest&&args[1]?.body===undefined?requestFiles.get(args[0]):null;
-    const file=chosenFile(args[1]?.body)||carried;
-    if(file)requestFiles.set(request,file);
+    const body=args[1]?.body;
+    const carried=args[0] instanceof NativeRequest&&body===undefined?requestFiles.get(args[0]):null;
+    const upload=hasFiles(body)?body:carried;
+    if(upload)requestFiles.set(request,upload);
     return request;
   }});}catch(_){}
-  window.fetch=async function(input,init){
-    let body=init?.body,request=input;
-    if(input instanceof NativeRequest&&body===undefined&&!['GET','HEAD'].includes(input.method)){
-      const contentType=input.headers.get('content-type')||'';
-      try{if(contentType.includes('multipart/form-data'))body=await input.clone().formData();else body=requestFiles.get(input);}catch(_){}
-    }
+  // Only a call that carries a chosen file is held for review. Everything else reaches
+  // the browser's own fetch from a microtask, through a bound copy of it, so no frame
+  // of this script is on the stack when the request starts: Chrome stamps that stack on
+  // a fetch that later fails, and a wrapper frame on top of it had every site's
+  // unhandled "Failed to fetch" filed against this extension in chrome://extensions.
+  const NativePromise=window.Promise,nativeThen=NativePromise.prototype.then;
+  function uploadBody(input,init){
+    if(init?.body!==undefined)return hasFiles(init.body)?init.body:undefined;
+    return input instanceof NativeRequest?requestFiles.get(input):undefined;
+  }
+  async function reviewedFetch(input,init){
+    let body=uploadBody(input,init);
+    // A Request built around a form is re-read from the Request itself, which is what it will send.
+    if(body instanceof FormData&&init?.body===undefined){try{body=await input.clone().formData();}catch(_){return capturedFetch.call(this,input,init);}}
     const result=await checkBody(body);if(!result.allowed)throw new DOMException('Upload cancelled by Aletheia','AbortError');
-    if(input instanceof NativeRequest&&body){const headers=new Headers(init?.headers||input.headers);if(result.body instanceof FormData)headers.delete('content-type');request=new NativeRequest(input,{...init,headers,body:result.body});return capturedFetch.call(this,request);}
-    return capturedFetch.call(this,request,init?{...init,body:result.body}:init);
+    if(init?.body!==undefined)return capturedFetch.call(this,input,{...init,body:result.body});
+    const headers=new Headers(init?.headers||input.headers);if(result.body instanceof FormData)headers.delete('content-type');
+    return capturedFetch.call(this,new NativeRequest(input,{...init,headers,body:result.body}));
+  }
+  window.fetch=function(input,init){
+    if(uploadBody(input,init)!==undefined)return reviewedFetch.call(this,input,init);
+    return nativeThen.call(NativePromise.resolve(),capturedFetch.bind(this,input,init));
   };
   XMLHttpRequest.prototype.open=function(method,url,async=true,...args){xhrAsync.set(this,async!==false);return capturedOpen.call(this,method,url,async,...args);};
   XMLHttpRequest.prototype.send=function(body){if(!hasFiles(body))return capturedSend.call(this,body);if(xhrAsync.get(this)===false){this.abort();throw new DOMException("Synchronous file uploads cannot wait for privacy review","InvalidStateError");}const xhr=this;checkBody(body).then(result=>{if(result.allowed)capturedSend.call(xhr,result.body);else xhr.abort();}).catch(()=>xhr.abort());};
