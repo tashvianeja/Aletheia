@@ -158,5 +158,18 @@ api.action.onClicked.addListener(async tab => {
   await api.tabs.sendMessage(tab.id,{pg:'refresh_context'},{frameId:0}).catch(()=>{});
   await native('deep_check',{origin:new URL(tab.url).origin}).catch(()=>{});
 });
-setInterval(()=>native('ping',{browser:'webextension'},4000).then(handleCommands).catch(()=>{}),1000);
+// Which page the person is actually looking at. The desktop needs it every tick, not
+// only when a check runs: a card that answers for one tab has to know when it has
+// stopped being the tab in front.
+async function activeOrigin() {
+  try {
+    const [tab] = await api.tabs.query({active:true,lastFocusedWindow:true});
+    const url = tab?.url || '';
+    return /^https?:/.test(url) ? new URL(url).origin : '';
+  } catch (_) {return '';}
+}
+setInterval(async ()=>{
+  const active_origin = await activeOrigin();
+  native('ping',{browser:'webextension',active_origin},4000).then(handleCommands).catch(()=>{});
+},1000);
 connect();

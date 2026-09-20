@@ -44,6 +44,9 @@ class UiController:
             learned_rules=LearnedRules(),
             adapter=FakeAdapter(),
             actions={},
+            # What the browser is showing right now, as its heartbeat reports it.
+            active_origin="",
+            focused_origin="",
         )
         self.clipboard = SimpleNamespace(allowlist=[])
         self.hotkey = FakeHotkey()

@@ -84,6 +84,7 @@ class Service:
         self.focus_listeners: list[Callable[[], None]] = []
         self.action_listeners: list[Callable[[str, str], None]] = []
         self.progress_listeners: list[Callable[[dict[str, str]], None]] = []
+        self.page_listeners: list[Callable[[str], None]] = []
         self.events: dict[str, PrivacyEvent] = {}
         self.decisions: dict[str, Decision] = {}
         self.actions: dict[str, dict[str, Any]] = {}
@@ -101,6 +102,10 @@ class Service:
         self.context_updated = asyncio.Event()
         self.pending_context_id: str | None = None
         self.focused_origin = ""
+        # The page the browser is actually showing right now, as its heartbeat reports
+        # it. Unlike focused_origin, which is whichever page was last analysed, this
+        # moves the moment the person changes tab.
+        self.active_origin = ""
         self.connected_browsers: dict[str, float] = {}
         self.browser_sessions: dict[str, str] = {}
         self.session_last_seen: dict[str, float] = {}
@@ -116,6 +121,19 @@ class Service:
         self._worker_preparation: asyncio.Task[None] | None = None
         self._ner_generation = -1
         self._light_generation = -1
+
+    def note_active_page(self, origin: str) -> None:
+        """Record which page is in front, and say so once when it changes.
+
+        Anything on screen that answers for one page — the thorough-check card above
+        all — needs to know the moment the person has moved to another, because from
+        then on it is describing somewhere they are no longer looking at.
+        """
+        if origin == self.active_origin:
+            return
+        self.active_origin = origin
+        for callback in self.page_listeners:
+            callback(origin)
 
     def dismiss_page_panels(self) -> None:
         """Ask the page in front to take its cards down.
@@ -840,6 +858,8 @@ class Service:
         if request.type == "ping":
             browser = str(payload.get("browser", "browser"))[:40]
             self.connected_browsers[browser] = time.monotonic()
+            if "active_origin" in payload:
+                self.note_active_page(str(payload.get("active_origin") or "")[:2000])
             if session:
                 if session not in self.browser_sessions:
                     self.prepare_browser_worker()

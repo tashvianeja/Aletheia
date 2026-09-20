@@ -432,25 +432,19 @@ class Dashboard(QWidget):
         run.addWidget(button)
         run.addStretch(1)
         outer.addLayout(run)
-        outer.addSpacing(10)
-        outer.addWidget(_label(tr("site_memory"), "section"))
-        self.profile_key = QLineEdit()
-        self.profile_key.setPlaceholderText(tr("profile_key"))
-        outer.addWidget(self.profile_key)
-        lookup = QPushButton(tr("view_profile"))
-        lookup.clicked.connect(self.view_profile)
-        outer.addWidget(lookup)
-        self.profile_detail = QTextEdit()
-        self.profile_detail.setReadOnly(True)
-        self.profile_detail.setMinimumHeight(140)
-        outer.addWidget(self.profile_detail)
-        self.memory = QTextEdit()
-        self.memory.setMinimumHeight(140)
-        outer.addWidget(self.memory)
-        memory_save = QPushButton(tr("save_memory"))
-        memory_save.clicked.connect(self.save_memory)
-        outer.addWidget(memory_save)
         outer.addStretch(1)
+        # The stored profile and the raw preference document are still read and written
+        # through these, so nothing behind them has gone; they are simply off the page.
+        # Someone reading their own privacy report has no use for a JSON editor, and a
+        # pane that ends in one reads as a debugging console rather than an answer.
+        self.profile_key = QLineEdit(inner)
+        self.profile_key.setPlaceholderText(tr("profile_key"))
+        self.profile_key.hide()
+        self.profile_detail = QTextEdit(inner)
+        self.profile_detail.setReadOnly(True)
+        self.profile_detail.hide()
+        self.memory = QTextEdit(inner)
+        self.memory.hide()
         return _scroller(inner)
 
     def show_report(self, report: dict[str, Any]) -> None:
@@ -678,8 +672,9 @@ class Dashboard(QWidget):
             else None,
         )
         if row < len(records):
+            # The record is still gathered, but the pane that used to display it no
+            # longer shows one, so sending the person there would be a dead end.
             self.profile_detail.setPlainText(json.dumps(records[row], indent=2))
-            self.select("sites_and_apps")
 
     def reset_preferences(self) -> None:
         self.service.core.learned_rules.reset()

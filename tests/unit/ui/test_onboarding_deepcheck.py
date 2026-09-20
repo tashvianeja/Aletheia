@@ -339,3 +339,80 @@ def test_deep_check_full_analysis_button_opens_the_report_when_clicked(
 
     qtbot.waitUntil(lambda: not window.isVisible())
     assert ("report", report) in ui_controller.calls
+
+
+def _report(origin: str) -> dict[str, object]:
+    return {
+        "summary": "Overall: 1 thing to review",
+        "origin": origin,
+        "findings": [{"kind": "tracking", "severity": "INFORM", "summary": "Advertising profile"}],
+        "groups": [],
+        "context_available": True,
+    }
+
+
+def test_the_check_card_goes_when_the_browser_moves_to_another_page(qtbot, ui_controller) -> None:
+    """The bug this guards: a check card left up over the next tab kept showing the last
+    tab's findings, which reads as a verdict on a page that was never checked."""
+    ui_controller.core.active_origin = "https://shop.test"
+    window = DeepCheckWindow(ui_controller)
+    qtbot.addWidget(window)
+    window.show()
+    window.show_report(_report("https://shop.test"))
+
+    window.page_changed("https://bank.test")
+
+    qtbot.waitUntil(lambda: not window.isVisible())
+
+
+def test_the_check_card_stays_up_for_the_page_it_is_about(qtbot, ui_controller) -> None:
+    ui_controller.core.active_origin = "https://shop.test"
+    window = DeepCheckWindow(ui_controller)
+    qtbot.addWidget(window)
+    window.show()
+    window.show_report(_report("https://shop.test"))
+
+    # The same page again, and a browser showing no page at all — neither is a reason
+    # to take the card away from someone who may be part-way through reading it.
+    window.page_changed("https://shop.test")
+    window.page_changed("")
+
+    assert window.isVisible()
+
+
+def test_a_check_about_a_desktop_application_ignores_the_browser_behind_it(
+    qtbot, ui_controller
+) -> None:
+    window = DeepCheckWindow(ui_controller)
+    qtbot.addWidget(window)
+    window.show()
+    window.show_report(_report("Photos"))
+
+    window.page_changed("https://bank.test")
+
+    assert window.isVisible()
+
+
+def test_a_check_that_has_not_found_its_page_yet_is_not_taken_down(qtbot, ui_controller) -> None:
+    """Nothing known about the page means nothing known about whether it has changed."""
+    window = DeepCheckWindow(ui_controller)
+    qtbot.addWidget(window)
+    window.show()
+
+    window.page_changed("https://bank.test")
+
+    assert window.isVisible()
+
+
+def test_a_rerun_check_forgets_the_page_the_last_one_was_about(qtbot, ui_controller) -> None:
+    ui_controller.core.active_origin = "https://shop.test"
+    window = DeepCheckWindow(ui_controller)
+    qtbot.addWidget(window)
+    window.show_report(_report("https://shop.test"))
+
+    ui_controller.core.active_origin = "https://bank.test"
+    window._show_running()
+
+    assert window.report is None
+    assert window.origin == "https://bank.test"
+    assert "https://bank.test" in _labels(window)

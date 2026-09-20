@@ -75,6 +75,9 @@ class DeepCheckWindow(QWidget):
         self.mode = mode
         self.colors = palette(mode)
         self.report: dict[str, Any] | None = None
+        # The page this card answers for. Everything on it is about that one page, so
+        # when the browser moves somewhere else the card has nothing left to say.
+        self.origin = ""
         self.setWindowTitle(tr("deep_check"))
         make_floating(self)
         self.setStyleSheet(card_stylesheet(mode))
@@ -99,6 +102,8 @@ class DeepCheckWindow(QWidget):
         return self.card
 
     def _show_running(self) -> None:
+        self.report = None
+        self.origin = self._origin()
         card = self._reset_card("note")
         card.add_header(title=tr("urgency_checking"), right=tr("app_name"))
         card.add_headline(tr("privacy_check"))
@@ -116,7 +121,7 @@ class DeepCheckWindow(QWidget):
             box.addLayout(row)
             self.stage_glyphs[key] = glyph
         card.add_layout(box)
-        card.add_context(tr("privacy_check"), self._origin())
+        card.add_context(tr("privacy_check"), self.origin)
         card.add_footer()
         self.status = card.headline_label or QLabel()
         self._anchor()
@@ -138,6 +143,7 @@ class DeepCheckWindow(QWidget):
 
     def show_report(self, report: dict[str, Any]) -> None:
         self.report = report
+        self.origin = self._origin(report) or self.origin
         # Only the things that need looking at. A card that spends half its height
         # listing what turned out fine makes the person hunt for the part that matters;
         # the all-clear sections are still there in the full report.
@@ -180,7 +186,7 @@ class DeepCheckWindow(QWidget):
             rows.append(DecisionFinding(label=tr("no_context"), severity="info"))
         if rows:
             card.add_rows(rows, accents)
-        card.add_context(tr("privacy_check"), self._origin(report))
+        card.add_context(tr("privacy_check"), self.origin)
         actions = QHBoxLayout()
         actions.setSpacing(8)
         actions.addStretch(1)
@@ -197,6 +203,25 @@ class DeepCheckWindow(QWidget):
         self.status = card.headline_label or QLabel()
         self._anchor()
 
+    def page_changed(self, origin: str) -> None:
+        """The browser is showing another page now, so this card is about the wrong one.
+
+        A check is a reading of one page at one moment. Left up over the next tab it
+        keeps the same headline, the same findings and the same tick marks, and every
+        one of them now reads as a verdict on a page that was never checked. There is
+        no honest way to keep it on screen, so it goes.
+        """
+        # An empty origin means the browser is not showing a web page at all — a blank
+        # tab, its own settings, or a window that has never been focused — which is not
+        # a reason to take a card away from someone who may be reading it. A card about
+        # a desktop application is not about a tab either, and a browser behind it
+        # changing page says nothing about the app in front.
+        if not origin or origin == self.origin:
+            return
+        if not self.origin.startswith(("http://", "https://")):
+            return
+        self.close()
+
     def _open_full(self) -> None:
         if self.report is not None:
             self.service.show_report_window(self.report)
@@ -210,7 +235,9 @@ class DeepCheckWindow(QWidget):
         if report is not None:
             return str(report.get("origin", ""))
         core = getattr(self.service, "core", None)
-        return str(getattr(core, "focused_origin", "") or "")
+        # What the browser is showing right now, falling back to the page the last
+        # analysis was about when no extension is reporting.
+        return str(getattr(core, "active_origin", "") or getattr(core, "focused_origin", "") or "")
 
     def _anchor(self) -> None:
         anchor_bottom_right(self, self.stack_content())

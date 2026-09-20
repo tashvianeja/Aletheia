@@ -207,6 +207,7 @@ def main() -> int:
         decision_ready = Signal(object)
         report_ready = Signal(object)
         progress = Signal(object)
+        page_changed = Signal(str)
         focus_requested = Signal()
         deep_check_requested = Signal()
         error = Signal(str)
@@ -235,8 +236,10 @@ def main() -> int:
             self.core.focus_listeners.append(self.bridge.focus_requested.emit)
             self.core.action_listeners.append(self.bridge.action_ready.emit)
             self.core.progress_listeners.append(self.bridge.progress.emit)
+            self.core.page_listeners.append(self.bridge.page_changed.emit)
             self.bridge.action_ready.connect(self.actuate)
             self.bridge.progress.connect(self.show_progress)
+            self.bridge.page_changed.connect(self.page_changed)
             self.bridge.decision_ready.connect(self.show_decision)
             self.bridge.report_ready.connect(self.show_report)
             self.bridge.update_ready.connect(
@@ -389,6 +392,7 @@ def main() -> int:
             self.core.focus_listeners.append(self.bridge.focus_requested.emit)
             self.core.action_listeners.append(self.bridge.action_ready.emit)
             self.core.progress_listeners.append(self.bridge.progress.emit)
+            self.core.page_listeners.append(self.bridge.page_changed.emit)
             self.thread = threading.Thread(
                 target=self._run_loop, daemon=True, name="guardian-service"
             )
@@ -435,9 +439,15 @@ def main() -> int:
             if self.deepcheck_window:
                 self.deepcheck_window.show_progress(update)
 
+        def page_changed(self, origin: str) -> None:
+            if self.deepcheck_window:
+                self.deepcheck_window.page_changed(origin)
+
         def show_report(self, report: dict[str, Any]) -> None:
             self.last_report = report
-            if self.deepcheck_window:
+            # A check whose page was left behind while it ran has already taken its card
+            # down; filling it back in would put the answer to a stale question on screen.
+            if self.deepcheck_window and self.deepcheck_window.isVisible():
                 self.deepcheck_window.show_report(report)
 
         def show_report_window(self, report: dict[str, Any]) -> None:

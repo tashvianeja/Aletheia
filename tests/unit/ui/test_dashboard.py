@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from PySide6.QtWidgets import QFileDialog, QMessageBox
+from PySide6.QtWidgets import QFileDialog, QLabel, QMessageBox, QPushButton, QTextEdit
 
 from privacy_guardian.core.events import DataCategory, Decision, Outcome, PrivacyEvent, Requester
 from privacy_guardian.engine.preferences import LearnedRule, Preference
@@ -45,7 +45,9 @@ def test_history_filters_and_detail_view(qtbot, ui_controller) -> None:
     assert dashboard.history.rowCount() == 1
     dashboard.show_event_detail(0, 0)
 
-    assert dashboard.current_section == "sites_and_apps"
+    # The record is still gathered, but nothing sends the person to a pane that no
+    # longer displays one.
+    assert dashboard.current_section == "events"
     detail = json.loads(dashboard.profile_detail.toPlainText())
     assert detail["decision"]["outcome"] == "INTERVENE"
     assert "secret=yes" not in dashboard.profile_detail.toPlainText()
@@ -334,3 +336,25 @@ def test_a_failure_is_not_drawn_as_a_hint(qtbot, ui_controller) -> None:
     dashboard.llm_enabled.setChecked(True)
     dashboard.show_llm_result(ConnectionCheck(ok=True, model="gemini-2.5-flash", latency_ms=90))
     assert dashboard.llm_status.property("role") == "muted"
+
+
+def test_sites_pane_is_a_report_not_a_json_console(qtbot, ui_controller) -> None:
+    """Site and app memory is still kept, read and written — it just has no controls on
+    a page whose job is to tell someone what a site does with their data."""
+    from privacy_guardian.ui.dashboard import SECTIONS
+
+    dashboard = Dashboard(ui_controller)
+    qtbot.addWidget(dashboard)
+    dashboard.select("sites_and_apps")
+    pane = dashboard.stack.widget(SECTIONS.index("sites_and_apps"))
+
+    shown = [label.text() for label in pane.findChildren(QLabel) if label.text()]
+    assert "Site and app memory" not in shown
+    assert [button.text() for button in pane.findChildren(QPushButton)] == ["Run thorough check"]
+    assert not any(widget.isVisibleTo(pane) for widget in pane.findChildren(QTextEdit))
+    assert not dashboard.profile_key.isVisibleTo(pane)
+
+    # The memory itself is untouched: still loaded on refresh, still saveable.
+    dashboard.refresh()
+    assert json.loads(dashboard.memory.toPlainText())
+    dashboard.save_memory()

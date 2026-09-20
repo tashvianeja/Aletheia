@@ -6,6 +6,11 @@ All notable changes will be documented here. This project has not produced a ver
 
 ### Changed
 
+- Sites & apps is a report again, not a console. The pane ended in a "Site and app memory"
+  section — a lookup field, a raw profile dump and an editable JSON copy of every stored
+  preference — which is machinery for whoever built the thing, not for someone asking what a
+  website does with their data. It is gone from the page; the memory behind it is untouched and
+  still read, written, exported and imported as before.
 - Every card now wears its urgency. `Decision` carries an `urgency` tier, set by the engine from
   the verdict and the risk — `act_now` (INTERVENE at risk ≥ 0.75), `attention` (other
   interventions), `heads_up` (a warning that asks nothing), `all_clear` (fine, or handled for the
@@ -55,6 +60,14 @@ All notable changes will be documented here. This project has not produced a ver
 
 ### Fixed
 
+- The thorough-check card answered for whichever page you left it on. A check reads one page at
+  one moment, but the card stayed in the corner through the next tab and the one after, keeping
+  the same headline, the same findings and the same ticked-off sections — so a clean result from
+  the page you had just left read as a verdict on the page you were now looking at, and a warning
+  from that page read as one about this one. The browser now reports which page is in front with
+  every heartbeat, and the card leaves the moment that stops being the page it checked. A browser
+  showing no page at all, or one sitting behind a check of a desktop application, is not a page
+  change and takes nothing away from someone part-way through reading it.
 - The same warning appeared twice. A page reports its context repeatedly — on load, when the
   consent banner animates in, each time another advertising script runs — and every report minted
   a fresh event, so the same "building an advertising profile" card was raised again a moment

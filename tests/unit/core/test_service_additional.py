@@ -571,3 +571,30 @@ async def test_a_page_reporting_itself_leaves_one_observation_not_twenty(
 
     profile = service._profile(Requester(origin="https://news.test", display_name="news.test"))
     assert len(profile.recent_observations) == 1
+
+
+@pytest.mark.asyncio
+async def test_the_browser_heartbeat_reports_which_page_is_in_front(service: Service) -> None:
+    """Anything on screen that answers for one page has to hear when the tab changes."""
+    seen: list[str] = []
+    service.page_listeners.append(seen.append)
+
+    async def ping(**payload: Any) -> None:
+        await service.handle_message(
+            {
+                "v": 1,
+                "id": "heartbeat",
+                "type": "ping",
+                "payload": {"browser": "chromium"} | payload,
+            }
+        )
+
+    await ping(active_origin="https://shop.test")
+    await ping(active_origin="https://shop.test")
+    await ping(active_origin="https://bank.test")
+    # A heartbeat that says nothing about tabs leaves the last answer standing, rather
+    # than reporting the browser as having no page in front of it.
+    await ping()
+
+    assert seen == ["https://shop.test", "https://bank.test"]
+    assert service.active_origin == "https://bank.test"
