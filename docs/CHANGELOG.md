@@ -6,6 +6,17 @@ All notable changes will be documented here. This project has not produced a ver
 
 ### Changed
 
+- The Overview is now a tally of what has passed through the app, in the manner of a browser's
+  "trackers blocked" panel: sites & apps checked, trackers spotted, files checked before upload,
+  policies & terms summarised (with an estimated reading time once word counts exist), cookie
+  banners and desktop permissions, followed by a list of the decisions the person actually made,
+  with those taken automatically on their behalf marked as such. Every figure comes from stored
+  records via `Store.tally()`, and each thing is counted once — a tracker on a site however many
+  page loads reported it, a permission grant however often it was polled, a document however
+  many times it was re-read — so the page can never claim more than the history shows. The
+  service now records how many words of each policy or terms document it analysed. The dashboard
+  opens on the Overview; Intervened / Informed / Ignored stay on Events, where the table they
+  describe is.
 - Sites & apps is a report again, not a console. The pane ended in a "Site and app memory"
   section — a lookup field, a raw profile dump and an editable JSON copy of every stored
   preference — which is machinery for whoever built the thing, not for someone asking what a

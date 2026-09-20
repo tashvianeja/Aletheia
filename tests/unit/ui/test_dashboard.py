@@ -5,7 +5,17 @@ from pathlib import Path
 
 from PySide6.QtWidgets import QFileDialog, QLabel, QMessageBox, QPushButton, QTextEdit
 
-from privacy_guardian.core.events import DataCategory, Decision, Outcome, PrivacyEvent, Requester
+from privacy_guardian.core.events import (
+    ConsentBannerEvent,
+    DataCategory,
+    Decision,
+    FileUploadEvent,
+    Outcome,
+    PrivacyEvent,
+    Requester,
+    TrackingEvent,
+    UserResponse,
+)
 from privacy_guardian.engine.preferences import LearnedRule, Preference
 from privacy_guardian.llm.client import SUGGESTED_MODELS, ConnectionCheck
 from privacy_guardian.ui.dashboard import Dashboard
@@ -37,6 +47,7 @@ def test_history_filters_and_detail_view(qtbot, ui_controller) -> None:
     seed_history(ui_controller)
     dashboard = Dashboard(ui_controller)
     qtbot.addWidget(dashboard)
+    dashboard.select("events")
     assert dashboard.history.rowCount() == 2
 
     dashboard.requester_filter.setText("https://one.example")
@@ -358,3 +369,82 @@ def test_sites_pane_is_a_report_not_a_json_console(qtbot, ui_controller) -> None
     dashboard.refresh()
     assert json.loads(dashboard.memory.toPlainText())
     dashboard.save_memory()
+
+
+def test_overview_is_the_landing_page_and_starts_honest_about_having_nothing(
+    qtbot, ui_controller
+) -> None:
+    dashboard = Dashboard(ui_controller)
+    qtbot.addWidget(dashboard)
+    assert dashboard.current_section == "overview"
+    assert "Nothing has been counted yet" in dashboard.tally_caption.text()
+    assert all(value.text() == "0" for value, _ in dashboard.tally_tiles.values())
+    assert dashboard.no_decisions.isVisibleTo(dashboard)
+    # A nonsense section lands on the same page rather than the history table.
+    dashboard.select("nowhere")
+    assert dashboard.current_section == "overview"
+
+
+def test_overview_tiles_say_what_was_counted_and_what_it_is_made_of(qtbot, ui_controller) -> None:
+    """Each number on the Overview must be traceable to stored records, and the words
+    under it must say what the number is made of rather than grade the app."""
+    store = ui_controller.core.store
+    site = Requester(origin="https://news.example", display_name="news.example")
+    for _ in range(2):
+        store.save_event(
+            TrackingEvent(requester=site, tracker_domains=["ads.example", "pixel.example"])
+        )
+    upload = FileUploadEvent(requester=site)
+    store.save_event(upload)
+    store.save_decision(
+        Decision(
+            event_id=upload.id,
+            outcome=Outcome.INTERVENE,
+            risk=0.9,
+            explanation="x",
+            actions=["cancel"],
+        )
+    )
+    store.save_response(UserResponse(event_id=upload.id, action="cancel"))
+    banner = ConsentBannerEvent(requester=site, cmp="onetrust")
+    store.save_event(banner)
+    store.save_decision(
+        Decision(
+            event_id=banner.id,
+            outcome=Outcome.INFORM,
+            risk=0.3,
+            explanation="x",
+            actions=["reject_optional"],
+            auto_action="reject_optional",
+        )
+    )
+    store.save_response(UserResponse(event_id=banner.id, action="reject_optional"))
+    store.cache_document(
+        "https://news.example",
+        "d" * 8,
+        {"policy": {"missing": False}, "word_counts": {"policy": 230 * 75}},
+    )
+
+    dashboard = Dashboard(ui_controller)
+    qtbot.addWidget(dashboard)
+    text = {
+        key: (value.text(), detail.text()) for key, (value, detail) in dashboard.tally_tiles.items()
+    }
+    assert text["requesters"] == ("1", "1 site  ·  0 apps")
+    assert text["trackers"] == ("2", "2 networks across 1 site")
+    assert text["files"] == ("1", "1 held sensitive information")
+    assert text["documents"] == ("1", "About 1 h 15 min of reading")
+    assert text["banners"] == ("1", "On 1 site")
+    assert text["permissions"] == ("0", "0 grants across 0 apps")
+    assert dashboard.tally_caption.text().startswith("Since ")
+    assert "Counted on this device" in dashboard.tally_caption.text()
+
+    shown = [label.text() for label in dashboard.findChildren(QLabel) if label.text()]
+    assert "Optional cookies rejected" in shown
+    assert "1 automatic" in shown
+    assert "Not shared" in shown
+    # Only what was decided is listed; a row of zeros would say nothing.
+    assert "Redacted copies created" not in shown
+    assert not dashboard.no_decisions.isVisibleTo(dashboard)
+    # The word the user asked never to see.
+    assert not any("help" in label.lower() for label in shown)

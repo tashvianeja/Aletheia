@@ -22,6 +22,7 @@ from privacy_guardian.core.events import (
     FormSubmitEvent,
     PrivacyEvent,
     Requester,
+    TrackingEvent,
     UserResponse,
 )
 from privacy_guardian.deepcheck import build_groups
@@ -167,6 +168,23 @@ def seed(controller: ScreenshotController) -> None:
         controller.core.store.save_event(event)
         controller.core.store.save_decision(decision)
         controller.core.store.save_response(UserResponse(event_id=event.id, action=action))
+    # Quiet observations that never became a card, so the Overview tally has something
+    # to count: trackers on the news site and the policy it was read against.
+    tracking = TrackingEvent(
+        ts=now - timedelta(minutes=19),
+        requester=_site("https://dailymeridian.example", "news"),
+        data_categories=[DataCategory.DEVICE_IDENTIFIERS],
+        tracker_domains=["doubleclick.net", "scorecardresearch.com", "taboola.com"],
+        fingerprinting=True,
+        confidence=0.9,
+    )
+    controller.core.store.save_event(tracking)
+    controller.core.store.save_decision(decide(tracking))
+    controller.core.store.cache_document(
+        "https://dailymeridian.example",
+        "0" * 64,
+        {"policy": {"missing": False, "clauses": []}, "word_counts": {"policy": 6900}},
+    )
 
 
 def main() -> int:
@@ -203,6 +221,8 @@ def main() -> int:
     dashboard = Dashboard(controller)
     dashboard.timer.stop()
     dashboard.resize(940, 620)
+    capture(dashboard, output / "overview.png", app, fit=False)
+    dashboard.select("events")
     capture(dashboard, output / "dashboard.png", app, fit=False)
     dashboard.select("preferences")
     capture(dashboard, output / "preferences.png", app, fit=False)

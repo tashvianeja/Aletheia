@@ -24,13 +24,17 @@ When a scanned passport goes into a free image compressor:
 *The safe option is the big one. "Upload anyway" is still there, in plain text, because it is your
 file and your decision.*
 
-| Event history | Preferences |
+| Overview | Event history |
 |---|---|
-| ![Events](docs/img/dashboard.png) | ![Preferences](docs/img/preferences.png) |
+| ![Overview](docs/img/overview.png) | ![Events](docs/img/dashboard.png) |
 
-| Thorough check | Full report |
+| Preferences | Thorough check |
 |---|---|
-| ![Thorough check](docs/img/deep-check.png) | ![Sites and apps](docs/img/sites-and-apps.png) |
+| ![Preferences](docs/img/preferences.png) | ![Thorough check](docs/img/deep-check.png) |
+
+| Full report | |
+|---|---|
+| ![Sites and apps](docs/img/sites-and-apps.png) | |
 
 Screenshots are rendered from the real Qt widgets by
 [`tests/unit/ui/render_screenshots.py`](tests/unit/ui/render_screenshots.py), so they cannot drift

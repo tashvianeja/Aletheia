@@ -8,12 +8,16 @@ from pathlib import Path
 import pytest
 
 from privacy_guardian.core.events import (
+    ConsentBannerEvent,
     DataCategory,
     Decision,
+    FileUploadEvent,
     FormField,
     FormSubmitEvent,
     Outcome,
+    PermissionRequestEvent,
     Requester,
+    TrackingEvent,
     UserResponse,
 )
 from privacy_guardian.storage import Store
@@ -138,3 +142,92 @@ def test_refuses_database_from_newer_schema(tmp_path: Path) -> None:
     connection.close()
     with pytest.raises(ValueError, match="newer"):
         Store(database)
+
+
+def _decide(store: Store, event_id: str, outcome: Outcome, auto_action: str = "") -> None:
+    store.save_decision(
+        Decision(
+            event_id=event_id,
+            outcome=outcome,
+            risk=0.5,
+            explanation="Synthetic",
+            actions=["reject_optional", "continue", "cancel"],
+            auto_action=auto_action,
+        )
+    )
+
+
+def test_tally_counts_each_thing_once_and_only_what_finished(tmp_path: Path) -> None:
+    """The Overview's numbers come from the records, and never inflate them.
+
+    The same page reports its trackers on every load, the desktop polls the same grant
+    every few seconds, an upload can be abandoned before it was checked, and a "policy"
+    row can record that no policy was found. None of those may count.
+    """
+    store = Store(tmp_path / "tally.sqlite3")
+    news = Requester(origin="https://news.example", display_name="news")
+    shop = Requester(origin="https://shop.example", display_name="shop")
+    for _ in range(3):
+        store.save_event(
+            TrackingEvent(
+                requester=news,
+                tracker_domains=["ads.example", "pixel.example"],
+                fingerprinting=True,
+            )
+        )
+    store.save_event(TrackingEvent(requester=shop, tracker_domains=["ads.example"]))
+    for _ in range(4):
+        store.save_event(
+            PermissionRequestEvent(
+                requester=Requester(kind="application", bundle_id="com.cam", display_name="Cam"),
+                permission="camera",
+                state="granted",
+            )
+        )
+    checked = FileUploadEvent(requester=shop, file_count=2)
+    abandoned = FileUploadEvent(requester=shop)
+    for upload in (checked, abandoned):
+        store.save_event(upload)
+    _decide(store, checked.id, Outcome.INTERVENE)
+    store.mark_aborted(abandoned.id)
+    banner = ConsentBannerEvent(requester=news, cmp="onetrust")
+    store.save_event(banner)
+    store.save_event(ConsentBannerEvent(requester=news, cmp="onetrust"))
+    _decide(store, banner.id, Outcome.INFORM, auto_action="reject_optional")
+    store.save_response(UserResponse(event_id=banner.id, action="reject_optional"))
+    # A second answer to the same event replaces the first; it is not a second decision.
+    store.save_response(UserResponse(event_id=checked.id, action="continue"))
+    store.save_response(UserResponse(event_id=checked.id, action="cancel"))
+    store.cache_document(
+        "https://news.example",
+        "a" * 8,
+        {"policy": {"missing": False}, "terms": {"missing": True}, "word_counts": {"policy": 2300}},
+    )
+    store.cache_document("https://shop.example", "b" * 8, {"policy": {"missing": True}})
+    store.cache_document("https://old.example", "c" * 8, {"policy": {"missing": False}}, ttl_days=0)
+
+    tally = store.tally()
+    store.close()
+
+    assert tally["since"]
+    assert (tally["sites"], tally["apps"]) == (2, 1)
+    assert tally["trackers"] == 3  # news→ads, news→pixel, shop→ads
+    assert tally["tracker_networks"] == 2
+    assert (tally["tracked_sites"], tally["fingerprinting_sites"]) == (2, 1)
+    assert (tally["files"], tally["sensitive_files"]) == (2, 1)
+    assert (tally["policies"], tally["terms"], tally["document_words"]) == (1, 0, 2300)
+    assert (tally["banners"], tally["banner_sites"]) == (2, 1)
+    assert (tally["grants"], tally["granted_apps"]) == (1, 1)
+    assert tally["decided"] == {
+        "reject_optional": {"count": 1, "automatic": 1},
+        "cancel": {"count": 1, "automatic": 0},
+    }
+
+
+def test_tally_of_an_empty_store_is_all_zeros(tmp_path: Path) -> None:
+    store = Store(tmp_path / "empty.sqlite3")
+    tally = store.tally()
+    store.close()
+    assert tally["since"] == ""
+    assert tally["decided"] == {}
+    assert all(value == 0 for key, value in tally.items() if key not in {"since", "decided"})

@@ -470,7 +470,7 @@ def main() -> int:
             )
             self.refresh_tray()
 
-        def show_dashboard(self, tab: str = "events") -> None:
+        def show_dashboard(self, tab: str = "overview") -> None:
             if self.dashboard is None:
                 self.dashboard = Dashboard(self)
             self.dashboard.select(tab)

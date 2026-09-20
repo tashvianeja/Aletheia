@@ -1121,7 +1121,17 @@ class Service:
                         str(worker_payload.get("text", "")).encode()
                     ).hexdigest()
                     cached = self.store.get_cached_document(origin, digest) or {}
-                    self.store.cache_document(origin, digest, {**cached, kind: analyzed.profile})
+                    # How much text was read, so the Overview can put a reading time on
+                    # it. Counted from exactly the text that was analysed, never the page.
+                    word_counts = {
+                        **cached.get("word_counts", {}),
+                        kind: len(str(worker_payload.get("text", "")).split()),
+                    }
+                    self.store.cache_document(
+                        origin,
+                        digest,
+                        {**cached, kind: analyzed.profile, "word_counts": word_counts},
+                    )
                     if self.settings.llm.enabled and self.settings.llm.policy_refinement:
                         self._schedule_cloud(
                             origin + ":" + digest,
